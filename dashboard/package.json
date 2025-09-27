@@ -5,24 +5,32 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:root": "vite build --mode production.root",
+    "build:apps": "vite build --mode production.apps",
+    "build:fastify": "node build-for-fastify.js",
     "preview": "vite preview",
+    "start": "node production-server.js",
+    "start:prod": "node production-server.js",
     "mock1": "json-server src/mock/data.json --host 127.0.0.1 --port 9978 --middlewares src/mock/middlewares.js",
     "mock2": "json-server public/mock/data.json --host 127.0.0.1 --port 9978 --middlewares public/mock/middlewares.js"
   },
   "dependencies": {
+    "@fastify/static": "^8.2.0",
     "axios": "1.12.0",
     "echarts": "^5.6.0",
+    "fastify": "^5.6.1",
     "json-server": "^0.17.4",
     "pinia": "^2.2.6",
     "v-viewer": "^3.0.22",
+    "viewerjs": "^1.11.0",
     "vue": "^3.5.12",
     "vue-echarts": "^7.0.3",
     "vue-router": "^4.4.5"
   },
   "devDependencies": {
     "@arco-design/web-vue": "^2.56.3",
-    "@vitejs/plugin-vue": "^5.1.4",
+    "@vitejs/plugin-vue": "^6.0.1",
     "unplugin-vue-components": "^0.27.4",
-    "vite": "^5.4.10"
+    "vite": "^7.1.7"
   }
 }

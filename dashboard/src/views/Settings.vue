@@ -22,7 +22,7 @@
               class="config-input"
             >
               <template #prefix>
-                <icon-globe />
+                <icon-link />
               </template>
             </a-input>
             <div class="config-actions">
@@ -51,13 +51,20 @@
             </div>
           </div>
           
-          <div v-if="configStatus" class="config-status">
-            <a-alert 
-              :type="configStatus.type === 'success' ? 'success' : configStatus.type === 'error' ? 'error' : 'warning'"
-              :message="configStatus.message"
-              show-icon
-              :closable="false"
-            />
+          <div v-if="configStatus && configStatus.message" class="config-status">
+            <div 
+              class="config-message"
+              :class="{
+                'config-message-success': configStatus.type === 'success',
+                'config-message-error': configStatus.type === 'error',
+                'config-message-warning': configStatus.type === 'warning'
+              }"
+            >
+              <icon-check-circle v-if="configStatus.type === 'success'" class="config-icon" />
+              <icon-exclamation-circle v-else-if="configStatus.type === 'error'" class="config-icon" />
+              <icon-info-circle v-else class="config-icon" />
+              <span class="config-text">{{ configStatus.message }}</span>
+            </div>
           </div>
         </div>
       </a-card>
@@ -71,7 +78,7 @@
         <div class="settings-grid">
           <div class="setting-item" @click="handleSettingClick('datasource')">
             <div class="setting-info">
-              <icon-database class="setting-icon" />
+              <icon-storage class="setting-icon" />
               <div class="setting-text">
                 <div class="setting-title">数据源</div>
                 <div class="setting-desc">管理视频数据来源</div>
@@ -176,7 +183,7 @@
 
           <div class="setting-item" @click="handleSettingClick('ad-filter')">
             <div class="setting-info">
-              <icon-shield class="setting-icon" />
+              <icon-safe class="setting-icon" />
               <div class="setting-text">
                 <div class="setting-title">广告过滤</div>
                 <div class="setting-desc">自动过滤广告内容</div>
@@ -401,6 +408,25 @@
 <script setup>
 import { ref, reactive, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { 
+  IconLink, 
+  IconCheckCircle, 
+  IconSave, 
+  IconHome, 
+  IconStorage, 
+  IconEye, 
+  IconRight,
+  IconStar,
+  IconHistory,
+  IconSettings,
+  IconDesktop,
+  IconFilter,
+  IconWifi,
+  IconSafe,
+  IconBug,
+  IconQuestionCircle,
+  IconInfoCircle
+} from '@arco-design/web-vue/es/icon'
 
 // 配置地址相关
 const configUrl = ref('')
@@ -427,29 +453,30 @@ const saveConfigUrl = async () => {
   
   saving.value = true
   try {
-    // 这里应该调用实际的保存API
-    await new Promise(resolve => setTimeout(resolve, 1000)) // 模拟API调用
+    // 使用配置服务保存配置地址
+    const configService = (await import('@/api/services/config')).default
+    const success = await configService.setConfigUrl(configUrl.value)
     
-    // 保存到localStorage
-    localStorage.setItem('configUrl', configUrl.value)
-    
-    configStatus.value = {
-      type: 'success',
-      message: '配置地址保存成功'
+    if (success) {
+      configStatus.value = {
+        type: 'success',
+        message: '配置地址保存成功'
+      }
+      Message.success('配置地址保存成功')
     }
-    Message.success('配置地址保存成功')
   } catch (error) {
+    console.error('保存配置地址失败:', error)
     configStatus.value = {
       type: 'error',
-      message: '保存失败：' + error.message
+      message: '保存失败：' + (error.message || '未知错误')
     }
-    Message.error('保存失败')
+    Message.error('保存失败：' + (error.message || '未知错误'))
   } finally {
     saving.value = false
-    // 3秒后清除状态消息
+    // 8秒后清除状态消息
     setTimeout(() => {
       configStatus.value = null
-    }, 3000)
+    }, 8000)
   }
 }
 
@@ -462,30 +489,36 @@ const testConfigUrl = async () => {
   
   testing.value = true
   try {
-    // 这里应该调用实际的测试API
-    const response = await fetch(configUrl.value)
+    // 使用配置服务验证配置地址
+    const configService = (await import('@/api/services/config')).default
+    const isValid = await configService.validateConfigUrl(configUrl.value)
     
-    if (response.ok) {
+    if (isValid) {
       configStatus.value = {
         type: 'success',
         message: '配置地址测试成功，连接正常'
       }
       Message.success('配置地址测试成功')
     } else {
-      throw new Error(`HTTP ${response.status}`)
+      configStatus.value = {
+        type: 'error',
+        message: '测试失败：配置地址无法访问或数据格式不正确'
+      }
+      Message.error('测试失败：配置地址无法访问或数据格式不正确')
     }
   } catch (error) {
+    console.error('测试配置地址失败:', error)
     configStatus.value = {
       type: 'error',
-      message: '测试失败：无法连接到配置地址'
+      message: '测试失败：' + (error.message || '网络连接错误')
     }
-    Message.error('测试失败：无法连接到配置地址')
+    Message.error('测试失败：' + (error.message || '网络连接错误'))
   } finally {
     testing.value = false
-    // 3秒后清除状态消息
+    // 8秒后清除状态消息
     setTimeout(() => {
       configStatus.value = null
-    }, 3000)
+    }, 8000)
   }
 }
 
@@ -497,11 +530,17 @@ const handleSettingClick = (settingKey) => {
   // 比如打开对话框、跳转页面等
 }
 
-// 页面加载时从localStorage恢复配置
-const loadConfig = () => {
-  const savedUrl = localStorage.getItem('configUrl')
-  if (savedUrl) {
-    configUrl.value = savedUrl
+// 页面加载时从配置服务恢复配置
+const loadConfig = async () => {
+  try {
+    // 使用配置服务加载配置地址
+    const configService = (await import('@/api/services/config')).default
+    const savedUrl = configService.getConfigUrl()
+    if (savedUrl) {
+      configUrl.value = savedUrl
+    }
+  } catch (error) {
+    console.error('Failed to load config url:', error)
   }
   
   // 加载其他设置项的状态
@@ -694,13 +733,47 @@ loadConfig()
 }
 
 .config-status {
-  margin-top: 4px;
+  margin-top: 12px;
 }
 
-.config-status :deep(.arco-alert) {
-  border-radius: 12px;
-  border: none;
+.config-message {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 500;
+  border: 1px solid;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.config-message-success {
+  color: #00b42a;
+  background-color: rgba(0, 180, 42, 0.1);
+  border-color: rgba(0, 180, 42, 0.3);
+}
+
+.config-message-error {
+  color: #f53f3f;
+  background-color: rgba(245, 63, 63, 0.1);
+  border-color: rgba(245, 63, 63, 0.3);
+}
+
+.config-message-warning {
+  color: #ff7d00;
+  background-color: rgba(255, 125, 0, 0.1);
+  border-color: rgba(255, 125, 0, 0.3);
+}
+
+.config-icon {
+  margin-right: 8px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.config-text {
+  flex: 1;
+  line-height: 1.5;
 }
 
 /* 设置项网格 */

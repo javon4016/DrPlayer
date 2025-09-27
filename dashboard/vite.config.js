@@ -10,7 +10,7 @@ export default defineConfig(({ command, mode }) => {
     return {
         // 基础路径配置，支持子目录部署
         // 开发环境使用 '/'，生产环境可以通过环境变量设置
-        base: mode === 'production' ? (env.VITE_BASE_PATH || './') : '/',
+        base: mode.startsWith('production') ? (env.VITE_BASE_PATH || './') : '/',
     
     plugins: [
         vue(),

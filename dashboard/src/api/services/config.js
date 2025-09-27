@@ -70,8 +70,7 @@ class ConfigService {
       const response = await axios.get(url, {
         timeout: 10000,
         headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'DrPlayer/1.0'
+          'Accept': 'application/json'
         }
       })
 
@@ -126,8 +125,7 @@ class ConfigService {
       const response = await axios.get(this.configUrl, {
         timeout: 15000,
         headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'DrPlayer/1.0'
+          'Accept': 'application/json'
         }
       })
 
