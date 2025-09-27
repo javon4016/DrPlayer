@@ -42,3 +42,7 @@ https://juejin.cn/post/7301193497247727652
 https://drplayer.playdreamer.cn/
 
 https://hipy.playdreamer.cn/
+
+# AI加量包购买
+
+[点此访问](https://www.trae.ai/account-setting?purchase=1#usage)

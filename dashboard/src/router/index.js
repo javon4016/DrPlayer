@@ -1,7 +1,7 @@
 import {createRouter, createWebHistory} from 'vue-router';
 import Home from '@/views/Home.vue';
 import Video from '@/views/Video.vue';
-import Video2 from '@/views/Video2.vue';
+import VideoDetail from '@/views/VideoDetail.vue';
 import Live from '@/views/Live.vue';
 import Settings from '@/views/Settings.vue';
 import Collection from '@/views/Collection.vue';
@@ -10,20 +10,49 @@ import Reader from '@/views/Reader.vue';
 import Parser from '@/views/Parser.vue';
 
 const routes = [
-    {path: '/', component: Home},
-    {path: '/video', component: Video},
-    {path: '/video2', component: Video2},
-    {path: '/live', component: Live},
-    {path: '/settings', component: Settings},
-    {path: '/collection', component: Collection},
-    {path: '/history', component: History},
-    {path: '/reader', component: Reader},
-    {path: '/parser', component: Parser},
+    {path: '/', component: Home, name: 'Home'},
+    {path: '/video', component: Video, name: 'Video'},
+    {path: '/video/:id', component: VideoDetail, name: 'VideoDetail', props: true},
+    {path: '/live', component: Live, name: 'Live'},
+    {path: '/settings', component: Settings, name: 'Settings'},
+    {path: '/collection', component: Collection, name: 'Collection'},
+    {path: '/history', component: History, name: 'History'},
+    {path: '/reader', component: Reader, name: 'Reader'},
+    {path: '/parser', component: Parser, name: 'Parser'},
+    // 404 fallback路由 - 必须放在最后
+    {path: '/:pathMatch(.*)*', redirect: '/'}
 ];
 
+// 获取base路径，支持子目录部署
+const getBasePath = () => {
+    // 在生产环境中，如果设置了VITE_BASE_PATH环境变量，使用它
+    if (import.meta.env.PROD && import.meta.env.VITE_BASE_PATH) {
+        return import.meta.env.VITE_BASE_PATH;
+    }
+    // 否则使用Vite的BASE_URL
+    return import.meta.env.BASE_URL;
+};
+
 const router = createRouter({
-    history: createWebHistory(import.meta.env.BASE_URL),
+    history: createWebHistory(getBasePath()),
     routes,
+    // 滚动行为
+    scrollBehavior(to, from, savedPosition) {
+        if (savedPosition) {
+            return savedPosition;
+        } else {
+            return { top: 0 };
+        }
+    }
+});
+
+// 路由守卫 - 可以在这里添加权限检查等逻辑
+router.beforeEach((to, from, next) => {
+    // 设置页面标题
+    if (to.name) {
+        document.title = `DrPlayer - ${to.name}`;
+    }
+    next();
 });
 
 export default router;
