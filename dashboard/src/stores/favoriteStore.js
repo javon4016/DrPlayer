@@ -209,6 +209,7 @@ export const useFavoriteStore = defineStore('favorite', () => {
     clearFavorites,
     exportFavorites,
     importFavorites,
-    loadFavorites
+    loadFavorites,
+    saveFavorites
   }
 })

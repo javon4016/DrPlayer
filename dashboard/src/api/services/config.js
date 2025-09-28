@@ -15,6 +15,7 @@ class ConfigService {
     this.configData = null
     this.lastFetchTime = null
     this.cacheExpiry = 5 * 60 * 1000 // 5分钟缓存
+    this.liveConfigUrl = null // 直播配置地址
     this.loadConfigFromStorage()
   }
 
@@ -44,11 +45,119 @@ class ConfigService {
       this.configUrl = url
       this.saveConfigToStorage()
       
+      // 自动设置直播配置地址（如果未设置）
+      await this.autoSetLiveConfigUrl()
+      
       console.log('配置地址设置成功:', url)
       return true
     } catch (error) {
       console.error('设置配置地址失败:', error)
       throw error
+    }
+  }
+
+  /**
+   * 设置直播配置地址
+   * @param {string} url - 直播配置地址URL
+   * @returns {Promise<boolean>} 设置是否成功
+   */
+  async setLiveConfigUrl(url) {
+    try {
+      if (!url || typeof url !== 'string') {
+        throw new Error('直播配置地址不能为空')
+      }
+
+      // 验证URL格式
+      const urlPattern = /^https?:\/\/.+/
+      if (!urlPattern.test(url)) {
+        throw new Error('直播配置地址格式不正确，请输入有效的HTTP/HTTPS地址')
+      }
+
+      this.liveConfigUrl = url
+      this.saveConfigToStorage()
+      
+      console.log('直播配置地址设置成功:', url)
+      return true
+    } catch (error) {
+      console.error('设置直播配置地址失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 获取直播配置地址
+   * @returns {string|null} 直播配置地址
+   */
+  getLiveConfigUrl() {
+    return this.liveConfigUrl
+  }
+
+  /**
+   * 自动设置直播配置地址（从点播配置中提取lives链接）
+   * @returns {Promise<boolean>} 是否成功设置
+   */
+  async autoSetLiveConfigUrl() {
+    try {
+      // 如果已经设置了直播配置地址，则不自动设置
+      if (this.liveConfigUrl) {
+        return false
+      }
+
+      // 获取点播配置数据
+      const configData = await this.getConfigData()
+      if (!configData || !configData.lives || !Array.isArray(configData.lives) || configData.lives.length === 0) {
+        console.log('点播配置中未找到lives链接')
+        return false
+      }
+
+      // 取lives数组中第一个对象的url字段
+      const firstLiveConfig = configData.lives[0]
+      if (!firstLiveConfig || !firstLiveConfig.url) {
+        console.log('lives配置中未找到有效的url')
+        return false
+      }
+
+      // 设置直播配置地址
+      this.liveConfigUrl = firstLiveConfig.url
+      this.saveConfigToStorage()
+      
+      console.log('自动设置直播配置地址成功:', firstLiveConfig.url)
+      return true
+    } catch (error) {
+      console.error('自动设置直播配置地址失败:', error)
+      return false
+    }
+  }
+
+  /**
+   * 重置直播配置地址（重置为当前点播配置中的默认lives链接）
+   * @returns {Promise<boolean>} 是否成功重置
+   */
+  async resetLiveConfigUrl() {
+    try {
+      // 获取点播配置数据
+      const configData = await this.getConfigData()
+      if (!configData || !configData.lives || !Array.isArray(configData.lives) || configData.lives.length === 0) {
+        console.log('点播配置中未找到lives链接，无法重置')
+        return false
+      }
+
+      // 取lives数组中第一个对象的url字段
+      const firstLiveConfig = configData.lives[0]
+      if (!firstLiveConfig || !firstLiveConfig.url) {
+        console.log('lives配置中未找到有效的url，无法重置')
+        return false
+      }
+
+      // 重置直播配置地址
+      this.liveConfigUrl = firstLiveConfig.url
+      this.saveConfigToStorage()
+      
+      console.log('直播配置地址重置成功:', firstLiveConfig.url)
+      return true
+    } catch (error) {
+      console.error('重置直播配置地址失败:', error)
+      return false
     }
   }
 
@@ -205,6 +314,7 @@ class ConfigService {
     this.configUrl = null
     this.configData = null
     this.lastFetchTime = null
+    this.liveConfigUrl = null
     this.saveConfigToStorage()
     console.log('配置已重置')
   }
@@ -217,6 +327,7 @@ class ConfigService {
       const configUrl = localStorage.getItem('drplayer_config_url')
       const configData = localStorage.getItem('drplayer_config_data')
       const lastFetchTime = localStorage.getItem('drplayer_config_fetch_time')
+      const liveConfigUrl = localStorage.getItem('drplayer_live_config_url')
 
       if (configUrl) {
         this.configUrl = configUrl
@@ -228,6 +339,10 @@ class ConfigService {
 
       if (lastFetchTime) {
         this.lastFetchTime = parseInt(lastFetchTime)
+      }
+
+      if (liveConfigUrl) {
+        this.liveConfigUrl = liveConfigUrl
       }
 
       console.log('从本地存储加载配置成功')
@@ -259,6 +374,12 @@ class ConfigService {
         localStorage.removeItem('drplayer_config_fetch_time')
       }
 
+      if (this.liveConfigUrl) {
+        localStorage.setItem('drplayer_live_config_url', this.liveConfigUrl)
+      } else {
+        localStorage.removeItem('drplayer_live_config_url')
+      }
+
       console.log('配置保存到本地存储成功')
     } catch (error) {
       console.error('保存配置失败:', error)
@@ -281,7 +402,9 @@ class ConfigService {
       lastFetchTime: this.lastFetchTime,
       cacheAge: this.lastFetchTime ? Date.now() - this.lastFetchTime : null,
       isCacheValid: this.configData && this.lastFetchTime && 
-                   (Date.now() - this.lastFetchTime) < this.cacheExpiry
+                   (Date.now() - this.lastFetchTime) < this.cacheExpiry,
+      hasLiveConfigUrl: !!this.liveConfigUrl,
+      liveConfigUrl: this.liveConfigUrl
     }
   }
 }

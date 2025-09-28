@@ -35,6 +35,12 @@
               </template>
               导入历史
             </a-doption>
+            <a-doption value="manage-api">
+              <template #icon>
+                <icon-settings />
+              </template>
+              API地址管理
+            </a-doption>
             <a-doption value="clear" class="danger-option">
               <template #icon>
                 <icon-delete />
@@ -93,6 +99,12 @@
       </div>
     </div>
 
+    <!-- API地址管理组件 -->
+    <ApiUrlManager
+      v-model="showApiManager"
+      @completed="handleApiManagerCompleted"
+    />
+
     <!-- v-viewer 图片查看器 -->
     <div v-viewer="viewerOptions" class="viewer" v-show="false">
       <img 
@@ -123,11 +135,13 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { useHistoryStore } from '@/stores/historyStore'
 import { useSiteStore } from '@/stores/siteStore'
 import VideoCard from '@/components/VideoCard.vue'
+import ApiUrlManager from '@/components/ApiUrlManager.vue'
 import {
   IconHistory,
   IconMore,
   IconDownload,
   IconUpload,
+  IconSettings,
   IconDelete,
   IconEye
 } from '@arco-design/web-vue/es/icon'
@@ -139,6 +153,7 @@ const siteStore = useSiteStore()
 // 响应式数据
 const searchKeyword = ref('')
 const activeFilter = ref('all')
+const showApiManager = ref(false)
 const fileInput = ref(null)
 
 // 图片查看器相关
@@ -229,6 +244,9 @@ const handleAction = (action) => {
       break
     case 'export':
       exportHistory()
+      break
+    case 'manage-api':
+      showApiManager.value = true
       break
     case 'clear':
       clearAllHistory()
@@ -331,9 +349,13 @@ const goToDetail = async (item) => {
           tempSiteApi: siteInfo.api,
           tempSiteKey: siteInfo.key,
           // 传递历史记录信息，用于恢复播放状态
-          historyRoute: item.current_route,
-          historyEpisode: item.current_episode,
-          historyProgress: item.progress || 0
+          historyRoute: item.current_route_name,
+          historyEpisode: item.current_episode_name,
+          historyProgress: item.progress || 0,
+          // 添加来源页面信息
+          sourceRouteName: 'History',
+          sourceRouteParams: JSON.stringify({}),
+          sourceRouteQuery: JSON.stringify({})
         }
     })
   } catch (error) {
@@ -360,7 +382,16 @@ const showImageModal = (item) => {
 }
 
 const handleImageError = (event) => {
-  event.target.src = '/placeholder-image.jpg'
+  // 使用相对路径，适配子目录部署
+  event.target.src = './default-poster.svg'
+  event.target.style.objectFit = 'contain'
+  event.target.style.backgroundColor = '#f7f8fa'
+}
+
+const handleApiManagerCompleted = (result) => {
+  console.log('API地址管理完成:', result)
+  Message.success(`API地址管理完成，共处理 ${result.replacedCount} 条记录`)
+  // 可以在这里添加其他后续处理逻辑
 }
 
 const formatDate = (dateString) => {

@@ -100,9 +100,13 @@
 import { ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePaginationStore } from '@/stores/paginationStore'
+import { usePageStateStore } from '@/stores/pageStateStore'
+import { useVisitedStore } from '@/stores/visitedStore'
 
 const router = useRouter()
 const paginationStore = usePaginationStore()
+const pageStateStore = usePageStateStore()
+const visitedStore = useVisitedStore()
 
 // Props
 const props = defineProps({
@@ -133,6 +137,16 @@ const props = defineProps({
   hasMore: {
     type: Boolean,
     default: false
+  },
+  // 新增：来源页面信息
+  sourceRoute: {
+    type: Object,
+    default: () => ({})
+  },
+  // 新增：滚动位置
+  scrollPosition: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -179,7 +193,14 @@ const updateScrollAreaHeight = () => {
       const searchHeader = document.querySelector('.search-header');
       const headerHeight = searchHeader ? searchHeader.offsetHeight : 60;
 
-      const newHeight = Math.max(containerHeight - headerHeight, 400);
+      // 根据搜索结果动态调整高度减值
+      // 如果没有结果或结果很少，减去100px强制触发滚动条
+      // 如果有足够搜索结果，只减去少量padding空间
+      const hasEnoughContent = props.videos && props.videos.length >= 17;
+      const heightReduction = hasEnoughContent ? 4 : 100;
+      
+      const newHeight = Math.max(containerHeight - headerHeight - heightReduction, 400);
+      console.log(`搜索结果数量: ${props.videos?.length || 0}, 内容充足: ${hasEnoughContent}, 高度减值: ${heightReduction}, 最终高度: ${newHeight}`);
       scrollAreaHeight.value = newHeight;
     }, 100); // 延迟确保DOM完全渲染
   });
@@ -239,6 +260,31 @@ const checkTextOverflow = () => {
 // 视频点击处理
 const handleVideoClick = (video) => {
   if (video && video.vod_id) {
+    // 记录最后点击的视频
+    visitedStore.setLastClicked(video.vod_id, video.vod_name)
+    
+    // 保存当前搜索状态
+    if (props.keyword) {
+      // 正确获取滚动位置
+      const scrollContainer = scrollbarRef.value?.$el?.querySelector('.arco-scrollbar-container');
+      const currentScrollPosition = scrollContainer?.scrollTop || 0;
+      
+      pageStateStore.saveSearchState(
+        props.keyword,
+        props.currentPage,
+        props.videos,
+        props.hasMore,
+        props.loading,
+        currentScrollPosition
+      );
+      console.log('保存搜索状态:', {
+        keyword: props.keyword,
+        currentPage: props.currentPage,
+        videosCount: props.videos.length,
+        scrollPosition: currentScrollPosition
+      });
+    }
+    
     router.push({
         name: 'VideoDetail',
         params: { id: video.vod_id },
@@ -251,7 +297,12 @@ const handleVideoClick = (video) => {
           remarks: video.vod_remarks,
           content: video.vod_content,
           actor: video.vod_actor,
-          director: video.vod_director
+          director: video.vod_director,
+          // 添加来源页面信息
+          sourceRouteName: props.sourceRoute?.name,
+          sourceRouteParams: JSON.stringify(props.sourceRoute?.params || {}),
+          sourceRouteQuery: JSON.stringify(props.sourceRoute?.query || {}),
+          fromSearch: 'true' // 标识来自搜索结果
         }
       });
   }
@@ -269,6 +320,24 @@ onMounted(() => {
   updateScrollAreaHeight()
   updateGlobalStats()
   window.addEventListener('resize', updateScrollAreaHeight)
+  
+  // 恢复滚动位置
+  if (props.scrollPosition > 0) {
+    nextTick(() => {
+      // 使用requestAnimationFrame确保DOM已渲染
+      requestAnimationFrame(() => {
+        const scrollContainer = scrollbarRef.value?.$el?.querySelector('.arco-scrollbar-container');
+        if (scrollContainer) {
+          // 使用平滑滚动
+          scrollContainer.scrollTo({
+            top: props.scrollPosition,
+            behavior: 'smooth'
+          });
+          console.log('SearchResults恢复滚动位置:', props.scrollPosition);
+        }
+      });
+    });
+  }
 })
 
 onBeforeUnmount(() => {

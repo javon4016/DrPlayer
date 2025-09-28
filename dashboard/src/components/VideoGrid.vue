@@ -55,6 +55,7 @@
 <script setup>
 import { onMounted, nextTick, ref, onBeforeUnmount, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useVisitedStore } from '@/stores/visitedStore';
 
 const props = defineProps({
   videos: {
@@ -68,33 +69,57 @@ const props = defineProps({
   hasMore: {
     type: Boolean,
     default: false
+  },
+  statsText: {
+    type: String,
+    default: ''
+  },
+  showStats: {
+    type: Boolean,
+    default: false
+  },
+  // 新增：来源页面信息
+  sourceRoute: {
+    type: Object,
+    default: () => ({})
   }
 });
 
 const emit = defineEmits(['load-more', 'scroll-bottom']);
 
 const router = useRouter();
+const visitedStore = useVisitedStore();
 const containerRef = ref(null);
 const scrollbarRef = ref(null);
 const scrollAreaHeight = ref(0);
 
+
 // 视频点击处理
 const handleVideoClick = (video) => {
   if (video && video.vod_id) {
+    // 记录最后点击的视频
+    visitedStore.setLastClicked(video.vod_id, video.vod_name)
+    
+    const routeQuery = {
+      name: video.vod_name,
+      pic: video.vod_pic,
+      year: video.vod_year,
+      area: video.vod_area,
+      type: video.vod_type,
+      remarks: video.vod_remarks,
+      content: video.vod_content,
+      actor: video.vod_actor,
+      director: video.vod_director,
+      // 添加来源页面信息
+      sourceRouteName: props.sourceRoute?.name || '',
+      sourceRouteParams: JSON.stringify(props.sourceRoute?.params || {}),
+      sourceRouteQuery: JSON.stringify(props.sourceRoute?.query || {})
+    }
+    
     router.push({
         name: 'VideoDetail',
         params: { id: video.vod_id },
-        query: {
-          name: video.vod_name,
-          pic: video.vod_pic,
-          year: video.vod_year,
-          area: video.vod_area,
-          type: video.vod_type,
-          remarks: video.vod_remarks,
-          content: video.vod_content,
-          actor: video.vod_actor,
-          director: video.vod_director
-        }
+        query: routeQuery
       });
   }
 };
@@ -116,7 +141,14 @@ const updateScrollAreaHeight = () => {
         containerHeight = Math.max(window.innerHeight - 120, 500);
       }
 
-      const newHeight = Math.max(containerHeight - footerHeight, 400); // 移除硬编码的32px减值，让scrollbar占满容器
+      // 根据视频内容动态调整高度减值
+      // 如果没有视频或视频很少，减去100px强制触发滚动条
+      // 如果有足够视频内容，只减去少量padding空间
+      const hasEnoughContent = props.videos && props.videos.length >= 17;
+      const heightReduction = hasEnoughContent ? 4 : 100;
+      
+      const newHeight = Math.max(containerHeight - footerHeight - heightReduction, 400);
+      console.log(`视频数量: ${props.videos?.length || 0}, 内容充足: ${hasEnoughContent}, 高度减值: ${heightReduction}, 最终高度: ${newHeight}`);
       scrollAreaHeight.value = newHeight;
     }, 100); // 增加延迟确保DOM完全渲染
   });
@@ -175,9 +207,38 @@ watch(() => [props.videos, props.showStats], () => {
   checkTextOverflow();
 });
 
+// 滚动位置恢复方法
+const restoreScrollPosition = (scrollPosition) => {
+  if (scrollPosition && scrollbarRef.value) {
+    // 使用requestAnimationFrame确保DOM已渲染
+    requestAnimationFrame(() => {
+      const scrollContainer = scrollbarRef.value?.$el?.querySelector('.arco-scrollbar-container');
+      if (scrollContainer) {
+        // 使用平滑滚动
+        scrollContainer.scrollTo({
+          top: scrollPosition,
+          behavior: 'smooth'
+        });
+        console.log('VideoGrid恢复滚动位置:', scrollPosition);
+      }
+    });
+  }
+};
+
+// 获取当前滚动位置
+const getCurrentScrollPosition = () => {
+  if (scrollbarRef.value) {
+    const scrollContainer = scrollbarRef.value?.$el?.querySelector('.arco-scrollbar-container');
+    return scrollContainer?.scrollTop || 0;
+  }
+  return 0;
+};
+
 // 暴露方法给父组件
 defineExpose({
-  checkTextOverflow
+  checkTextOverflow,
+  restoreScrollPosition,
+  getCurrentScrollPosition
 });
 </script>
 
@@ -197,7 +258,7 @@ defineExpose({
 .video-scroll-container {
   width: 100%;
   flex: 1; /* 使用flex让scrollbar占满剩余空间 */
-  padding: 16px 20px 8px 16px; /* 上右下左：减少下padding */
+  padding: 2px 20px 2px 16px; /* 大幅减少上下padding，让scrollbar占用更多空间 */
 }
 
 .video_list_hover {

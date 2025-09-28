@@ -3,11 +3,11 @@ import Home from '@/views/Home.vue';
 import Video from '@/views/Video.vue';
 import VideoDetail from '@/views/VideoDetail.vue';
 import Live from '@/views/Live.vue';
-import Settings from '@/views/Settings.vue';
+import Parser from '@/views/Parser.vue';
 import Collection from '@/views/Collection.vue';
 import History from '@/views/History.vue';
-import Reader from '@/views/Reader.vue';
-import Parser from '@/views/Parser.vue';
+import Settings from '@/views/Settings.vue';
+import BookGallery from '@/views/BookGallery.vue';
 
 const routes = [
     {path: '/', component: Home, name: 'Home'},
@@ -16,8 +16,8 @@ const routes = [
     {path: '/live', component: Live, name: 'Live'},
     {path: '/settings', component: Settings, name: 'Settings'},
     {path: '/collection', component: Collection, name: 'Collection'},
+    {path: '/book-gallery', component: BookGallery, name: 'BookGallery'},
     {path: '/history', component: History, name: 'History'},
-    {path: '/reader', component: Reader, name: 'Reader'},
     {path: '/parser', component: Parser, name: 'Parser'},
     // 404 fallback路由 - 必须放在最后
     {path: '/:pathMatch(.*)*', redirect: '/'}

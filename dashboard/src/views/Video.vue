@@ -6,6 +6,7 @@
     @maximize="maximize"
     @closeWindow="closeWindow"
     @onSearch="onSearch"
+    @handlePush="handlePush"
     :now_site_title="form.now_site_title"
   >
     <!-- 默认插槽的内容放这里 -->
@@ -27,6 +28,8 @@
         :currentPage="searchState.currentPage"
         :totalPages="searchState.totalPages"
         :hasMore="searchState.hasMore"
+        :scrollPosition="searchState.scrollPosition"
+        :sourceRoute="{ name: route.name, params: route.params, query: route.query }"
         @load-more="onSearchLoadMore"
         @exit-search="exitSearch"
         @video-click="handleVideoClick"
@@ -35,8 +38,12 @@
       <!-- 默认视频列表 -->
       <VideoList 
         v-else
+        ref="videoListRef"
         :classList="form.classList" 
         :recommendVideos="form.recommendVideos"
+        :sourceRoute="{ name: route.name, params: route.params, query: { ...route.query, activeKey: currentActiveKey } }"
+        :returnToActiveKey="route.query._returnToActiveKey"
+        @activeKeyChange="handleActiveKeyChange"
       />
     </a-layout-content>
   </div>
@@ -62,11 +69,30 @@ import SearchResults from "../components/SearchResults.vue";
 import { videoService, siteService } from "@/api/services";
 import { useSiteStore } from "@/stores/siteStore";
 import { usePaginationStore } from "@/stores/paginationStore";
+import { usePageStateStore } from "@/stores/pageStateStore";
+import { useRoute, useRouter } from "vue-router";
+import { Message } from "@arco-design/web-vue";
 
 const { nowSite, setCurrentSite } = useSiteStore();
 const paginationStore = usePaginationStore();
+const pageStateStore = usePageStateStore();
+const route = useRoute();
+const router = useRouter();
 
-const currentDateTime = ref("");
+// 时间格式化函数
+const formatDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+const currentDateTime = ref(formatDate(new Date())); // 初始化时就设置当前时间
+const currentActiveKey = ref(""); // 当前选中的分类key
+const videoListRef = ref(null); // VideoList组件引用
 const form = reactive({
   sites: [],
   now_site_title: "hipy影视",
@@ -87,7 +113,8 @@ const searchState = reactive({
   searchError: null,
   currentPage: 1,
   totalPages: 1,
-  hasMore: false
+  hasMore: false,
+  scrollPosition: 0
 });
 
 const timer = ref(null);
@@ -143,20 +170,6 @@ const checkNowSite = () => {
   ) {
     form.new_site = form.sites[0];
   }
-};
-
-const formatDate = (date) => {
-  const options = {
-    weekday: "long", // 星期几
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true, // 12小时制
-  };
-  return date.toLocaleString("zh-CN", options);
 };
 
 // 启动定时器
@@ -332,9 +345,36 @@ const exitSearch = () => {
   searchState.currentPage = 1;
 };
 
+// 处理分类变化事件
+const handleActiveKeyChange = (activeKey) => {
+  currentActiveKey.value = activeKey;
+};
+
 // 处理视频点击事件
 const handleVideoClick = (video) => {
   if (video && video.vod_id) {
+    let fromSearch = 'false';
+    
+    // 判断当前是否在搜索状态
+    if (searchState.isSearching) {
+      // 搜索状态的保存由SearchResults组件处理
+      console.log('从搜索结果点击视频，状态保存由SearchResults组件处理');
+      fromSearch = 'true';
+    } else {
+      // 保存分类状态
+      if (currentActiveKey.value) {
+        pageStateStore.saveVideoState(
+          currentActiveKey.value,
+          1, // 当前页码
+          [], // 视频列表
+          true, // hasMore状态
+          false, // loading状态
+          window.scrollY // 当前滚动位置
+        );
+        console.log('从分类列表点击视频，保存分类状态');
+      }
+    }
+    
     router.push({
          name: 'VideoDetail',
          params: { id: video.vod_id },
@@ -347,7 +387,12 @@ const handleVideoClick = (video) => {
            remarks: video.vod_remarks,
            content: video.vod_content,
            actor: video.vod_actor,
-           director: video.vod_director
+           director: video.vod_director,
+           // 传递来源页面信息
+           sourceRouteName: route.name,
+           sourceRouteParams: JSON.stringify(route.params),
+           sourceRouteQuery: JSON.stringify({ ...route.query, activeKey: currentActiveKey.value }),
+           fromSearch: fromSearch // 标识是否来自搜索
          }
        });
   }
@@ -361,18 +406,171 @@ const handleOpenForm = () => {
   checkNowSite();
 };
 
+// 处理推送功能
+const handlePush = async (vodId) => {
+  if (!vodId || !vodId.trim()) {
+    Message.error("推送内容不能为空");
+    return;
+  }
+
+  // 检查是否存在push_agent源
+  const pushAgentSite = form.sites.find(site => site.key === 'push_agent');
+  
+  if (!pushAgentSite) {
+    Message.error("没有找到push_agent服务，请检查源配置");
+    return;
+  }
+
+  try {
+    console.log('推送功能，使用临时站源:', {
+      siteName: pushAgentSite.name,
+      siteKey: pushAgentSite.key,
+      siteApi: pushAgentSite.api
+    });
+
+    // 参考收藏和历史功能，使用临时源跳转到详情页
+    router.push({
+      name: 'VideoDetail',
+      params: { id: vodId.trim() },
+      query: {
+        // 基本视频信息（推送时可能没有完整信息）
+        name: `推送内容-${vodId.trim()}`,
+        pic: '',
+        year: '',
+        area: '',
+        type: '',
+        type_name: '',
+        remarks: '',
+        content: '',
+        actor: '',
+        director: '',
+        // 标识从推送进入，使用临时站源
+        fromPush: 'true',
+        // 传递push_agent站源信息，不影响全局状态
+        tempSiteName: pushAgentSite.name,
+        tempSiteApi: pushAgentSite.api,
+        tempSiteKey: pushAgentSite.key,
+        // 传递来源页面信息
+        sourceRouteName: route.name,
+        sourceRouteParams: JSON.stringify(route.params),
+        sourceRouteQuery: JSON.stringify(route.query)
+      }
+    });
+    
+    Message.success(`正在推送内容: ${vodId.trim()}`);
+  } catch (error) {
+    console.error("推送失败:", error);
+    Message.error("推送失败，请重试");
+  }
+};
+
 // 页面加载时获取数据
-onMounted(() => {
+onMounted(async () => {
   getData(); // 页面加载时获取数据
   getNowSite(); // 获取储存的当前源
-  getClassList(form.now_site);
+  
+  // 检查是否需要恢复搜索状态
+  const restoreSearch = route.query._restoreSearch;
+  const returnToActiveKey = route.query._returnToActiveKey;
+  
+  if (restoreSearch === 'true') {
+    // 恢复搜索状态
+    const savedSearchState = pageStateStore.getPageState('search');
+    if (savedSearchState && savedSearchState.keyword && !pageStateStore.isStateExpired('search')) {
+      console.log('恢复搜索状态:', savedSearchState);
+      
+      // 恢复搜索相关状态
+      searchState.isSearching = true;
+      searchState.searchKeyword = savedSearchState.keyword;
+      searchState.searchResults = savedSearchState.videos || [];
+      searchState.currentPage = savedSearchState.currentPage || 1;
+      searchState.hasMore = savedSearchState.hasMore || false;
+      searchState.searchLoading = false;
+      searchState.searchError = null;
+      searchState.scrollPosition = savedSearchState.scrollPosition || 0;
+      
+      // 清除URL中的恢复参数
+      const newQuery = { ...route.query };
+      delete newQuery._restoreSearch;
+      router.replace({ query: newQuery });
+      
+      await getClassList(form.now_site);
+      startClock(); // 启动时钟
+      
+      // 注意：搜索结果的滚动位置恢复由SearchResults组件自动处理
+      console.log('搜索状态恢复完成，滚动位置由SearchResults组件处理');
+      
+      return; // 搜索状态恢复完成，不再执行分类恢复逻辑
+    }
+  }
+  
+  // 尝试恢复页面状态
+  const savedState = pageStateStore.getPageState('video');
+  const isStateExpired = pageStateStore.isStateExpired('video');
+  
+  let shouldRestoreState = false;
+  
+  if (returnToActiveKey) {
+    // 如果有返回参数，优先使用返回参数
+    currentActiveKey.value = returnToActiveKey;
+    shouldRestoreState = true;
+    console.log('从详情页返回，恢复到分类:', returnToActiveKey);
+    
+    // 清除URL中的返回参数
+    const newQuery = { ...route.query };
+    delete newQuery._returnToActiveKey;
+    router.replace({ query: newQuery });
+  } else if (savedState && savedState.activeKey && !isStateExpired) {
+    // 如果有保存的状态且未过期，恢复状态
+    currentActiveKey.value = savedState.activeKey;
+    shouldRestoreState = true;
+    console.log('恢复保存的分类状态:', savedState.activeKey);
+  }
+  
+  // 确保分类列表已加载
+  await getClassList(form.now_site);
   startClock(); // 启动时钟
+  
+  // 如果需要恢复状态，等待VideoList组件挂载后再恢复
+  if (shouldRestoreState) {
+    setTimeout(() => {
+      if (videoListRef.value) {
+        videoListRef.value.restoreFullState({
+          activeKey: currentActiveKey.value,
+          currentPage: savedState?.currentPage || 1,
+          videos: savedState?.videos || [],
+          hasMore: savedState?.hasMore || true,
+          scrollPosition: savedState?.scrollPosition || 0
+        });
+    }}, 100);
+  }
 });
 
 // 清理定时器
 onBeforeUnmount(() => {
   if (timer.value) {
     clearInterval(timer.value); // 销毁时清除定时器
+  }
+  
+  // 保存当前页面状态
+  if (currentActiveKey.value && videoListRef.value) {
+    const currentState = videoListRef.value.getCurrentState();
+    pageStateStore.saveVideoState(
+      currentActiveKey.value,
+      currentState.currentPage, // 从VideoList组件获取当前页码
+      currentState.videos, // 从VideoList组件获取视频列表
+      currentState.hasMore, // 从VideoList组件获取hasMore状态
+      false, // loading状态
+      currentState.scrollPosition // 从VideoList组件获取滚动位置
+    );
+    console.log('保存Video页面状态:', {
+      activeKey: currentActiveKey.value,
+      currentPage: currentState.currentPage,
+      videosCount: currentState.videos.length,
+      hasMore: currentState.hasMore,
+      hasData: currentState.hasData,
+      scrollPosition: currentState.scrollPosition
+    });
   }
 });
 </script>

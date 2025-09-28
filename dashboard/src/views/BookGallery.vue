@@ -1,15 +1,15 @@
 <template>
-  <div class="collection-container">
+  <div class="book-gallery-container">
     <!-- 头部 -->
-    <div class="collection-header">
+    <div class="book-gallery-header">
       <div class="header-left">
-        <h1 class="page-title">我的收藏</h1>
-        <a-badge :count="favoriteStore.favoriteCount" class="count-badge" />
+        <h1 class="page-title">我的书画柜</h1>
+        <a-badge :count="bookGalleryCount" class="count-badge" />
       </div>
       <div class="header-actions">
         <a-input-search
           v-model="searchKeyword"
-          placeholder="搜索收藏的视频..."
+          placeholder="搜索我的书画..."
           style="width: 300px"
           @search="handleSearch"
           @clear="handleSearch"
@@ -23,6 +23,12 @@
             更多操作
           </a-button>
           <template #content>
+            <a-doption value="add-local">
+              <template #icon>
+                <icon-plus />
+              </template>
+              添加本地图书
+            </a-doption>
             <a-doption value="import">
               <template #icon>
                 <icon-import />
@@ -45,7 +51,7 @@
               <template #icon>
                 <icon-delete />
               </template>
-              清空收藏
+              清空书画柜
             </a-doption>
           </template>
         </a-dropdown>
@@ -53,43 +59,50 @@
     </div>
 
     <!-- 分类筛选 -->
-    <div class="filter-section" v-if="favoriteStore.favoriteCount > 0">
+    <div class="filter-section" v-if="bookGalleryCount > 0">
       <div class="filter-tabs">
         <a-button
           :type="selectedCategory === 'all' ? 'primary' : 'outline'"
           @click="selectedCategory = 'all'"
           size="small"
         >
-          全部 ({{ favoriteStore.favoriteCount }})
+          全部 ({{ bookGalleryCount }})
         </a-button>
         <a-button
-          v-for="(items, category) in favoriteStore.favoritesByType"
-          :key="category"
-          :type="selectedCategory === category ? 'primary' : 'outline'"
-          @click="selectedCategory = category"
+          :type="selectedCategory === '小说' ? 'primary' : 'outline'"
+          @click="selectedCategory = '小说'"
           size="small"
+          v-if="novelCount > 0"
         >
-          {{ category }} ({{ items.length }})
+          我的书架 ({{ novelCount }})
+        </a-button>
+        <a-button
+          :type="selectedCategory === '漫画' ? 'primary' : 'outline'"
+          @click="selectedCategory = '漫画'"
+          size="small"
+          v-if="comicCount > 0"
+        >
+          我的漫画柜 ({{ comicCount }})
         </a-button>
       </div>
     </div>
 
-    <!-- 收藏列表 -->
-    <div class="collection-content">
+    <!-- 书画柜列表 -->
+    <div class="book-gallery-content">
       <!-- 空状态 -->
-      <div v-if="favoriteStore.favoriteCount === 0" class="empty-state">
-        <a-empty description="还没有收藏任何视频">
+      <div v-if="bookGalleryCount === 0" class="empty-state">
+        <a-empty description="还没有收藏任何书画">
           <template #image>
-            <icon-heart style="font-size: 64px; color: var(--color-text-4);" />
+            <icon-book style="font-size: 64px; color: var(--color-text-4);" />
           </template>
           <a-button type="primary" @click="goToVideo">去发现好内容</a-button>
         </a-empty>
       </div>
 
-      <!-- 收藏网格 -->
-      <div v-else class="favorites-grid">
+      <!-- 书画网格 -->
+      <div v-else class="books-grid">
         <VideoCard
-          v-for="item in filteredFavorites"
+          v-for="item in filteredBooks"
           :key="`${item.id}-${item.api_info.api_url}`"
           :item="item"
           type="favorite"
@@ -138,10 +151,10 @@ import { useSiteStore } from '@/stores/siteStore'
 import VideoCard from '@/components/VideoCard.vue'
 import ApiUrlManager from '@/components/ApiUrlManager.vue'
 import {
-  IconHeart,
-  IconHeartFill,
+  IconBook,
   IconPlayArrow,
   IconMore,
+  IconPlus,
   IconImport,
   IconExport,
   IconSettings,
@@ -195,27 +208,43 @@ const viewerOptions = ref({
   backdrop: true,
 })
 
-// 计算属性
-const filteredFavorites = computed(() => {
-  let favorites = favoriteStore.favorites
+// 计算属性 - 只获取小说和漫画分类的收藏
+const bookGalleryItems = computed(() => {
+  return favoriteStore.favorites.filter(item => {
+    const siteName = item.api_info?.site_name || ''
+    return siteName.includes('[书]') || siteName.includes('[画]')
+  })
+})
+
+const bookGalleryCount = computed(() => bookGalleryItems.value.length)
+
+const novelCount = computed(() => {
+  return bookGalleryItems.value.filter(item => {
+    const siteName = item.api_info?.site_name || ''
+    return siteName.includes('[书]')
+  }).length
+})
+
+const comicCount = computed(() => {
+  return bookGalleryItems.value.filter(item => {
+    const siteName = item.api_info?.site_name || ''
+    return siteName.includes('[画]')
+  }).length
+})
+
+const filteredBooks = computed(() => {
+  let books = bookGalleryItems.value
 
   // 分类筛选
   if (selectedCategory.value !== 'all') {
-    favorites = favorites.filter(item => {
-      // 根据站源名称中的标识进行分类（与favoriteStore中的逻辑保持一致）
+    books = books.filter(item => {
       const siteName = item.api_info?.site_name || ''
-      let type = '影视' // 默认分类
+      let type = ''
       
       if (siteName.includes('[书]')) {
         type = '小说'
       } else if (siteName.includes('[画]')) {
         type = '漫画'
-      } else if (siteName.includes('[密]')) {
-        type = '密'
-      } else if (siteName.includes('[听]')) {
-        type = '音频'
-      } else if (siteName.includes('[儿]')) {
-        type = '少儿'
       }
       
       return type === selectedCategory.value
@@ -225,14 +254,14 @@ const filteredFavorites = computed(() => {
   // 搜索筛选
   if (searchKeyword.value.trim()) {
     const keyword = searchKeyword.value.toLowerCase()
-    favorites = favorites.filter(item =>
+    books = books.filter(item =>
       item.name.toLowerCase().includes(keyword) ||
       (item.director && item.director.toLowerCase().includes(keyword)) ||
       (item.actor && item.actor.toLowerCase().includes(keyword))
     )
   }
 
-  return favorites
+  return books
 })
 
 // 方法
@@ -259,6 +288,9 @@ const showImageModal = (item) => {
 
 const handleAction = (value) => {
   switch (value) {
+    case 'add-local':
+      addLocalBook()
+      break
     case 'import':
       importFavorites()
       break
@@ -269,9 +301,14 @@ const handleAction = (value) => {
       showApiManager.value = true
       break
     case 'clear':
-      clearAllFavorites()
+      clearAllBooks()
       break
   }
+}
+
+const addLocalBook = () => {
+  Message.info('添加本地图书功能开发中...')
+  // TODO: 实现添加本地图书功能
 }
 
 const importFavorites = () => {
@@ -294,29 +331,48 @@ const handleFileImport = async (event) => {
 }
 
 const exportFavorites = () => {
-  if (favoriteStore.favoriteCount === 0) {
-    Message.warning('没有收藏数据可以导出')
+  if (bookGalleryCount.value === 0) {
+    Message.warning('没有书画数据可以导出')
     return
   }
 
   try {
-    favoriteStore.exportFavorites()
-    Message.success('收藏数据导出成功')
+    // 只导出书画相关的收藏
+    const bookData = {
+      favorites: bookGalleryItems.value,
+      exportTime: new Date().toISOString(),
+      type: 'book-gallery'
+    }
+    
+    const blob = new Blob([JSON.stringify(bookData, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `书画柜_${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    
+    Message.success('书画柜数据导出成功')
   } catch (error) {
     Message.error('导出失败，请稍后重试')
   }
 }
 
-const clearAllFavorites = () => {
+const clearAllBooks = () => {
   Modal.confirm({
-    title: '确认清空收藏',
-    content: `确定要清空所有 ${favoriteStore.favoriteCount} 个收藏项吗？此操作不可恢复。`,
+    title: '确认清空书画柜',
+    content: `确定要清空所有 ${bookGalleryCount.value} 个书画收藏吗？此操作不可恢复。`,
     okText: '确认清空',
     cancelText: '取消',
     okButtonProps: { status: 'danger' },
     onOk: () => {
-      favoriteStore.clearFavorites()
-      Message.success('已清空所有收藏')
+      // 只清空书画相关的收藏
+      bookGalleryItems.value.forEach(item => {
+        favoriteStore.removeFavorite(item.id, item.api_info.api_url)
+      })
+      Message.success('已清空书画柜')
     }
   })
 }
@@ -346,7 +402,7 @@ const goToDetail = async (item) => {
       key: item.api_info.module
     }
     
-    console.log('从收藏进入详情页，使用临时站源:', siteInfo.name)
+    console.log('从书画柜进入详情页，使用临时站源:', siteInfo.name)
     
     // 跳转到详情页，传递站源信息
     router.push({
@@ -369,13 +425,13 @@ const goToDetail = async (item) => {
           tempSiteApi: siteInfo.api,
           tempSiteKey: siteInfo.key,
           // 添加来源页面信息
-          sourceRouteName: 'Collection',
+          sourceRouteName: 'BookGallery',
           sourceRouteParams: JSON.stringify({}),
           sourceRouteQuery: JSON.stringify({})
         }
       })
     
-    Message.info(`正在加载 ${item.api_info.site_name} 的视频详情...`)
+    Message.info(`正在加载 ${item.api_info.site_name} 的详情...`)
   } catch (error) {
     Message.error('跳转失败，请稍后重试')
     console.error('跳转到详情页失败:', error)
@@ -415,14 +471,14 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.collection-container {
+.book-gallery-container {
   height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--color-bg-1);
 }
 
-.collection-header {
+.book-gallery-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -466,7 +522,7 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.collection-content {
+.book-gallery-content {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
@@ -479,13 +535,11 @@ onMounted(() => {
   min-height: 400px;
 }
 
-.favorites-grid {
+.books-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 24px;
 }
-
-
 
 .danger-option {
   color: var(--color-danger-6);
@@ -493,14 +547,14 @@ onMounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 1200px) {
-  .favorites-grid {
+  .books-grid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 20px;
   }
 }
 
 @media (max-width: 768px) {
-  .collection-header {
+  .book-gallery-header {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
@@ -519,18 +573,18 @@ onMounted(() => {
     padding: 12px 16px;
   }
   
-  .collection-content {
+  .book-gallery-content {
     padding: 16px;
   }
   
-  .favorites-grid {
+  .books-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 16px;
   }
 }
 
 @media (max-width: 480px) {
-  .collection-header {
+  .book-gallery-header {
     padding: 16px;
   }
   
@@ -538,7 +592,7 @@ onMounted(() => {
     font-size: 20px;
   }
   
-  .favorites-grid {
+  .books-grid {
     grid-template-columns: 1fr;
   }
 }

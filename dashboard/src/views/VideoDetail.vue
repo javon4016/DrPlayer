@@ -12,8 +12,8 @@
         <span v-if="!originalVideoInfo.name">视频详情</span>
         <span v-else class="title-with-info">
           <span class="title-main">视频详情 - {{ originalVideoInfo.name }}</span>
-          <span class="title-source" v-if="siteStore.nowSite">
-            ({{ siteStore.nowSite.name }} - ID: {{ originalVideoInfo.id }})
+          <span class="title-source" v-if="currentSiteInfo.name">
+            ({{ currentSiteInfo.name }} - ID: {{ originalVideoInfo.id }})
           </span>
         </span>
       </div>
@@ -51,8 +51,12 @@
       <!-- 视频信息卡片 -->
       <a-card class="video-info-card">
         <div class="video-header">
-          <div class="video-poster">
+          <div class="video-poster" @click="showImageModal">
             <img :src="videoDetail.vod_pic" :alt="videoDetail.vod_name" @error="handleImageError" />
+            <div class="poster-overlay">
+              <icon-eye class="view-icon" />
+              <span>查看大图</span>
+            </div>
           </div>
           <div class="video-meta">
             <h1 class="video-title">{{ videoDetail.vod_name }}</h1>
@@ -74,6 +78,23 @@
                 <span class="label">备注：</span>
                 <span class="value">{{ videoDetail.vod_remarks }}</span>
               </div>
+            </div>
+          </div>
+          <div class="video-actions">
+            <!-- 播放按钮区域 -->
+            <div v-if="currentEpisodeUrl" class="play-actions">
+              <a-button type="primary" size="large" @click="playVideo" class="play-btn">
+                <template #icon>
+                  <icon-play-arrow />
+                </template>
+                播放视频
+              </a-button>
+              <a-button @click="copyPlayUrl" class="copy-btn">
+                <template #icon>
+                  <icon-copy />
+                </template>
+                复制链接
+              </a-button>
             </div>
           </div>
         </div>
@@ -185,21 +206,7 @@
           </div>
         </div>
 
-        <!-- 播放按钮 -->
-        <div v-if="currentEpisodeUrl" class="play-actions">
-          <a-button type="primary" size="large" @click="playVideo" class="play-btn">
-            <template #icon>
-              <icon-play-arrow />
-            </template>
-            播放视频
-          </a-button>
-          <a-button @click="copyPlayUrl" class="copy-btn">
-            <template #icon>
-              <icon-copy />
-            </template>
-            复制链接
-          </a-button>
-        </div>
+
       </a-card>
 
       <!-- 无播放资源提示 -->
@@ -207,17 +214,30 @@
         <a-empty description="暂无播放资源" />
       </a-card>
     </div>
+
+    <!-- v-viewer 图片查看器 -->
+    <div v-viewer="viewerOptions" class="viewer" v-show="false">
+      <img 
+        v-for="(imageData, index) in viewerImageData" 
+        :key="index"
+        :src="imageData.src" 
+        :alt="imageData.name"
+        :data-source="imageData.src"
+        :title="imageData.name"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import videoService from '@/api/services/video'
 import { useSiteStore } from '@/stores/siteStore'
 import { useFavoriteStore } from '@/stores/favoriteStore'
 import { useHistoryStore } from '@/stores/historyStore'
+import { usePageStateStore } from '@/stores/pageStateStore'
 import { 
   IconLeft, 
   IconPlayArrow, 
@@ -227,7 +247,8 @@ import {
   IconSortAscending,
   IconSortDescending,
   IconSettings,
-  IconMenu
+  IconMenu,
+  IconEye
 } from '@arco-design/web-vue/es/icon'
 
 const route = useRoute()
@@ -235,6 +256,7 @@ const router = useRouter()
 const siteStore = useSiteStore()
 const favoriteStore = useFavoriteStore()
 const historyStore = useHistoryStore()
+const pageStateStore = usePageStateStore()
 
 // 响应式数据
 const loading = ref(false)
@@ -267,6 +289,41 @@ const currentSiteInfo = ref({
   key: ''
 })
 
+// 图片查看器相关
+const viewerImages = ref([])
+const viewerImageData = ref([])
+const viewerOptions = ref({
+  inline: false,
+  button: true,
+  navbar: true,
+  title: true,
+  toolbar: {
+    zoomIn: 1,
+    zoomOut: 1,
+    oneToOne: 1,
+    reset: 1,
+    prev: 1,
+    play: {
+      show: 1,
+      size: 'large',
+    },
+    next: 1,
+    rotateLeft: 1,
+    rotateRight: 1,
+    flipHorizontal: 1,
+    flipVertical: 1,
+  },
+  tooltip: true,
+  movable: true,
+  zoomable: true,
+  rotatable: true,
+  scalable: true,
+  transition: true,
+  fullscreen: true,
+  keyboard: true,
+  backdrop: true,
+})
+
 // 计算属性
 const playRoutes = computed(() => {
   if (!videoDetail.value?.vod_play_from || !videoDetail.value?.vod_play_url) {
@@ -297,6 +354,10 @@ const currentRouteEpisodes = computed(() => {
   }
   
   return episodes
+})
+
+const currentEpisodes = computed(() => {
+  return currentRouteEpisodes.value
 })
 
 const currentEpisodeUrl = computed(() => {
@@ -352,19 +413,23 @@ const loadVideoDetail = async () => {
   loading.value = true
   error.value = ''
   
-  // 检查是否从收藏进入，如果是则优先调用T4详情接口获取最新数据
+  // 检查是否从收藏、历史或推送进入，如果是则优先调用T4详情接口获取最新数据
   const fromCollection = route.query.fromCollection === 'true'
+  const fromHistory = route.query.fromHistory === 'true'
+  const fromPush = route.query.fromPush === 'true'
   
   try {
     // 确定使用的站源信息
     let module, apiUrl, siteName
     
-    if (fromCollection && route.query.tempSiteKey) {
-      // 从收藏进入，使用临时站源信息，不影响全局状态
+    if ((fromCollection || fromHistory || fromPush) && route.query.tempSiteKey) {
+      // 从收藏、历史或推送进入，使用临时站源信息，不影响全局状态
       module = route.query.tempSiteKey
       apiUrl = route.query.tempSiteApi
       siteName = route.query.tempSiteName
-      console.log('从收藏进入，使用临时站源:', {
+      
+      const sourceType = fromCollection ? '收藏' : fromHistory ? '历史' : '推送'
+      console.log(`从${sourceType}进入，使用临时站源:`, {
         siteName,
         module,
         apiUrl
@@ -407,6 +472,39 @@ const loadVideoDetail = async () => {
       
       videoDetail.value = videoInfo
       console.log('视频详情获取成功:', videoInfo)
+      
+      // 处理历史记录恢复
+      const historyRoute = route.query.historyRoute
+      const historyEpisode = route.query.historyEpisode
+      
+      if (historyRoute && historyEpisode) {
+        console.log('检测到历史记录参数，准备恢复播放位置:', { historyRoute, historyEpisode })
+        // 等待DOM更新和计算属性更新后恢复历史记录位置
+        nextTick(() => {
+          // 再次等待，确保playRoutes计算属性已完全更新
+          setTimeout(() => {
+            console.log('开始恢复历史记录，当前playRoutes长度:', playRoutes.value.length)
+            if (playRoutes.value.length > 0) {
+              restoreHistoryPosition(historyRoute, historyEpisode)
+            } else {
+              console.warn('playRoutes为空，无法恢复历史记录')
+            }
+          }, 100)
+        })
+      } else {
+        // 如果没有历史记录参数，确保默认选择第一个线路和选集
+        nextTick(() => {
+          setTimeout(() => {
+            if (playRoutes.value.length > 0 && currentRoute.value === 0) {
+              console.log('初始化默认播放位置')
+              currentRoute.value = 0
+              if (currentRouteEpisodes.value.length > 0) {
+                currentEpisode.value = 0
+              }
+            }
+          }, 100)
+        })
+      }
     } else {
       error.value = '未找到视频详情'
     }
@@ -468,13 +566,152 @@ const toggleFavorite = async () => {
 }
 
 const goBack = () => {
-  router.back()
+  // 检查是否有来源页面信息
+  const sourceRouteName = route.query.sourceRouteName
+  const sourceRouteParams = route.query.sourceRouteParams
+  const sourceRouteQuery = route.query.sourceRouteQuery
+  const fromSearch = route.query.fromSearch // 新增：标识是否来自搜索
+  
+  console.log('goBack 调用，来源信息:', { sourceRouteName, fromSearch, sourceRouteParams, sourceRouteQuery });
+  
+  if (sourceRouteName) {
+    try {
+      // 解析来源页面的参数和查询
+      const params = sourceRouteParams ? JSON.parse(sourceRouteParams) : {}
+      const query = sourceRouteQuery ? JSON.parse(sourceRouteQuery) : {}
+      
+      console.log('返回来源页面:', sourceRouteName, { params, query, fromSearch });
+      
+      // 根据来源页面类型和是否来自搜索处理状态恢复
+      if (sourceRouteName === 'Video') {
+        if (fromSearch === 'true') {
+          // 来自Video页面的搜索结果，需要恢复搜索状态
+          console.log('从Video页面搜索返回，恢复搜索状态');
+          const savedSearchState = pageStateStore.getPageState('search');
+          if (savedSearchState && savedSearchState.keyword && !pageStateStore.isStateExpired('search')) {
+            console.log('发现保存的搜索状态，将恢复搜索结果:', savedSearchState);
+            // 添加搜索恢复标识
+            query._restoreSearch = 'true';
+          }
+        } else {
+          // 来自Video页面的分类列表，恢复分类状态
+          console.log('从Video页面分类返回，恢复分类状态');
+          if (query.activeKey) {
+            query._returnToActiveKey = query.activeKey;
+            console.log('设置返回分类:', query.activeKey);
+          }
+          
+          // 检查是否有保存的Video页面状态
+          const savedVideoState = pageStateStore.getPageState('video');
+          if (savedVideoState && !pageStateStore.isStateExpired('video')) {
+            console.log('发现保存的Video页面状态，将恢复状态而非重新加载');
+          }
+        }
+      } else if (sourceRouteName === 'Home') {
+        // 返回Home页面，检查搜索状态
+        const savedSearchState = pageStateStore.getPageState('search');
+        if (savedSearchState && savedSearchState.keyword && !pageStateStore.isStateExpired('search')) {
+          console.log('发现保存的搜索状态，将恢复搜索结果');
+          // 添加搜索恢复标识
+          query._restoreSearch = 'true';
+        }
+      }
+      
+      // 跳转到来源页面
+      router.push({
+        name: sourceRouteName,
+        params: params,
+        query: query
+      })
+    } catch (error) {
+      console.error('解析来源页面信息失败:', error)
+      // 如果解析失败，使用默认的返回方式
+      router.back()
+    }
+  } else {
+    console.log('没有来源信息，使用默认返回方式')
+    // 没有来源信息，使用默认的返回方式
+    router.back()
+  }
 }
 
 const handleImageError = (event) => {
-  event.target.src = '/default-poster.svg'
+  // 使用相对路径，适配子目录部署
+  event.target.src = './default-poster.svg'
   event.target.style.objectFit = 'contain'
   event.target.style.backgroundColor = '#f7f8fa'
+}
+
+const showImageModal = () => {
+  if (videoDetail.value?.vod_pic) {
+    // 设置当前图片到 viewer，包含图片URL和名称
+    viewerImages.value = [videoDetail.value.vod_pic]
+    viewerImageData.value = [{
+      src: videoDetail.value.vod_pic,
+      name: videoDetail.value.vod_name || '未知标题'
+    }]
+    
+    // 等待下一个 tick 后显示 viewer
+    setTimeout(() => {
+      const viewerElement = document.querySelector('.viewer')
+      if (viewerElement && viewerElement.$viewer) {
+        viewerElement.$viewer.show()
+      }
+    }, 100)
+  }
+}
+
+const restoreHistoryPosition = (historyRoute, historyEpisode) => {
+  try {
+    console.log('开始恢复历史记录位置:', { historyRoute, historyEpisode })
+    
+    // 查找对应的线路和选集
+    const routes = playRoutes.value
+    const targetRoute = routes.find(route => route.name === historyRoute)
+    
+    if (targetRoute) {
+      console.log('找到历史线路:', targetRoute.name)
+      
+      // 设置当前线路索引
+      const routeIndex = routes.indexOf(targetRoute)
+      currentRoute.value = routeIndex
+      
+      // 等待currentRouteEpisodes更新后查找选集
+      nextTick(() => {
+        const episodes = currentRouteEpisodes.value
+        const targetEpisode = episodes.find(ep => ep.name === historyEpisode)
+        
+        if (targetEpisode) {
+          console.log('找到历史选集:', targetEpisode.name)
+          
+          // 设置当前选集索引
+          const episodeIndex = episodes.indexOf(targetEpisode)
+          currentEpisode.value = episodeIndex
+          
+          console.log('历史记录位置恢复成功:', { routeIndex, episodeIndex })
+        } else {
+          console.warn('未找到历史选集:', historyEpisode)
+          // 如果找不到历史选集，默认选择第一个选集
+          if (episodes.length > 0) {
+            currentEpisode.value = 0
+          }
+        }
+      })
+    } else {
+      console.warn('未找到历史线路:', historyRoute)
+      // 如果找不到历史线路，默认选择第一个线路
+      if (routes.length > 0) {
+        currentRoute.value = 0
+        nextTick(() => {
+          if (currentRouteEpisodes.value.length > 0) {
+            currentEpisode.value = 0
+          }
+        })
+      }
+    }
+  } catch (error) {
+    console.error('恢复历史记录位置失败:', error)
+  }
 }
 
 const toggleDescription = () => {
@@ -599,43 +836,117 @@ const processEpisodeName = (episodeName) => {
 }
 
 const playVideo = () => {
-  if (currentEpisodeUrl.value) {
-    // 添加到历史记录
-    if (videoDetail.value && currentRouteEpisodes.value[currentEpisode.value]) {
-      const videoInfo = {
-        id: originalVideoInfo.value.id,
-        name: originalVideoInfo.value.name || videoDetail.value.vod_name || '',
-        pic: originalVideoInfo.value.pic || videoDetail.value.vod_pic || '',
-        year: originalVideoInfo.value.year || videoDetail.value.vod_year || '',
-        area: originalVideoInfo.value.area || videoDetail.value.vod_area || '',
-        type: originalVideoInfo.value.type || videoDetail.value.vod_type || '',
-        type_name: originalVideoInfo.value.type_name || videoDetail.value.type_name || '',
-        remarks: originalVideoInfo.value.remarks || videoDetail.value.vod_remarks || '',
-        api_info: {
-          module: currentSiteInfo.value.key,
-          api_url: currentSiteInfo.value.api,
-          site_name: currentSiteInfo.value.name
-        }
-      }
+  // 检查是否有历史记录
+  const videoId = originalVideoInfo.value.id
+  const apiUrl = currentSiteInfo.value.api
+  
+  if (videoId && apiUrl) {
+    const historyItem = historyStore.getHistoryByVideo(videoId, apiUrl)
+    
+    if (historyItem) {
+      console.log('发现历史记录，播放历史位置:', historyItem)
       
-      const routeInfo = {
-        name: playRoutes.value[currentRoute.value]?.name || '',
-        index: currentRoute.value
-      }
+      // 查找历史记录对应的线路和选集
+      const routes = playRoutes.value
+      const targetRoute = routes.find(route => route.name === historyItem.current_route_name)
       
-      const episodeInfo = {
-        name: currentRouteEpisodes.value[currentEpisode.value].name,
-        index: currentEpisode.value,
-        url: currentRouteEpisodes.value[currentEpisode.value].url
+      if (targetRoute) {
+        const routeIndex = routes.indexOf(targetRoute)
+        currentRoute.value = routeIndex
+        
+        // 等待currentRouteEpisodes更新后查找选集
+        nextTick(() => {
+          const episodes = currentRouteEpisodes.value
+          const targetEpisode = episodes.find(ep => ep.name === historyItem.current_episode_name)
+          
+          if (targetEpisode) {
+            const episodeIndex = episodes.indexOf(targetEpisode)
+            currentEpisode.value = episodeIndex
+            
+            // 等待currentEpisodeUrl更新后播放
+            nextTick(() => {
+              if (currentEpisodeUrl.value) {
+                console.log('播放历史记录位置:', historyItem.current_episode_name)
+                Message.info(`继续播放: ${historyItem.current_episode_name}`)
+                window.open(currentEpisodeUrl.value, '_blank')
+                
+                // 更新历史记录的播放时间
+                updateHistoryRecord()
+              }
+            })
+          } else {
+            console.warn('未找到历史选集，播放第一个选集')
+            playFirstEpisode()
+          }
+        })
+      } else {
+        console.warn('未找到历史线路，播放第一个选集')
+        playFirstEpisode()
       }
-      
-      historyStore.addToHistory(videoInfo, routeInfo, episodeInfo)
+    } else {
+      console.log('无历史记录，播放第一个选集')
+      playFirstEpisode()
+    }
+  } else {
+    playFirstEpisode()
+  }
+}
+
+const playFirstEpisode = () => {
+  // 播放第一个线路的第一个选集（受排序影响）
+  if (playRoutes.value.length > 0) {
+    currentRoute.value = 0
+    
+    nextTick(() => {
+      if (currentRouteEpisodes.value.length > 0) {
+        currentEpisode.value = 0
+        
+        nextTick(() => {
+          if (currentEpisodeUrl.value) {
+            console.log('播放第一个选集:', currentRouteEpisodes.value[0].name)
+            Message.info(`开始播放: ${currentRouteEpisodes.value[0].name}`)
+            window.open(currentEpisodeUrl.value, '_blank')
+            
+            // 添加到历史记录
+            updateHistoryRecord()
+          }
+        })
+      }
+    })
+  }
+}
+
+const updateHistoryRecord = () => {
+  // 添加到历史记录
+  if (videoDetail.value && currentRouteEpisodes.value[currentEpisode.value]) {
+    const videoInfo = {
+      id: originalVideoInfo.value.id,
+      name: originalVideoInfo.value.name || videoDetail.value.vod_name || '',
+      pic: originalVideoInfo.value.pic || videoDetail.value.vod_pic || '',
+      year: originalVideoInfo.value.year || videoDetail.value.vod_year || '',
+      area: originalVideoInfo.value.area || videoDetail.value.vod_area || '',
+      type: originalVideoInfo.value.type || videoDetail.value.vod_type || '',
+      type_name: originalVideoInfo.value.type_name || videoDetail.value.type_name || '',
+      remarks: originalVideoInfo.value.remarks || videoDetail.value.vod_remarks || '',
+      api_info: {
+        module: currentSiteInfo.value.key,
+        api_url: currentSiteInfo.value.api,
+        site_name: currentSiteInfo.value.name
+      }
     }
     
-    // 这里可以集成视频播放器或跳转到播放页面
-    Message.info(`准备播放: ${currentRouteEpisodes.value[currentEpisode.value].name}`)
-    // 可以在这里添加实际的播放逻辑
-    window.open(currentEpisodeUrl.value, '_blank')
+    const routeInfo = {
+      name: playRoutes.value[currentRoute.value]?.name || '',
+      index: currentRoute.value
+    }
+    
+    const episodeInfo = {
+      name: currentRouteEpisodes.value[currentEpisode.value].name,
+      index: currentEpisode.value,
+      url: currentRouteEpisodes.value[currentEpisode.value].url
+    }
+    
+    historyStore.addToHistory(videoInfo, routeInfo, episodeInfo)
   }
 }
 
@@ -1024,11 +1335,20 @@ onMounted(() => {
   padding: 0 8px;
 }
 
+.video-actions {
+  margin-top: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+}
+
 .play-actions {
   display: flex;
   gap: 16px;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .play-btn {

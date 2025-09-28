@@ -7,63 +7,331 @@
 
     <!-- 设置内容 -->
     <div class="settings-content">
-      <!-- 配置地址卡片 -->
-      <a-card class="settings-card config-card" title="配置地址" :bordered="false">
+      <!-- 地址设置卡片 -->
+      <a-card class="settings-card config-card" title="地址设置" :bordered="false">
         <template #extra>
           <icon-link class="card-icon" />
         </template>
         
-        <div class="config-section">
-          <div class="config-input-group">
-            <a-input 
-              v-model="configUrl" 
-              placeholder="请输入配置地址URL (如: https://example.com/config.json)"
-              size="large"
-              class="config-input"
-            >
-              <template #prefix>
-                <icon-link />
-              </template>
-            </a-input>
-            <div class="config-actions">
-              <a-button 
-                type="outline" 
-                @click="testConfigUrl"
-                :loading="testing"
-                size="large"
+        <div class="address-settings-section">
+          <!-- 点播配置 -->
+          <div class="address-config-item">
+            <div class="address-config-row">
+              <div class="address-config-info">
+                <icon-play-circle class="address-config-icon" />
+                <div class="address-config-text">
+                  <div class="address-config-title">点播配置</div>
+                  <div class="address-config-desc">配置点播视频数据源地址</div>
+                </div>
+              </div>
+              <div class="address-config-input-group">
+                <a-input 
+                  v-model="addressSettings.vodConfig" 
+                  placeholder="请输入点播配置地址"
+                  size="medium"
+                  class="address-config-input"
+                >
+                  <template #prefix>
+                    <icon-link />
+                  </template>
+                </a-input>
+                <div class="address-config-actions">
+                  <AddressHistory 
+                    config-key="vod-config"
+                    :current-value="addressSettings.vodConfig"
+                    @select="(value) => addressSettings.vodConfig = value"
+                  />
+                  <a-button 
+                    type="outline" 
+                    @click="testAddress('vodConfig')"
+                    :loading="addressTesting.vodConfig"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-check-circle />
+                    </template>
+                    测试
+                  </a-button>
+                  <a-button 
+                    type="primary" 
+                    @click="saveAddress('vodConfig')"
+                    :loading="addressSaving.vodConfig"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-save />
+                    </template>
+                    保存
+                  </a-button>
+                </div>
+              </div>
+            </div>
+            <div v-if="addressStatus.vodConfig && addressStatus.vodConfig.message" class="address-config-status">
+              <div 
+                class="config-message"
+                :class="{
+                  'config-message-success': addressStatus.vodConfig.type === 'success',
+                  'config-message-error': addressStatus.vodConfig.type === 'error',
+                  'config-message-warning': addressStatus.vodConfig.type === 'warning'
+                }"
               >
-                <template #icon>
-                  <icon-check-circle />
-                </template>
-                测试
-              </a-button>
-              <a-button 
-                type="primary" 
-                @click="saveConfigUrl"
-                :loading="saving"
-                size="large"
-              >
-                <template #icon>
-                  <icon-save />
-                </template>
-                保存
-              </a-button>
+                <icon-check-circle v-if="addressStatus.vodConfig.type === 'success'" class="config-icon" />
+                <icon-exclamation-circle v-else-if="addressStatus.vodConfig.type === 'error'" class="config-icon" />
+                <icon-info-circle v-else class="config-icon" />
+                <span class="config-text">{{ addressStatus.vodConfig.message }}</span>
+              </div>
             </div>
           </div>
-          
-          <div v-if="configStatus && configStatus.message" class="config-status">
-            <div 
-              class="config-message"
-              :class="{
-                'config-message-success': configStatus.type === 'success',
-                'config-message-error': configStatus.type === 'error',
-                'config-message-warning': configStatus.type === 'warning'
-              }"
-            >
-              <icon-check-circle v-if="configStatus.type === 'success'" class="config-icon" />
-              <icon-exclamation-circle v-else-if="configStatus.type === 'error'" class="config-icon" />
-              <icon-info-circle v-else class="config-icon" />
-              <span class="config-text">{{ configStatus.message }}</span>
+
+          <!-- 直播配置 -->
+          <div class="address-config-item">
+            <div class="address-config-row">
+              <div class="address-config-info">
+                <icon-live-broadcast class="address-config-icon" />
+                <div class="address-config-text">
+                  <div class="address-config-title">直播配置</div>
+                  <div class="address-config-desc">配置直播频道数据源地址</div>
+                </div>
+              </div>
+              <div class="address-config-input-group">
+                <a-input 
+                  v-model="addressSettings.liveConfig" 
+                  placeholder="请输入直播配置地址"
+                  size="medium"
+                  class="address-config-input"
+                >
+                  <template #prefix>
+                    <icon-link />
+                  </template>
+                </a-input>
+                <div class="address-config-actions">
+                  <AddressHistory 
+                    config-key="live-config"
+                    :current-value="addressSettings.liveConfig"
+                    @select="(value) => addressSettings.liveConfig = value"
+                  />
+                  <a-button 
+                    type="outline" 
+                    @click="resetLiveConfig"
+                    :loading="addressSaving.liveConfigReset"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-refresh />
+                    </template>
+                    重置
+                  </a-button>
+                  <a-button 
+                    type="primary" 
+                    @click="saveAddress('liveConfig')"
+                    :loading="addressSaving.liveConfig"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-save />
+                    </template>
+                    保存
+                  </a-button>
+                </div>
+              </div>
+            </div>
+            <div v-if="addressStatus.liveConfig && addressStatus.liveConfig.message" class="address-config-status">
+              <div 
+                class="config-message"
+                :class="{
+                  'config-message-success': addressStatus.liveConfig.type === 'success',
+                  'config-message-error': addressStatus.liveConfig.type === 'error',
+                  'config-message-warning': addressStatus.liveConfig.type === 'warning'
+                }"
+              >
+                <icon-check-circle v-if="addressStatus.liveConfig.type === 'success'" class="config-icon" />
+                <icon-exclamation-circle v-else-if="addressStatus.liveConfig.type === 'error'" class="config-icon" />
+                <icon-info-circle v-else class="config-icon" />
+                <span class="config-text">{{ addressStatus.liveConfig.message }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 代理访问接口 -->
+          <div class="address-config-item">
+            <div class="address-config-row">
+              <div class="address-config-info">
+                <icon-swap class="address-config-icon" />
+                <div class="address-config-text">
+                  <div class="address-config-title">代理访问接口</div>
+                  <div class="address-config-desc">配置代理访问服务接口地址</div>
+                </div>
+              </div>
+              <div class="address-config-input-group">
+                <a-switch v-model="addressSettings.proxyAccessEnabled" class="address-config-switch" />
+                <a-input 
+                  v-model="addressSettings.proxyAccess" 
+                  placeholder="请输入代理访问接口地址"
+                  size="medium"
+                  class="address-config-input"
+                  :disabled="!addressSettings.proxyAccessEnabled"
+                >
+                  <template #prefix>
+                    <icon-link />
+                  </template>
+                </a-input>
+                <div class="address-config-actions">
+                  <AddressHistory 
+                    config-key="proxy-access"
+                    :current-value="addressSettings.proxyAccess"
+                    @select="(value) => addressSettings.proxyAccess = value"
+                  />
+                  <a-button 
+                    type="primary" 
+                    @click="saveAddress('proxyAccess')"
+                    :loading="addressSaving.proxyAccess"
+                    :disabled="!addressSettings.proxyAccessEnabled"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-save />
+                    </template>
+                    保存
+                  </a-button>
+                </div>
+              </div>
+            </div>
+            <div v-if="addressStatus.proxyAccess && addressStatus.proxyAccess.message" class="address-config-status">
+              <div 
+                class="config-message"
+                :class="{
+                  'config-message-success': addressStatus.proxyAccess.type === 'success',
+                  'config-message-error': addressStatus.proxyAccess.type === 'error',
+                  'config-message-warning': addressStatus.proxyAccess.type === 'warning'
+                }"
+              >
+                <icon-check-circle v-if="addressStatus.proxyAccess.type === 'success'" class="config-icon" />
+                <icon-exclamation-circle v-else-if="addressStatus.proxyAccess.type === 'error'" class="config-icon" />
+                <icon-info-circle v-else class="config-icon" />
+                <span class="config-text">{{ addressStatus.proxyAccess.message }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 代理播放接口 -->
+          <div class="address-config-item">
+            <div class="address-config-row">
+              <div class="address-config-info">
+                <icon-play-arrow class="address-config-icon" />
+                <div class="address-config-text">
+                  <div class="address-config-title">代理播放接口</div>
+                  <div class="address-config-desc">配置代理播放服务接口地址</div>
+                </div>
+              </div>
+              <div class="address-config-input-group">
+                <a-switch v-model="addressSettings.proxyPlayEnabled" class="address-config-switch" />
+                <a-input 
+                  v-model="addressSettings.proxyPlay" 
+                  placeholder="请输入代理播放接口地址"
+                  size="medium"
+                  class="address-config-input"
+                  :disabled="!addressSettings.proxyPlayEnabled"
+                >
+                  <template #prefix>
+                    <icon-link />
+                  </template>
+                </a-input>
+                <div class="address-config-actions">
+                  <AddressHistory 
+                    config-key="proxy-play"
+                    :current-value="addressSettings.proxyPlay"
+                    @select="(value) => addressSettings.proxyPlay = value"
+                  />
+                  <a-button 
+                    type="primary" 
+                    @click="saveAddress('proxyPlay')"
+                    :loading="addressSaving.proxyPlay"
+                    :disabled="!addressSettings.proxyPlayEnabled"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-save />
+                    </template>
+                    保存
+                  </a-button>
+                </div>
+              </div>
+            </div>
+            <div v-if="addressStatus.proxyPlay && addressStatus.proxyPlay.message" class="address-config-status">
+              <div 
+                class="config-message"
+                :class="{
+                  'config-message-success': addressStatus.proxyPlay.type === 'success',
+                  'config-message-error': addressStatus.proxyPlay.type === 'error',
+                  'config-message-warning': addressStatus.proxyPlay.type === 'warning'
+                }"
+              >
+                <icon-check-circle v-if="addressStatus.proxyPlay.type === 'success'" class="config-icon" />
+                <icon-exclamation-circle v-else-if="addressStatus.proxyPlay.type === 'error'" class="config-icon" />
+                <icon-info-circle v-else class="config-icon" />
+                <span class="config-text">{{ addressStatus.proxyPlay.message }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 代理嗅探接口 -->
+          <div class="address-config-item">
+            <div class="address-config-row">
+              <div class="address-config-info">
+                <icon-search class="address-config-icon" />
+                <div class="address-config-text">
+                  <div class="address-config-title">代理嗅探接口</div>
+                  <div class="address-config-desc">配置代理嗅探服务接口地址</div>
+                </div>
+              </div>
+              <div class="address-config-input-group">
+                <a-switch v-model="addressSettings.proxySniffEnabled" class="address-config-switch" />
+                <a-input 
+                  v-model="addressSettings.proxySniff" 
+                  placeholder="请输入代理嗅探接口地址"
+                  size="medium"
+                  class="address-config-input"
+                  :disabled="!addressSettings.proxySniffEnabled"
+                >
+                  <template #prefix>
+                    <icon-link />
+                  </template>
+                </a-input>
+                <div class="address-config-actions">
+                  <AddressHistory 
+                    config-key="proxy-sniff"
+                    :current-value="addressSettings.proxySniff"
+                    @select="(value) => addressSettings.proxySniff = value"
+                  />
+                  <a-button 
+                    type="primary" 
+                    @click="saveAddress('proxySniff')"
+                    :loading="addressSaving.proxySniff"
+                    :disabled="!addressSettings.proxySniffEnabled"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-save />
+                    </template>
+                    保存
+                  </a-button>
+                </div>
+              </div>
+            </div>
+            <div v-if="addressStatus.proxySniff && addressStatus.proxySniff.message" class="address-config-status">
+              <div 
+                class="config-message"
+                :class="{
+                  'config-message-success': addressStatus.proxySniff.type === 'success',
+                  'config-message-error': addressStatus.proxySniff.type === 'error',
+                  'config-message-warning': addressStatus.proxySniff.type === 'warning'
+                }"
+              >
+                <icon-check-circle v-if="addressStatus.proxySniff.type === 'success'" class="config-icon" />
+                <icon-exclamation-circle v-else-if="addressStatus.proxySniff.type === 'error'" class="config-icon" />
+                <icon-info-circle v-else class="config-icon" />
+                <span class="config-text">{{ addressStatus.proxySniff.message }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -162,7 +430,7 @@
               </div>
             </div>
             <div class="setting-value">
-              <span class="value-text">IJK</span>
+              <span class="value-text">{{ getCurrentPlayerName() }}</span>
               <icon-right class="arrow-icon" />
             </div>
           </div>
@@ -402,6 +670,14 @@
         </div>
       </a-card>
     </div>
+    
+    <!-- 播放器选择对话框 -->
+    <PlayerSelector
+      v-model:visible="playerSelectVisible"
+      :player-types="playerTypes"
+      :current-player="settings.playerType"
+      @confirm="handlePlayerSelect"
+    />
   </div>
 </template>
 
@@ -425,82 +701,189 @@ import {
   IconSafe,
   IconBug,
   IconQuestionCircle,
-  IconInfoCircle
+  IconInfoCircle,
+  IconPlayCircle,
+  IconLiveBroadcast,
+  IconSwap,
+  IconPlayArrow,
+  IconSearch,
+  IconExclamationCircle,
+  IconRefresh
 } from '@arco-design/web-vue/es/icon'
+import AddressHistory from '@/components/AddressHistory.vue'
+import PlayerSelector from '@/components/PlayerSelector.vue'
 
-// 配置地址相关
-const configUrl = ref('')
-const saving = ref(false)
-const testing = ref(false)
-const configStatus = ref(null)
+// 地址设置相关
+const addressSettings = reactive({
+  vodConfig: '',
+  liveConfig: '',
+  proxyAccess: '',
+  proxyAccessEnabled: false,
+  proxyPlay: '',
+  proxyPlayEnabled: false,
+  proxySniff: '',
+  proxySniffEnabled: false
+})
+
+const addressSaving = reactive({
+  vodConfig: false,
+  liveConfig: false,
+  liveConfigReset: false,
+  proxyAccess: false,
+  proxyPlay: false,
+  proxySniff: false
+})
+
+const addressTesting = reactive({
+  vodConfig: false
+})
+
+const addressStatus = reactive({
+  vodConfig: null,
+  liveConfig: null,
+  proxyAccess: null,
+  proxyPlay: null,
+  proxySniff: null
+})
+
+// 播放器类型选项
+const playerTypes = [
+  { value: 'art', label: 'Art Player', description: '现代化的HTML5播放器' },
+  { value: 'ijk', label: 'IJK Player', description: '基于FFmpeg的播放器' },
+  { value: 'exo', label: 'Exo Player', description: 'Google开发的Android播放器' },
+  { value: 'mpv', label: 'MPV Player', description: '轻量级的媒体播放器' },
+  { value: 'vlc', label: 'VLC Player', description: '功能强大的多媒体播放器' }
+]
 
 // 设置项状态
 const settings = reactive({
   datasourceDisplay: true,
   windowPreview: true,
+  playerType: 'ijk', // 默认播放器类型
   adFilter: true,
   ijkCache: false,
   autoLive: false,
   secureDns: false
 })
 
-// 保存配置地址
-const saveConfigUrl = async () => {
-  if (!configUrl.value.trim()) {
-    Message.warning('请输入配置地址')
+// 播放器选择对话框状态
+const playerSelectVisible = ref(false)
+
+// 保存地址配置
+const saveAddress = async (configType) => {
+  const addressValue = addressSettings[configType]
+  
+  if (!addressValue || !addressValue.trim()) {
+    Message.warning('请输入地址')
     return
   }
   
-  saving.value = true
+  addressSaving[configType] = true
   try {
-    // 使用配置服务保存配置地址
-    const configService = (await import('@/api/services/config')).default
-    const success = await configService.setConfigUrl(configUrl.value)
+    // 保存到本地存储
+    const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+    savedAddresses[configType] = addressValue
     
-    if (success) {
-      configStatus.value = {
-        type: 'success',
-        message: '配置地址保存成功'
-      }
-      Message.success('配置地址保存成功')
+    // 如果是代理相关配置，也保存开关状态
+    if (configType.startsWith('proxy')) {
+      const enabledKey = configType + 'Enabled'
+      savedAddresses[enabledKey] = addressSettings[enabledKey]
     }
+    
+    localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
+    
+    // 如果是点播配置，尝试使用配置服务设置地址并自动设置直播配置地址
+    if (configType === 'vodConfig') {
+      try {
+        const configService = (await import('@/api/services/config')).default
+        await configService.setConfigUrl(addressValue)
+        
+        // 检查是否自动设置了直播配置地址
+        const liveConfigUrl = configService.getLiveConfigUrl()
+        if (liveConfigUrl && liveConfigUrl !== addressSettings.liveConfig) {
+          // 更新界面显示的直播配置地址
+          addressSettings.liveConfig = liveConfigUrl
+          
+          // 同步保存到本地存储
+          savedAddresses.liveConfig = liveConfigUrl
+          localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
+          
+          Message.success('点播配置保存成功，已自动设置直播配置地址')
+        } else {
+          Message.success('点播配置保存成功')
+        }
+      } catch (error) {
+        console.error('设置配置服务失败:', error)
+        Message.success('地址保存成功，但配置服务设置失败')
+      }
+    } else if (configType === 'liveConfig') {
+      // 如果是直播配置，使用配置服务设置直播配置地址
+      try {
+        const configService = (await import('@/api/services/config')).default
+        await configService.setLiveConfigUrl(addressValue)
+        Message.success('直播配置地址保存成功')
+      } catch (error) {
+        console.error('设置直播配置服务失败:', error)
+        Message.success('地址保存成功，但配置服务设置失败')
+      }
+    } else {
+      Message.success('地址保存成功')
+    }
+    
+    addressStatus[configType] = {
+      type: 'success',
+      message: '地址保存成功'
+    }
+    
+    // 添加到历史记录
+    const historyComponent = document.querySelector(`[config-key="${getConfigKey(configType)}"]`)
+    if (historyComponent && historyComponent.__vueParentComponent) {
+      historyComponent.__vueParentComponent.exposed.addHistory(addressValue)
+    }
+    
   } catch (error) {
-    console.error('保存配置地址失败:', error)
-    configStatus.value = {
+    console.error('保存地址失败:', error)
+    addressStatus[configType] = {
       type: 'error',
       message: '保存失败：' + (error.message || '未知错误')
     }
     Message.error('保存失败：' + (error.message || '未知错误'))
   } finally {
-    saving.value = false
+    addressSaving[configType] = false
     // 8秒后清除状态消息
     setTimeout(() => {
-      configStatus.value = null
+      addressStatus[configType] = null
     }, 8000)
   }
 }
 
-// 测试配置地址
-const testConfigUrl = async () => {
-  if (!configUrl.value.trim()) {
+// 测试地址配置（仅点播配置支持测试）
+const testAddress = async (configType) => {
+  if (configType !== 'vodConfig') {
+    return
+  }
+  
+  const addressValue = addressSettings[configType]
+  
+  if (!addressValue || !addressValue.trim()) {
     Message.warning('请输入配置地址')
     return
   }
   
-  testing.value = true
+  addressTesting[configType] = true
   try {
     // 使用配置服务验证配置地址
     const configService = (await import('@/api/services/config')).default
-    const isValid = await configService.validateConfigUrl(configUrl.value)
+    const isValid = await configService.validateConfigUrl(addressValue)
     
     if (isValid) {
-      configStatus.value = {
+      addressStatus[configType] = {
         type: 'success',
         message: '配置地址测试成功，连接正常'
       }
       Message.success('配置地址测试成功')
     } else {
-      configStatus.value = {
+      addressStatus[configType] = {
         type: 'error',
         message: '测试失败：配置地址无法访问或数据格式不正确'
       }
@@ -508,36 +891,138 @@ const testConfigUrl = async () => {
     }
   } catch (error) {
     console.error('测试配置地址失败:', error)
-    configStatus.value = {
+    addressStatus[configType] = {
       type: 'error',
       message: '测试失败：' + (error.message || '网络连接错误')
     }
     Message.error('测试失败：' + (error.message || '网络连接错误'))
   } finally {
-    testing.value = false
+    addressTesting[configType] = false
     // 8秒后清除状态消息
     setTimeout(() => {
-      configStatus.value = null
+      addressStatus[configType] = null
     }, 8000)
   }
+}
+
+// 重置直播配置地址
+const resetLiveConfig = async () => {
+  addressSaving.liveConfigReset = true
+  try {
+    // 使用配置服务重置直播配置地址
+    const configService = (await import('@/api/services/config')).default
+    const success = await configService.resetLiveConfigUrl()
+    
+    if (success) {
+      // 更新界面显示的地址
+      const newLiveConfigUrl = configService.getLiveConfigUrl()
+      addressSettings.liveConfig = newLiveConfigUrl || ''
+      
+      // 同步保存到本地存储
+      const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+      savedAddresses.liveConfig = newLiveConfigUrl || ''
+      localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
+      
+      addressStatus.liveConfig = {
+        type: 'success',
+        message: '直播配置地址已重置为当前点播配置中的默认地址'
+      }
+      Message.success('直播配置地址重置成功')
+    } else {
+      addressStatus.liveConfig = {
+        type: 'error',
+        message: '重置失败：当前点播配置中未找到直播地址'
+      }
+      Message.error('重置失败：当前点播配置中未找到直播地址')
+    }
+  } catch (error) {
+    console.error('重置直播配置地址失败:', error)
+    addressStatus.liveConfig = {
+      type: 'error',
+      message: '重置失败：' + (error.message || '未知错误')
+    }
+    Message.error('重置失败：' + (error.message || '未知错误'))
+  } finally {
+    addressSaving.liveConfigReset = false
+    // 8秒后清除状态消息
+    setTimeout(() => {
+      addressStatus.liveConfig = null
+    }, 8000)
+  }
+}
+
+// 获取配置键名
+const getConfigKey = (configType) => {
+  const keyMap = {
+    vodConfig: 'vod-config',
+    liveConfig: 'live-config',
+    proxyAccess: 'proxy-access',
+    proxyPlay: 'proxy-play',
+    proxySniff: 'proxy-sniff'
+  }
+  return keyMap[configType] || configType
+}
+
+// 获取当前播放器名称
+const getCurrentPlayerName = () => {
+  const currentPlayer = playerTypes.find(player => player.value === settings.playerType)
+  return currentPlayer ? currentPlayer.label : 'IJK Player'
+}
+
+// 处理播放器选择
+const handlePlayerSelect = (playerType) => {
+  settings.playerType = playerType
+  Message.success(`已切换到 ${getCurrentPlayerName()}`)
 }
 
 // 处理设置项点击
 const handleSettingClick = (settingKey) => {
   console.log('Setting clicked:', settingKey)
-  Message.info(`点击了设置项：${settingKey}`)
-  // 这里可以根据不同的设置项执行不同的操作
-  // 比如打开对话框、跳转页面等
+  
+  switch (settingKey) {
+    case 'player-type':
+      playerSelectVisible.value = true
+      break
+    case 'window-preview':
+      Message.info('窗口预览设置')
+      break
+    case 'ijk-decode':
+      Message.info('IJK解码设置')
+      break
+    case 'ad-filter':
+      Message.info('广告过滤设置')
+      break
+    case 'ijk-cache':
+      Message.info('IJK缓存设置')
+      break
+    case 'auto-live':
+      Message.info('启动时进直播设置')
+      break
+    default:
+      Message.info(`点击了设置项：${settingKey}`)
+      break
+  }
 }
 
 // 页面加载时从配置服务恢复配置
 const loadConfig = async () => {
   try {
-    // 使用配置服务加载配置地址
+    // 加载地址设置
+    const savedAddresses = localStorage.getItem('addressSettings')
+    if (savedAddresses) {
+      try {
+        const parsed = JSON.parse(savedAddresses)
+        Object.assign(addressSettings, parsed)
+      } catch (error) {
+        console.error('Failed to load address settings:', error)
+      }
+    }
+    
+    // 兼容旧的配置地址设置
     const configService = (await import('@/api/services/config')).default
     const savedUrl = configService.getConfigUrl()
-    if (savedUrl) {
-      configUrl.value = savedUrl
+    if (savedUrl && !addressSettings.vodConfig) {
+      addressSettings.vodConfig = savedUrl
     }
   } catch (error) {
     console.error('Failed to load config url:', error)
@@ -549,6 +1034,10 @@ const loadConfig = async () => {
     try {
       const parsed = JSON.parse(savedSettings)
       Object.assign(settings, parsed)
+      // 确保播放器类型有默认值
+      if (!settings.playerType) {
+        settings.playerType = 'ijk'
+      }
     } catch (error) {
       console.error('Failed to load settings:', error)
     }
@@ -904,6 +1393,149 @@ loadConfig()
 }
 
 .setting-value :deep(.arco-switch.arco-switch-checked) {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+}
+
+/* 地址设置样式 */
+.address-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.address-config-item {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.address-config-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(99, 102, 241, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.address-config-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.address-config-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
+.address-config-icon {
+  font-size: 18px;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.address-config-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.address-config-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.address-config-desc {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.address-config-input-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.address-config-switch {
+  flex-shrink: 0;
+}
+
+.address-config-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.address-config-input :deep(.arco-input) {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+}
+
+.address-config-input :deep(.arco-input:focus) {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.address-config-input :deep(.arco-input:disabled) {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.address-config-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.address-config-actions :deep(.arco-btn) {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.address-config-actions :deep(.arco-btn-primary) {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+}
+
+.address-config-actions :deep(.arco-btn-primary:hover) {
+  background: linear-gradient(135deg, #5855eb 0%, #7c3aed 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.address-config-actions :deep(.arco-btn-outline) {
+  border-color: #e2e8f0;
+  color: #6366f1;
+}
+
+.address-config-actions :deep(.arco-btn-outline:hover) {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.address-config-status {
+  margin-top: 8px;
+}
+
+.address-config-switch :deep(.arco-switch) {
+  background: #e2e8f0;
+}
+
+.address-config-switch :deep(.arco-switch.arco-switch-checked) {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
 }
 

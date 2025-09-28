@@ -353,6 +353,8 @@ import {
 import watchStatsService from '@/api/services/watchStatsService'
 import updateLogService from '@/api/services/updateLogService'
 import recommendService from '@/api/services/recommendService'
+import { usePageStateStore } from '@/stores/pageStateStore'
+import { useRoute, useRouter } from 'vue-router'
 
 // 注册 ECharts 组件
 use([
@@ -365,6 +367,11 @@ use([
   LegendComponent,
   TitleComponent
 ])
+
+// 初始化stores和router
+const pageStateStore = usePageStateStore()
+const route = useRoute()
+const router = useRouter()
 
 // 响应式数据
 const statsTimeRange = ref('week')
@@ -578,6 +585,30 @@ const initData = () => {
 
 // 生命周期
 onMounted(() => {
+  // 检查是否需要恢复搜索状态
+  const restoreSearch = route.query._restoreSearch;
+  
+  if (restoreSearch === 'true') {
+    // 恢复搜索状态
+    const savedSearchState = pageStateStore.getPageState('search');
+    if (savedSearchState && savedSearchState.keyword && !pageStateStore.isStateExpired('search')) {
+      console.log('Home页面恢复搜索状态:', savedSearchState);
+      
+      // 这里可以触发搜索功能，但由于Home页面可能没有搜索功能
+      // 我们可以跳转到Video页面并恢复搜索
+      router.replace({
+        name: 'Video',
+        query: { _restoreSearch: 'true' }
+      });
+      return;
+    }
+    
+    // 清除URL中的恢复参数
+    const newQuery = { ...route.query };
+    delete newQuery._restoreSearch;
+    router.replace({ query: newQuery });
+  }
+  
   initData()
   console.log('主页看板加载完成')
 })

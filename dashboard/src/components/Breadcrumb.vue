@@ -31,35 +31,68 @@
 
     <!-- 右侧控制按钮和时间 -->
     <div class="header-right">
-      <a-button type="outline" status="success" shape="round" @click="minimize">
+      <a-button type="outline" status="success" shape="round" @click="handlePush">
         <template #icon>
-          <icon-bug />
+          <icon-send />
         </template>
-        <template #default>调试</template>
+        <template #default>推送</template>
       </a-button>
 
-      <a-button type="outline" status="success" shape="round" @click="maximize">
+      <a-button type="outline" status="success" shape="round" @click="handleGlobalAction">
         <template #icon>
-          <icon-settings />
+          <icon-thunderbolt />
         </template>
-        <template #default>设置</template>
-      </a-button>
-      
-      <a-button type="outline" status="success" shape="round" @click="closeWindow">
-        <template #icon>
-          <icon-user />
-        </template>
-        <template #default>用户设置</template>
+        <template #default>全局动作</template>
       </a-button>
       
       <!-- 时间显示插槽 -->
       <slot name="default"></slot>
     </div>
   </div>
+
+  <!-- 推送内容输入弹窗 -->
+  <a-modal 
+    v-model:visible="showPushModal"
+    title="推送内容"
+    :width="600"
+    @ok="confirmPush"
+    @cancel="cancelPush"
+    ok-text="确认推送"
+    cancel-text="取消"
+    :ok-button-props="{ disabled: !pushContent.trim() }"
+  >
+    <div class="push-modal-content">
+      <div class="push-description">
+        <icon-send class="push-icon" />
+        <span>请输入要推送的内容（vod_id）：</span>
+      </div>
+      <a-textarea
+        v-model="pushContent"
+        placeholder="请输入要推送的内容...&#10;支持多行输入，每行一个vod_id"
+        :rows="6"
+        :max-length="1000"
+        show-word-limit
+        allow-clear
+        autofocus
+        class="push-textarea"
+      />
+      <div class="push-hint">
+        <div class="hint-item">
+          <icon-info-circle class="hint-icon" />
+          <span>输入的内容将作为vod_id调用push_agent源的详情接口</span>
+        </div>
+        <div class="hint-item">
+          <icon-bulb class="hint-icon" />
+          <span>支持多行输入，系统将使用第一行非空内容作为vod_id</span>
+        </div>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
 
 const props = defineProps({
   navigation_title: {
@@ -71,14 +104,17 @@ const props = defineProps({
 });
 const emit = defineEmits([
   "handleOpenForm",
-  "closeWindow",
-  "maximize",
-  "minimize",
   "refreshPage",
   "onSearch",
+  "handlePush",
+  "minimize",
+  "maximize", 
+  "closeWindow",
 ]);
 
 const searchValue = ref('')
+const showPushModal = ref(false)
+const pushContent = ref('')
 
 const handleOpenForm = () => {
   emit("handleOpenForm");
@@ -94,14 +130,53 @@ const onSearch = (value) => {
   }
 };
 
-const closeWindow = () => {
-  emit("closeWindow");
+// 推送按钮点击事件
+const handlePush = () => {
+  showPushModal.value = true
+  pushContent.value = ''
 };
-const minimize = () => {
-  emit("minimize");
+
+// 全局动作按钮点击事件
+const handleGlobalAction = () => {
+  Message.info({
+    content: '全局动作功能开发中，敬请期待！',
+    duration: 3000
+  })
 };
-const maximize = () => {
-  emit("maximize");
+
+// 确认推送
+const confirmPush = () => {
+  if (!pushContent.value.trim()) {
+    Message.error('推送内容不能为空');
+    return;
+  }
+  
+  // 处理多行输入，取第一行非空内容作为vod_id
+  const lines = pushContent.value.split('\n').map(line => line.trim()).filter(line => line);
+  
+  if (lines.length === 0) {
+    Message.error('请输入有效的推送内容');
+    return;
+  }
+  
+  const vodId = lines[0]; // 使用第一行非空内容
+  
+  if (lines.length > 1) {
+    Message.info(`检测到多行输入，将使用第一行内容: ${vodId}`);
+  }
+  
+  // 触发推送事件，传递处理后的vod_id
+  emit('handlePush', vodId);
+  
+  // 关闭弹窗并清空内容
+  showPushModal.value = false;
+  pushContent.value = '';
+};
+
+// 取消推送
+const cancelPush = () => {
+  showPushModal.value = false
+  pushContent.value = ''
 };
 </script>
 
@@ -169,6 +244,76 @@ const maximize = () => {
   color: var(--color-text-2);
   white-space: nowrap;
   margin-left: 8px;
+}
+
+/* 推送弹窗样式 */
+.push-modal-content {
+  padding: 20px 0;
+}
+
+.push-description {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  font-size: 16px;
+  color: var(--color-text-1);
+  font-weight: 500;
+}
+
+.push-icon {
+  margin-right: 8px;
+  font-size: 18px;
+  color: var(--color-primary-6);
+}
+
+.push-textarea {
+  margin-bottom: 16px;
+}
+
+.push-textarea :deep(.arco-textarea) {
+  border-radius: 8px;
+  border: 2px solid var(--color-border-2);
+  transition: all 0.3s ease;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  line-height: 1.6;
+}
+
+.push-textarea :deep(.arco-textarea:focus) {
+  border-color: var(--color-primary-6);
+  box-shadow: 0 0 0 3px var(--color-primary-1);
+}
+
+.push-textarea :deep(.arco-textarea::placeholder) {
+  color: var(--color-text-3);
+  font-style: italic;
+}
+
+.push-hint {
+  background: var(--color-bg-2);
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid var(--color-primary-6);
+}
+
+.hint-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--color-text-2);
+  line-height: 1.5;
+}
+
+.hint-item:last-child {
+  margin-bottom: 0;
+}
+
+.hint-icon {
+  margin-right: 8px;
+  margin-top: 2px;
+  font-size: 16px;
+  color: var(--color-primary-6);
+  flex-shrink: 0;
 }
 
 /* 响应式设计 */

@@ -40,25 +40,50 @@
           <icon-expand/>
         </template>
       </a-button>
-      <a-popconfirm content="你确认要关闭当前应用?" @ok="closeWindow">
-        <a-button shape="circle">
-          <template #icon>
-            <icon-close/>
-          </template>
-        </a-button>
-      </a-popconfirm>
+      <a-button shape="circle" @click="showCloseConfirm">
+        <template #icon>
+          <icon-close/>
+        </template>
+      </a-button>
+    </div>
 
-
+    <!-- 全屏居中确认弹窗 -->
+    <div v-if="showConfirmModal" class="confirm-modal-overlay" @click="hideCloseConfirm">
+      <div class="confirm-modal" @click.stop>
+        <div class="modal-header">
+          <icon-exclamation-circle-fill class="warning-icon" />
+          <h3 class="modal-title">确认关闭</h3>
+        </div>
+        <div class="modal-content">
+          <p class="modal-message">你确认要关闭当前应用吗？</p>
+          <p class="modal-submessage">关闭后将退出应用程序</p>
+        </div>
+        <div class="modal-footer">
+          <a-button class="cancel-btn" @click="hideCloseConfirm">
+            取消
+          </a-button>
+          <a-button type="primary" status="danger" class="confirm-btn" @click="confirmClose">
+            确认关闭
+          </a-button>
+        </div>
+      </div>
     </div>
   </a-layout-header>
 </template>
 
 <script>
-import {defineComponent} from 'vue';
+import {defineComponent, ref} from 'vue';
 import {Message} from '@arco-design/web-vue';
 
 export default defineComponent({
   components: {},
+  setup() {
+    const showConfirmModal = ref(false);
+    
+    return {
+      showConfirmModal
+    };
+  },
   methods: {
     goBack() {
       Message.info("前进按钮");
@@ -87,12 +112,41 @@ export default defineComponent({
       // 最大化窗口的逻辑
       this.enterFullScreen()
     },
-    closeWindow() {
-      Message.info("将在1秒后关闭窗口");
-      // 关闭窗口的逻辑，可以通过调用系统接口来实现
-      setTimeout(function () {
-        window.open("about:blank", "_self").close()
-      }, 1000)
+    showCloseConfirm() {
+      this.showConfirmModal = true;
+    },
+    hideCloseConfirm() {
+      this.showConfirmModal = false;
+    },
+    confirmClose() {
+      this.showConfirmModal = false;
+      Message.info("正在关闭应用...");
+      
+      // 尝试多种关闭方式
+      try {
+        // 方式1: 尝试关闭当前窗口
+        if (window.opener) {
+          window.close();
+        } else {
+          // 方式2: 如果是主窗口，尝试使用about:blank方式
+          window.open('about:blank', '_self');
+          window.close();
+        }
+        
+        // 方式3: 如果上述方式都失败，提供备用方案
+        setTimeout(() => {
+          // 检查窗口是否已关闭
+          if (!window.closed) {
+            Message.warning("无法自动关闭窗口，请手动关闭浏览器标签页");
+            // 可以考虑跳转到一个关闭页面
+            window.location.href = 'about:blank';
+          }
+        }, 500);
+        
+      } catch (error) {
+        console.error('关闭窗口失败:', error);
+        Message.error("关闭失败，请手动关闭浏览器标签页");
+      }
     },
     enterFullScreen() {
       let element = document.documentElement;
@@ -252,6 +306,114 @@ export default defineComponent({
   background: var(--color-primary-7);
 }
 
+/* 全屏居中确认弹窗样式 */
+.confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.confirm-modal {
+  background: var(--color-bg-1);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  min-width: 400px;
+  max-width: 500px;
+  padding: 0;
+  animation: slideIn 0.3s ease-out;
+  border: 1px solid var(--color-border-2);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--color-border-2);
+}
+
+.warning-icon {
+  font-size: 24px;
+  color: #ff6b35;
+  margin-right: 12px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.modal-content {
+  padding: 20px 24px;
+}
+
+.modal-message {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: var(--color-text-1);
+  line-height: 1.5;
+}
+
+.modal-submessage {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-3);
+  line-height: 1.4;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px 24px;
+  border-top: 1px solid var(--color-border-2);
+}
+
+.cancel-btn {
+  min-width: 80px;
+  height: 36px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.confirm-btn {
+  min-width: 100px;
+  height: 36px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .header-left,
@@ -265,6 +427,12 @@ export default defineComponent({
   
   .header-center :deep(.arco-input-search) {
     max-width: 250px;
+  }
+  
+  .confirm-modal {
+    min-width: 320px;
+    max-width: 90vw;
+    margin: 20px;
   }
 }
 
@@ -295,6 +463,28 @@ export default defineComponent({
   .header-right :deep(.arco-btn) {
     width: 28px;
     height: 28px;
+  }
+  
+  .confirm-modal {
+    min-width: 280px;
+    margin: 16px;
+  }
+  
+  .modal-header,
+  .modal-content,
+  .modal-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  
+  .modal-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .cancel-btn,
+  .confirm-btn {
+    width: 100%;
   }
 }
 </style>

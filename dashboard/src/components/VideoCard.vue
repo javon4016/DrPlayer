@@ -1,6 +1,7 @@
 <template>
   <div
     class="video-card"
+    :class="{ 'last-clicked': isLastClicked }"
     @click="handleCardClick"
   >
     <div class="card-poster">
@@ -71,6 +72,7 @@ import {
   IconHeartFill,
   IconDelete
 } from '@arco-design/web-vue/es/icon'
+import { useVisitedStore } from '@/stores/visitedStore'
 
 const props = defineProps({
   item: {
@@ -85,6 +87,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['card-click', 'image-click', 'action-click'])
+
+// 访问状态管理
+const visitedStore = useVisitedStore()
 
 // 计算属性
 const showHistoryInfo = computed(() => props.type === 'history')
@@ -122,6 +127,12 @@ const cardTitle = computed(() => {
   return props.type === 'video' ? props.item.vod_name : props.item.name
 })
 
+// 检查是否是最后点击的视频
+const isLastClicked = computed(() => {
+  const videoId = props.type === 'video' ? props.item.vod_id : props.item.id
+  return visitedStore.isLastClicked(videoId)
+})
+
 // 事件处理
 const handleCardClick = () => {
   emit('card-click', props.item)
@@ -136,7 +147,8 @@ const handleActionClick = () => {
 }
 
 const handleImageError = (event) => {
-  event.target.src = '/default-poster.svg'
+  // 使用相对路径，适配子目录部署
+  event.target.src = './default-poster.svg'
   event.target.style.objectFit = 'contain'
   event.target.style.backgroundColor = '#f7f8fa'
 }
@@ -165,6 +177,11 @@ const formatDate = (dateString) => {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   border-color: var(--color-primary-light-3);
+}
+
+/* 最后点击的视频样式 */
+.video-card.last-clicked .card-title {
+  color: var(--color-primary-6);
 }
 
 .card-poster {
@@ -291,5 +308,10 @@ const formatDate = (dateString) => {
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(4px);
+}
+
+/* 最后点击的视频样式 */
+.video-card.last-clicked .card-title {
+  color: var(--color-primary);
 }
 </style>

@@ -17,9 +17,9 @@
         <VideoGrid
           :videos="listData[activeKey] || []"
           :loading="loadingMore[activeKey] || false"
-          :hasMore="pageData[activeKey]?.hasNext || false"
+          :hasMore="false"
           :statsText="`推荐视频：共 ${listData[activeKey]?.length || 0} 条`"
-          @load-more="loadMoreData(activeKey)"
+          :sourceRoute="props.sourceRoute"
         />
       </div>
 
@@ -38,10 +38,13 @@
 
         <!-- 视频网格 -->
         <VideoGrid
+          ref="videoGridRef"
           :videos="listData[activeKey] || []"
           :loading="loadingMore[activeKey] || false"
           :hasMore="pageData[activeKey]?.hasNext || false"
+          :sourceRoute="props.sourceRoute"
           @load-more="loadMoreData(activeKey)"
+          @scroll-bottom="loadMoreData(activeKey)"
         />
       </div>
     </div>
@@ -77,7 +80,19 @@ const props = defineProps({
     type: String,
     default: "click",
   },
+  // 新增：来源页面信息
+  sourceRoute: {
+    type: Object,
+    default: () => ({})
+  },
+  // 新增：返回时指定的activeKey
+  returnToActiveKey: {
+    type: String,
+    default: ""
+  }
 });
+
+const emit = defineEmits(['activeKeyChange']);
 
 // 使用翻页统计store
 const paginationStore = usePaginationStore();
@@ -90,6 +105,7 @@ const loadingMore = reactive({});
 const filterVisible = reactive({});
 const selectedFilters = reactive({});
 const categoryModalVisible = ref(false);
+const videoGridRef = ref(null);
 
 // 计算属性
 const hasRecommendVideos = computed(() => {
@@ -98,6 +114,11 @@ const hasRecommendVideos = computed(() => {
 
 // 计算默认的activeKey
 const getDefaultActiveKey = () => {
+  // 优先使用返回时指定的activeKey
+  if (props.returnToActiveKey) {
+    return props.returnToActiveKey;
+  }
+  
   if (hasRecommendVideos.value) {
     return "recommendTuijian404";
   }
@@ -293,6 +314,7 @@ const loadMoreData = async (key) => {
 const handleTabChange = (key) => {
   activeKey.value = key;
   getListData(key);
+  emit('activeKeyChange', key);
 };
 
 const openCategoryModal = () => {
@@ -302,6 +324,7 @@ const openCategoryModal = () => {
 const selectCategory = (categoryId) => {
   activeKey.value = categoryId;
   getListData(categoryId);
+  emit('activeKeyChange', categoryId);
   // 更新全局翻页统计信息
   setTimeout(() => {
     paginationStore.updateStats(getStatsText(categoryId));
@@ -325,6 +348,7 @@ watch(() => props.recommendVideos, (newVideos) => {
   if (activeKey.value !== newActiveKey) {
     activeKey.value = newActiveKey;
     getListData(newActiveKey);
+    emit('activeKeyChange', newActiveKey);
   }
 }, { immediate: true });
 
@@ -343,12 +367,77 @@ watch(() => props.classList, (newClassList, oldClassList) => {
   if (activeKey.value !== newActiveKey) {
     activeKey.value = newActiveKey;
     getListData(newActiveKey);
+    emit('activeKeyChange', newActiveKey);
   }
 }, { immediate: true });
 
 onMounted(() => {
   activeKey.value = getDefaultActiveKey();
-  getListData(activeKey.value);
+  
+  // 如果有returnToActiveKey参数，说明是状态恢复，不立即加载数据
+  // 等待父组件调用restoreState方法
+  if (!props.returnToActiveKey) {
+    getListData(activeKey.value);
+  }
+  
+  emit('activeKeyChange', activeKey.value);
+});
+
+// 暴露方法给父组件
+defineExpose({
+  getCurrentState: () => ({
+    activeKey: activeKey.value,
+    currentPage: pageData[activeKey.value]?.page || 1,
+    videos: listData[activeKey.value] || [],
+    hasMore: pageData[activeKey.value]?.hasNext || false,
+    hasData: listData[activeKey.value] && listData[activeKey.value].length > 0,
+    scrollPosition: videoGridRef.value ? videoGridRef.value.getCurrentScrollPosition() : 0
+  }),
+  restoreState: (state) => {
+    if (state.activeKey && state.activeKey !== activeKey.value) {
+      activeKey.value = state.activeKey;
+      emit('activeKeyChange', state.activeKey);
+      
+      // 如果该分类已有数据，不需要重新加载
+      if (!listData[state.activeKey] || listData[state.activeKey].length === 0) {
+        getListData(state.activeKey);
+      }
+    }
+  },
+  restoreFullState: (state) => {
+    if (state.activeKey) {
+      // 恢复完整状态，包括数据
+      activeKey.value = state.activeKey;
+      
+      if (state.videos && state.videos.length > 0) {
+        listData[state.activeKey] = [...state.videos];
+        pageData[state.activeKey] = {
+          page: state.currentPage || 1,
+          hasNext: state.hasMore || false
+        };
+        console.log(`恢复分类 ${state.activeKey} 的完整状态:`, {
+          videos: state.videos.length,
+          page: state.currentPage,
+          hasMore: state.hasMore,
+          scrollPosition: state.scrollPosition
+        });
+      }
+      
+      emit('activeKeyChange', state.activeKey);
+      
+      // 更新全局翻页统计信息
+      setTimeout(() => {
+        paginationStore.updateStats(getStatsText(state.activeKey));
+      }, 100);
+      
+      // 恢复滚动位置
+      if (state.scrollPosition && videoGridRef.value) {
+        setTimeout(() => {
+          videoGridRef.value.restoreScrollPosition(state.scrollPosition);
+        }, 200);
+      }
+    }
+  }
 });
 </script>
 
