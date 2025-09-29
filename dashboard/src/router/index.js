@@ -9,9 +9,8 @@ import History from '@/views/History.vue';
 import Settings from '@/views/Settings.vue';
 import BookGallery from '@/views/BookGallery.vue';
 import ActionTest from '@/views/ActionTest.vue';
-import ActionIntegrationTest from '@/views/ActionIntegrationTest.vue';
 import ActionDebugTest from '@/views/ActionDebugTest.vue';
-import SimpleActionDebug from '@/views/SimpleActionDebug.vue';
+
 
 const routes = [
     {path: '/', component: Home, name: 'Home'},
@@ -24,9 +23,8 @@ const routes = [
     {path: '/history', component: History, name: 'History'},
     {path: '/parser', component: Parser, name: 'Parser'},
     {path: '/action-test', component: ActionTest, name: 'ActionTest'},
-    {path: '/action-integration-test', component: ActionIntegrationTest, name: 'ActionIntegrationTest'},
     {path: '/action-debug-test', component: ActionDebugTest, name: 'ActionDebugTest'},
-    {path: '/simple-action-debug', component: SimpleActionDebug, name: 'SimpleActionDebug'},
+
     // 404 fallback路由 - 必须放在最后
     {path: '/:pathMatch(.*)*', redirect: '/'}
 ];

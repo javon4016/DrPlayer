@@ -99,8 +99,12 @@
       v-if="showActionRenderer"
       ref="actionRendererRef"
       :action-data="currentActionData"
+      :module="props.module"
+      :extend="props.extend"
+      :api-url="props.apiUrl"
       @close="handleActionClose"
       @submit="handleActionSubmit"
+      @special-action="handleSpecialAction"
     />
   </div>
 </template>
@@ -108,6 +112,7 @@
 <script setup>
 import { ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { Message } from '@arco-design/web-vue'
 import { usePaginationStore } from '@/stores/paginationStore'
 import { usePageStateStore } from '@/stores/pageStateStore'
 import { useVisitedStore } from '@/stores/visitedStore'
@@ -157,11 +162,26 @@ const props = defineProps({
   scrollPosition: {
     type: Number,
     default: 0
+  },
+  // 模块名称，用于T4接口调用
+  module: {
+    type: String,
+    default: ''
+  },
+  // 扩展参数，用于T4接口调用
+  extend: {
+    type: String,
+    default: ''
+  },
+  // API URL，用于直接调用站点API
+  apiUrl: {
+    type: String,
+    default: ''
   }
 })
 
 // Emits
-const emit = defineEmits(['video-click', 'exit-search', 'load-more'])
+const emit = defineEmits(['video-click', 'exit-search', 'load-more', 'refresh-list'])
 
 const containerRef = ref(null)
 const scrollbarRef = ref(null)
@@ -307,7 +327,7 @@ const handleVideoClick = (video) => {
     // 检查是否为action类型
     if (video.vod_tag === 'action') {
       try {
-        // 解析vod_id中的JSON字符串获取action配置
+        // 尝试解析vod_id中的JSON字符串获取action配置
         const actionConfig = JSON.parse(video.vod_id);
         console.log('SearchResults解析action配置:', actionConfig);
         
@@ -316,9 +336,14 @@ const handleVideoClick = (video) => {
         showActionRenderer.value = true;
         return;
       } catch (error) {
-        console.error('SearchResults解析action配置失败:', error, 'vod_id:', video.vod_id);
-        // 如果解析失败，显示错误信息
-        alert(`Action配置解析失败: ${error.message}`);
+        console.log('SearchResults vod_id不是JSON格式，作为普通文本处理:', video.vod_id);
+        
+        // 如果解析失败，说明vod_id是普通文本，显示Toast提示
+        Message.info({
+          content: video.vod_id,
+          duration: 3000,
+          closable: true
+        });
         return;
       }
     }
@@ -430,6 +455,34 @@ const handleActionSubmit = (result) => {
   showActionRenderer.value = false;
   currentActionData.value = null;
   // 可以在这里处理action的提交结果
+}
+
+const handleSpecialAction = (actionType, actionData) => {
+  console.log('处理专项动作:', actionType, actionData);
+  
+  switch (actionType) {
+    case 'self-search':
+      // 处理源内搜索
+      console.log('执行源内搜索:', actionData);
+      break;
+    case 'detail':
+      // 处理详情页跳转
+      console.log('跳转到详情页:', actionData);
+      break;
+    case 'ktv-player':
+      // 处理KTV播放
+      console.log('启动KTV播放:', actionData);
+      break;
+    case 'refresh-list':
+      // 处理刷新列表
+      console.log('刷新列表:', actionData);
+      // 可以触发父组件的刷新事件
+      emit('refresh-list');
+      break;
+    default:
+      console.log('未知的专项动作:', actionType, actionData);
+      break;
+  }
 }
 </script>
 

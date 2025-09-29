@@ -229,22 +229,47 @@ export const executeAction = async (module, data) => {
     requestData.extend = extend
   }
   
-  // 如果提供了apiUrl，直接使用站点的API地址（POST请求需要特殊处理）
+  console.log('executeAction调用参数:', {
+    module,
+    data,
+    requestData,
+    apiUrl
+  })
+  
+  // 如果提供了apiUrl，直接使用站点的API地址
   if (apiUrl) {
-    // 对于POST请求，我们需要使用axios直接调用
     const axios = (await import('axios')).default
-    const response = await axios.post(apiUrl, requestData, {
-      timeout: 30000,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    return response.data
+    console.log('直接调用API:', apiUrl, requestData)
+    
+    // 如果是测试用的JSON文件，使用GET请求
+    if (apiUrl.endsWith('.json')) {
+      const response = await axios.get(apiUrl, {
+        timeout: 30000,
+        headers: {
+          'Accept': 'application/json'
+        }
+      })
+      console.log('API响应 (GET):', response.data)
+      return response.data
+    } else {
+      // 否则使用POST请求
+      const response = await axios.post(apiUrl, requestData, {
+        timeout: 30000,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      })
+      console.log('API响应 (POST):', response.data)
+      return response.data
+    }
   }
   
   // 否则使用原来的代理方式
-  return post(buildModuleUrl(module), requestData)
+  console.log('使用代理方式调用:', buildModuleUrl(module), requestData)
+  const result = await post(buildModuleUrl(module), requestData)
+  console.log('代理响应:', result)
+  return result
 }
 
 /**

@@ -24,6 +24,10 @@
           :hasMore="false"
           :statsText="`推荐视频：共 ${listData[activeKey]?.length || 0} 条`"
           :sourceRoute="props.sourceRoute"
+          :module="props.module"
+          :extend="props.extend"
+          :api-url="props.apiUrl"
+          @refresh-list="handleRefreshList"
         />
       </div>
 
@@ -36,8 +40,12 @@
           :loading="loadingMore[activeKey] || false"
           :hasMore="pageData[activeKey]?.hasNext || false"
           :sourceRoute="props.sourceRoute"
+          :module="props.module"
+          :extend="props.extend"
+          :api-url="props.apiUrl"
           @load-more="loadMoreData(activeKey)"
           @scroll-bottom="loadMoreData(activeKey)"
+          @refresh-list="handleRefreshList"
         />
       </div>
     </div>
@@ -82,6 +90,19 @@ const props = defineProps({
   returnToActiveKey: {
     type: String,
     default: ""
+  },
+  // T4接口调用相关参数
+  module: {
+    type: String,
+    default: ''
+  },
+  extend: {
+    type: Object,
+    default: () => ({})
+  },
+  apiUrl: {
+    type: String,
+    default: ''
   }
 });
 
@@ -439,8 +460,33 @@ defineExpose({
         }, 200);
       }
     }
+  },
+  refreshCurrentCategory: () => {
+    if (activeKey.value) {
+      console.log('刷新当前分类:', activeKey.value);
+      // 重置当前分类的数据
+      listData[activeKey.value] = [];
+      pageData[activeKey.value] = { page: 1, hasNext: true };
+      loadingMore[activeKey.value] = false;
+      // 重新加载数据
+      getListData(activeKey.value);
+    }
   }
 });
+
+// 处理刷新列表事件
+const handleRefreshList = () => {
+  console.log('VideoList收到刷新列表请求');
+  if (activeKey.value) {
+    console.log('刷新当前分类:', activeKey.value);
+    // 重置当前分类的数据
+    listData[activeKey.value] = [];
+    pageData[activeKey.value] = { page: 1, hasNext: true };
+    loadingMore[activeKey.value] = false;
+    // 重新加载数据
+    getListData(activeKey.value);
+  }
+};
 </script>
 
 <style scoped>

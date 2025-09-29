@@ -3,11 +3,17 @@
     <!-- 固定头部区域 -->
     <div class="test-header">
       <div class="header-content">
-        <h1 class="page-title">
-          <icon-code class="title-icon" />
-          Action组件测试
-        </h1>
-        <p class="page-subtitle">测试各种Action组件的功能和交互</p>
+        <div class="header-left">
+          <h1 class="page-title">
+            <icon-code class="title-icon" />
+            Action组件测试
+          </h1>
+          <p class="page-subtitle">测试各种Action组件的功能和交互效果</p>
+        </div>
+        <a-button type="primary" status="success" @click="goToDebugTest" class="nav-button">
+          <icon-bug />
+          综合测试工具
+        </a-button>
       </div>
     </div>
 
@@ -64,6 +70,77 @@
           <a-button type="outline" status="success" shape="round" @click="testQRText">文本二维码</a-button>
           <a-button type="outline" status="success" shape="round" @click="testQRWifi">WiFi二维码</a-button>
           <a-button type="outline" status="success" shape="round" @click="testQRContact">联系人二维码</a-button>
+        </div>
+      </div>
+
+      <!-- Action数据解析调试 -->
+      <div class="test-section">
+        <h2>Action数据解析调试</h2>
+        <div class="debug-area">
+          <!-- 原始数据输入区域 -->
+          <div class="debug-input-section">
+            <h3>原始数据输入</h3>
+            <p class="debug-description">请粘贴T4 API返回的vod_id字段内容：</p>
+            <a-textarea 
+              v-model="debugRawData" 
+              :rows="8"
+              placeholder="粘贴vod_id字段的JSON字符串..."
+              class="debug-textarea"
+            />
+            <div class="debug-buttons">
+              <a-button type="outline" status="success" shape="round" @click="parseDebugData">解析数据</a-button>
+              <a-button type="outline" status="success" shape="round" @click="loadDebugTestData">加载测试数据</a-button>
+            </div>
+          </div>
+
+          <!-- 解析结果 -->
+          <div v-if="debugParseResult" class="debug-result-section">
+            <h3>解析结果</h3>
+            <div class="debug-status">
+              <span class="debug-label">解析状态：</span>
+              <span :class="debugParseResult.success ? 'debug-success' : 'debug-error'">
+                {{ debugParseResult.success ? '成功' : '失败' }}
+              </span>
+            </div>
+            
+            <div v-if="debugParseResult.success" class="debug-success-content">
+              <h4>解析后的配置对象：</h4>
+              <pre class="debug-json">{{ JSON.stringify(debugParseResult.config, null, 2) }}</pre>
+              
+              <h4>关键字段检查：</h4>
+              <div class="debug-fields">
+                <div class="debug-field">
+                  <span class="debug-field-label">actionId:</span>
+                  <code class="debug-field-value">{{ debugParseResult.config.actionId || 'undefined' }}</code>
+                </div>
+                <div class="debug-field">
+                  <span class="debug-field-label">type:</span>
+                  <code class="debug-field-value">{{ debugParseResult.config.type || 'undefined' }}</code>
+                </div>
+                <div class="debug-field">
+                  <span class="debug-field-label">title:</span>
+                  <code class="debug-field-value">{{ debugParseResult.config.title || 'undefined' }}</code>
+                </div>
+              </div>
+
+              <div class="debug-test-section">
+                <a-button type="outline" status="success" @click="testDebugActionRenderer">
+                  测试ActionRenderer
+                </a-button>
+              </div>
+            </div>
+            
+            <div v-else class="debug-error-content">
+              <h4>错误信息：</h4>
+              <pre class="debug-error-message">{{ debugParseResult.error }}</pre>
+            </div>
+          </div>
+
+          <!-- ActionRenderer错误显示 -->
+          <div v-if="debugRendererError" class="debug-error-section">
+            <h4>ActionRenderer错误：</h4>
+            <pre class="debug-error-message">{{ debugRendererError }}</pre>
+          </div>
         </div>
       </div>
 
@@ -140,11 +217,23 @@
       @cancel="handleActionCancel"
       @close="handleActionClose"
     />
+
+    <!-- 调试ActionRenderer -->
+    <ActionRenderer
+      v-if="showDebugActionRenderer"
+      :action-data="debugActionData"
+      :visible="true"
+      @submit="handleDebugActionSubmit"
+      @cancel="handleDebugActionClose"
+      @close="handleDebugActionClose"
+      @error="handleDebugActionError"
+    />
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { IconCode } from '@arco-design/web-vue/es/icon'
 import { 
   ActionRenderer,
@@ -159,6 +248,7 @@ import {
   types
 } from '@/components/actions'
 import { ActionValidator } from '@/utils/action-validator'
+import { parseActionConfig } from '@/components/actions/types.js'
 
 export default {
   name: 'ActionTest',
@@ -167,6 +257,8 @@ export default {
     IconCode
   },
   setup() {
+    const router = useRouter()
+    
     // 图片URL（从public目录，支持子目录部署）
     const livesImage = import.meta.env.BASE_URL + 'lives.jpg'
     const testResults = ref([])
@@ -174,6 +266,28 @@ export default {
     const validationResults = ref(null)
     const validationPassRate = ref(0)
     const validator = new ActionValidator()
+
+    // 调试功能相关数据
+    const debugRawData = ref('')
+    const debugParseResult = ref(null)
+    const debugRendererError = ref('')
+    const showDebugActionRenderer = ref(false)
+    const debugActionData = ref(null)
+
+    // 测试数据
+    const debugTestData = `{
+  "actionId": "push_video",
+  "type": "input",
+  "title": "推送视频播放",
+  "description": "请输入要推送的视频链接",
+  "id": "video_url",
+  "placeholder": "请输入视频链接",
+  "required": true,
+  "validation": {
+    "pattern": "^https?://.*",
+    "message": "请输入有效的视频链接"
+  }
+}`
 
     // 计算属性
     const successRate = computed(() => {
@@ -195,6 +309,11 @@ export default {
       if (testResults.value.length > 50) {
         testResults.value = testResults.value.slice(0, 50)
       }
+    }
+
+    // 跳转到综合测试工具
+    const goToDebugTest = () => {
+      router.push('/action-debug-test')
     }
 
     // 格式化时间
@@ -706,10 +825,99 @@ export default {
       }
     }
 
+    // 调试功能方法
+    const loadDebugTestData = () => {
+      debugRawData.value = debugTestData
+      parseDebugData()
+    }
+
+    const parseDebugData = () => {
+      try {
+        debugParseResult.value = null
+        debugRendererError.value = ''
+        
+        if (!debugRawData.value.trim()) {
+          debugParseResult.value = {
+            success: false,
+            error: '请输入数据'
+          }
+          return
+        }
+        
+        // 尝试解析JSON
+        let jsonData
+        try {
+          jsonData = JSON.parse(debugRawData.value)
+        } catch (e) {
+          debugParseResult.value = {
+            success: false,
+            error: `JSON解析失败: ${e.message}`
+          }
+          return
+        }
+        
+        // 使用parseActionConfig解析
+        try {
+          const config = parseActionConfig(jsonData)
+          debugParseResult.value = {
+            success: true,
+            config: config
+          }
+          addResult('DebugParse', 'success', 'Action配置解析成功')
+        } catch (e) {
+          debugParseResult.value = {
+            success: false,
+            error: `Action配置解析失败: ${e.message}`
+          }
+          addResult('DebugParse', 'error', e.message)
+        }
+      } catch (e) {
+        debugParseResult.value = {
+          success: false,
+          error: `未知错误: ${e.message}`
+        }
+        addResult('DebugParse', 'error', e.message)
+      }
+    }
+
+    const testDebugActionRenderer = () => {
+      try {
+        if (debugParseResult.value && debugParseResult.value.success) {
+          debugActionData.value = debugParseResult.value.config
+          showDebugActionRenderer.value = true
+          debugRendererError.value = ''
+          addResult('DebugRenderer', 'success', 'ActionRenderer测试启动')
+        }
+      } catch (e) {
+        debugRendererError.value = `ActionRenderer测试失败: ${e.message}`
+        addResult('DebugRenderer', 'error', e.message)
+      }
+    }
+
+    // 调试ActionRenderer事件处理
+    const handleDebugActionClose = () => {
+      showDebugActionRenderer.value = false
+      debugActionData.value = null
+      addResult('DebugRenderer', 'info', 'ActionRenderer已关闭')
+    }
+
+    const handleDebugActionSubmit = (data) => {
+      console.log('调试Action提交数据:', data)
+      addResult('DebugRenderer', 'success', `Action提交成功: ${JSON.stringify(data)}`)
+      showDebugActionRenderer.value = false
+      debugActionData.value = null
+    }
+
+    const handleDebugActionError = (error) => {
+      console.error('调试Action错误:', error)
+      debugRendererError.value = `ActionRenderer错误: ${error.message || error}`
+      addResult('DebugRenderer', 'error', error.message || error)
+    }
+
     // 状态管理方法
     const clearHistory = () => {
       actionStateManager.clearHistory()
-      addResult('System', 'success', 'History cleared')
+      addResult('ClearHistory', 'success', 'History cleared')
     }
 
     const resetStatistics = () => {
@@ -860,7 +1068,20 @@ export default {
       statistics,
       successRate,
       livesImage,
+      // 调试功能
+      debugRawData,
+      debugParseResult,
+      debugRendererError,
+      showDebugActionRenderer,
+      debugActionData,
+      loadDebugTestData,
+      parseDebugData,
+      testDebugActionRenderer,
+      handleDebugActionClose,
+      handleDebugActionSubmit,
+      handleDebugActionError,
       addResult,
+      goToDebugTest,
       formatTime,
       formatResult,
       testInputAction,
@@ -929,6 +1150,13 @@ export default {
 .header-content {
   width: 100%;
   margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.header-left {
+  flex: 1;
 }
 
 .page-title {
@@ -939,6 +1167,28 @@ export default {
   font-weight: 600;
   color: var(--color-text-1);
   margin: 0 0 8px 0;
+}
+
+.nav-button {
+  padding: 8px 16px;
+  background: var(--color-primary-6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.nav-button:hover {
+  background: var(--color-primary-7);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(var(--primary-6), 0.3);
 }
 
 .title-icon {
@@ -1113,6 +1363,149 @@ export default {
   word-break: break-all;
   max-height: 60px;
   overflow: hidden;
+}
+
+/* 调试功能样式 */
+.debug-area {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.debug-input-section {
+  margin-bottom: 24px;
+}
+
+.debug-input-section h3 {
+  color: #495057;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.debug-description {
+  color: #6c757d;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.debug-textarea {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.debug-buttons {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+}
+
+.debug-result-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.debug-result-section h3 {
+  color: #495057;
+  margin-bottom: 16px;
+  font-size: 16px;
+}
+
+.debug-status {
+  margin-bottom: 16px;
+}
+
+.debug-label {
+  font-weight: 600;
+  color: #495057;
+}
+
+.debug-success {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.debug-error {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.debug-success-content h4,
+.debug-error-content h4 {
+  color: #495057;
+  margin: 20px 0 12px 0;
+  font-size: 14px;
+}
+
+.debug-json {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  border: 1px solid #e9ecef;
+  margin-bottom: 16px;
+}
+
+.debug-fields {
+  margin-bottom: 16px;
+}
+
+.debug-field {
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debug-field-label {
+  font-weight: 600;
+  color: #495057;
+  min-width: 80px;
+}
+
+.debug-field-value {
+  background: #f8f9fa;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  border: 1px solid #e9ecef;
+}
+
+.debug-test-section {
+  margin-top: 16px;
+}
+
+.debug-error-content {
+  color: #721c24;
+}
+
+.debug-error-message {
+  background: #f8d7da;
+  padding: 12px;
+  border-radius: 4px;
+  color: #721c24;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  border: 1px solid #f5c6cb;
+}
+
+.debug-error-section {
+  padding: 16px;
+  background: #f8d7da;
+  border-radius: 6px;
+  border: 1px solid #f5c6cb;
+}
+
+.debug-error-section h4 {
+  color: #721c24;
+  margin-bottom: 12px;
+  font-size: 14px;
 }
 
 /* 自定义样式示例 */

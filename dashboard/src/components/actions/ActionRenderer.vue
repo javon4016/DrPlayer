@@ -64,6 +64,7 @@ import {
   ActionErrorType,
   createActionError 
 } from './types.js'
+import { executeAction } from '@/api/modules/module.js'
 
 // 懒加载Action组件
 const InputAction = defineAsyncComponent(() => import('./InputAction.vue'))
@@ -101,9 +102,24 @@ export default {
     autoShow: {
       type: Boolean,
       default: true
+    },
+    // 模块名称，用于T4接口调用
+    module: {
+      type: String,
+      default: ''
+    },
+    // 扩展参数，用于T4接口调用
+    extend: {
+      type: Object,
+      default: () => ({})
+    },
+    // API URL，用于直接调用站点API
+    apiUrl: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['action', 'close', 'error', 'success'],
+  emits: ['action', 'close', 'error', 'success', 'special-action'],
   setup(props, { emit }) {
     const parsedConfig = ref(null)
     const error = ref(null)
@@ -186,6 +202,71 @@ export default {
       }
     }
 
+    // 处理专项动作（动态动作）
+    const handleSpecialAction = async (actionData) => {
+      const { actionId } = actionData
+
+      switch (actionId) {
+        case '__self_search__':
+          // 源内搜索
+          showToast('执行源内搜索', 'info')
+          emit('special-action', 'self-search', actionData)
+          handleClose()
+          break
+
+        case '__detail__':
+          // 详情页跳转
+          showToast('跳转到详情页', 'info')
+          emit('special-action', 'detail', actionData)
+          handleClose()
+          break
+
+        case '__ktvplayer__':
+          // KTV播放
+          showToast('启动KTV播放', 'info')
+          emit('special-action', 'ktv-player', actionData)
+          handleClose()
+          break
+
+        case '__refresh_list__':
+          // 刷新列表
+          showToast('刷新列表', 'info')
+          emit('special-action', 'refresh-list', actionData)
+          handleClose()
+          break
+
+        case '__copy__':
+          // 复制到剪贴板
+          if (actionData.content) {
+            try {
+              await navigator.clipboard.writeText(actionData.content)
+              showToast('已复制到剪贴板', 'success')
+            } catch (err) {
+              showToast('复制失败', 'error')
+            }
+          }
+          handleClose()
+          break
+
+        case '__keep__':
+          // 保持窗口
+          if (actionData.msg) {
+            showToast(actionData.msg, 'info')
+          }
+          if (actionData.reset) {
+            // 重置窗口内容
+            parsedConfig.value = null
+          }
+          // 不关闭窗口
+          break
+
+        default:
+          showToast(`未知的专项动作: ${actionId}`, 'warning')
+          handleClose()
+          break
+      }
+    }
+
     // 处理提交
     const handleSubmit = async (value) => {
       if (!parsedConfig.value) return
@@ -193,27 +274,122 @@ export default {
       try {
         isLoading.value = true
         
-        // 触发action事件
-        const result = await emit('action', parsedConfig.value.actionId, value)
+        // 准备action数据
+        const actionData = {
+          action: parsedConfig.value.actionId,
+          value: typeof value === 'object' ? JSON.stringify(value) : value
+        }
+
+        // 添加扩展参数
+        if (props.extend) {
+          actionData.extend = props.extend
+        }
+
+        // 添加API URL
+        if (props.apiUrl) {
+          actionData.apiUrl = props.apiUrl
+        }
+
+        // 调用T4接口
+        console.log('ActionRenderer准备调用T4接口:', {
+          module: props.module,
+          actionData,
+          apiUrl: props.apiUrl
+        })
+        
+        let result = null
+        if (props.module) {
+          result = await executeAction(props.module, actionData)
+          console.log('T4接口返回结果:', result)
+        } else {
+          // 如果没有module，触发action事件让父组件处理
+          result = await emit('action', parsedConfig.value.actionId, value)
+          console.log('父组件处理结果:', result)
+        }
         
         // 处理返回结果
-        if (result && typeof result === 'object') {
-          if (result.success === false) {
-            throw createActionError(
-              ActionErrorType.NETWORK_ERROR,
-              result.error || '操作失败'
-            )
+        if (result) {
+          // 如果返回的是字符串，尝试解析为JSON
+          if (typeof result === 'string') {
+            try {
+              const parsedResult = JSON.parse(result)
+              result = parsedResult
+            } catch (e) {
+              // 如果不是JSON，作为toast消息显示
+              showToast(result, 'success')
+              emit('success', value)
+              handleClose()
+              return
+            }
           }
 
-          // 显示toast消息
-          if (result.toast) {
-            showToast(result.toast, 'success')
-          }
+          // 处理对象结果
+          if (typeof result === 'object') {
+            console.log('处理API返回的对象结果:', result)
+            
+            // 检查错误
+            if (result.error) {
+              throw createActionError(
+                ActionErrorType.NETWORK_ERROR,
+                result.error
+              )
+            }
 
-          // 处理新的action
-          if (result.action) {
-            parseConfig(result.action)
-            return
+            // 显示toast消息
+            if (result.toast) {
+              showToast(result.toast, 'success')
+            }
+
+            // 处理消息字段（兼容不同的消息字段名）
+            if (result.message || result.msg) {
+              showToast(result.message || result.msg, 'success')
+            }
+
+            // 处理新的action（动态action）
+            if (result.action) {
+              console.log('检测到动态action，重新解析:', result.action)
+              parseConfig(result.action)
+              return
+            }
+
+            // 处理专项动作
+            if (result.actionId) {
+              console.log('检测到专项动作:', result.actionId)
+              await handleSpecialAction(result)
+              return
+            }
+
+            // 处理状态码
+            if (result.code !== undefined) {
+              if (result.code === 0 || result.code === 200) {
+                // 成功状态
+                if (result.data) {
+                  // 如果有data字段，递归处理data内容
+                  if (typeof result.data === 'object') {
+                    // 递归处理data对象
+                    const dataResult = { ...result.data }
+                    if (dataResult.action || dataResult.actionId) {
+                      console.log('在data字段中检测到action:', dataResult)
+                      if (dataResult.action) {
+                        parseConfig(dataResult.action)
+                        return
+                      }
+                      if (dataResult.actionId) {
+                        await handleSpecialAction(dataResult)
+                        return
+                      }
+                    }
+                  }
+                }
+                showToast(result.message || result.msg || '操作成功', 'success')
+              } else {
+                // 错误状态
+                throw createActionError(
+                  ActionErrorType.NETWORK_ERROR,
+                  result.message || result.msg || `操作失败，错误码: ${result.code}`
+                )
+              }
+            }
           }
         }
 
@@ -223,6 +399,7 @@ export default {
       } catch (err) {
         console.error('执行Action失败:', err)
         error.value = err
+        showToast(err.message || '操作失败', 'error')
       } finally {
         isLoading.value = false
       }

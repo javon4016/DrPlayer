@@ -30,9 +30,13 @@
         :hasMore="searchState.hasMore"
         :scrollPosition="searchState.scrollPosition"
         :sourceRoute="{ name: route.name, params: route.params, query: route.query }"
+        :module="form.now_site?.key || nowSite?.key"
+        :extend="form.now_site"
+        :api-url="form.now_site?.api"
         @load-more="onSearchLoadMore"
         @exit-search="exitSearch"
         @video-click="handleVideoClick"
+        @refresh-list="handleRefreshList"
       />
       
       <!-- 默认视频列表 -->
@@ -43,6 +47,9 @@
         :recommendVideos="form.recommendVideos"
         :sourceRoute="{ name: route.name, params: route.params, query: { ...route.query, activeKey: currentActiveKey } }"
         :returnToActiveKey="route.query._returnToActiveKey"
+        :module="form.now_site?.key || nowSite?.key"
+        :extend="form.now_site"
+        :api-url="form.now_site?.api"
         @activeKeyChange="handleActiveKeyChange"
       />
     </a-layout-content>
@@ -374,6 +381,24 @@ const handleVideoClick = (video) => {
         console.log('从分类列表点击视频，保存分类状态');
       }
     }
+
+// 处理刷新列表事件
+const handleRefreshList = () => {
+  console.log('收到刷新列表请求');
+  
+  if (searchState.isSearching) {
+    // 如果在搜索状态，重新执行搜索
+    console.log('刷新搜索结果');
+    // 可以重新调用搜索方法
+    // searchVideos(searchState.searchKeyword);
+  } else {
+    // 如果在分类列表状态，刷新当前分类
+    console.log('刷新分类列表');
+    if (videoListRef.value) {
+      videoListRef.value.refreshCurrentCategory();
+    }
+  }
+};
     
     router.push({
          name: 'VideoDetail',
