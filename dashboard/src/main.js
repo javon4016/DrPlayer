@@ -9,6 +9,7 @@ import {createPinia} from 'pinia'
 import 'viewerjs/dist/viewer.css'
 import VueViewer from 'v-viewer'
 import ECharts from 'vue-echarts'
+import ActionComponents from '@/components/actions'
 import { use } from 'echarts/core'
 import {
   CanvasRenderer
@@ -42,5 +43,6 @@ app.use(ArcoVue);
 app.use(ArcoVueIcon);
 app.use(createPinia())
 app.use(VueViewer)
+app.use(ActionComponents)
 app.component('v-chart', ECharts)
 app.mount('#app')

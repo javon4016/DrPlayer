@@ -1,13 +1,17 @@
 <template>
   <div class="video-list-container">
-    <!-- 分类导航 -->
+    <!-- 分类导航（集成筛选功能） -->
     <CategoryNavigation
       :classList="classList"
       :trigger="trigger"
       :hasRecommendVideos="hasRecommendVideos"
       :activeKey="activeKey"
+      :filters="props.classList?.filters || {}"
+      :selectedFilters="selectedFilters"
       @tab-change="handleTabChange"
       @open-category-modal="openCategoryModal"
+      @toggle-filter="handleToggleFilter"
+      @reset-filters="handleResetFilters"
     />
 
     <!-- 内容区域 -->
@@ -25,17 +29,6 @@
 
       <!-- 其他分类内容 -->
       <div v-else class="tab-content">
-        <!-- 筛选区域 -->
-        <FilterSection
-           v-if="getFiltersForCategory(activeKey)"
-           :filters="getFiltersForCategory(activeKey)"
-           :selectedFilters="selectedFilters[activeKey] || {}"
-           :visible="filterVisible[activeKey] || false"
-           @update:visible="(val) => filterVisible[activeKey] = val"
-           @toggle-filter="(filterKey, filterValue, filterName) => toggleFilter(filterKey, filterValue, filterName)"
-           @reset-filters="resetFilters(activeKey)"
-         />
-
         <!-- 视频网格 -->
         <VideoGrid
           ref="videoGridRef"
@@ -315,6 +308,15 @@ const handleTabChange = (key) => {
   activeKey.value = key;
   getListData(key);
   emit('activeKeyChange', key);
+};
+
+const handleToggleFilter = (data) => {
+  const { filterKey, filterValue, filterName } = data;
+  toggleFilter(filterKey, filterValue, filterName);
+};
+
+const handleResetFilters = () => {
+  resetFilters(activeKey.value);
 };
 
 const openCategoryModal = () => {

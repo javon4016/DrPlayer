@@ -235,6 +235,9 @@
             </div>
           </div>
         </div>
+
+        <!-- Action 文档卡片 -->
+        <ActionDocCard />
       </div>
     </div>
   </div>
@@ -355,6 +358,9 @@ import updateLogService from '@/api/services/updateLogService'
 import recommendService from '@/api/services/recommendService'
 import { usePageStateStore } from '@/stores/pageStateStore'
 import { useRoute, useRouter } from 'vue-router'
+
+// 导入组件
+import ActionDocCard from '@/components/ActionDocCard.vue'
 
 // 注册 ECharts 组件
 use([

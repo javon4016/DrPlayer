@@ -393,8 +393,13 @@ const handleApiManagerCompleted = (result) => {
 }
 
 const handleImageError = (event) => {
-  // 使用相对路径，适配子目录部署
-  event.target.src = './default-poster.svg'
+  // 防止无限循环：如果已经是默认图片，就不再重新设置
+  if (event.target.src.includes('default-poster.svg')) {
+    return
+  }
+  // 使用BASE_URL确保在任何路由层级和部署环境下都能正确访问
+  const basePath = import.meta.env.BASE_URL || '/'
+  event.target.src = `${basePath}default-poster.svg`
   event.target.style.objectFit = 'contain'
   event.target.style.backgroundColor = '#f7f8fa'
 }

@@ -420,19 +420,21 @@ const loadVideoDetail = async () => {
   
   try {
     // 确定使用的站源信息
-    let module, apiUrl, siteName
+    let module, apiUrl, siteName, extend
     
     if ((fromCollection || fromHistory || fromPush) && route.query.tempSiteKey) {
       // 从收藏、历史或推送进入，使用临时站源信息，不影响全局状态
       module = route.query.tempSiteKey
       apiUrl = route.query.tempSiteApi
       siteName = route.query.tempSiteName
+      extend = route.query.tempSiteExt || null
       
       const sourceType = fromCollection ? '收藏' : fromHistory ? '历史' : '推送'
       console.log(`从${sourceType}进入，使用临时站源:`, {
         siteName,
         module,
-        apiUrl
+        apiUrl,
+        extend
       })
     } else {
       // 正常进入，使用全局站源
@@ -440,19 +442,22 @@ const loadVideoDetail = async () => {
       module = currentSite.key || currentSite.name
       apiUrl = currentSite.api
       siteName = currentSite.name
+      extend = currentSite.ext || null
     }
     
     // 设置当前使用的站源信息
     currentSiteInfo.value = {
       name: siteName,
       api: apiUrl,
-      key: module
+      key: module,
+      ext: extend
     }
     
     console.log('获取视频详情:', {
       videoId: route.params.id,
       module: module,
       apiUrl: apiUrl,
+      extend: extend,
       fromCollection: fromCollection,
       usingTempSite: fromCollection && route.query.tempSiteKey
     })
@@ -462,7 +467,7 @@ const loadVideoDetail = async () => {
     }
     
     // 从收藏进入时跳过缓存，强制获取最新数据
-    const videoInfo = await videoService.getVideoDetails(module, route.params.id, apiUrl, fromCollection)
+    const videoInfo = await videoService.getVideoDetails(module, route.params.id, apiUrl, fromCollection, extend)
     
     if (videoInfo) {
       // 添加API信息用于收藏
@@ -636,8 +641,13 @@ const goBack = () => {
 }
 
 const handleImageError = (event) => {
-  // 使用相对路径，适配子目录部署
-  event.target.src = './default-poster.svg'
+  // 防止无限循环：如果已经是默认图片，就不再重新设置
+  if (event.target.src.includes('default-poster.svg')) {
+    return
+  }
+  // 使用BASE_URL确保在任何路由层级和部署环境下都能正确访问
+  const basePath = import.meta.env.BASE_URL || '/'
+  event.target.src = `${basePath}default-poster.svg`
   event.target.style.objectFit = 'contain'
   event.target.style.backgroundColor = '#f7f8fa'
 }

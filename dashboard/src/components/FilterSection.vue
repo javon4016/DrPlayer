@@ -1,31 +1,23 @@
 <template>
   <div v-if="filters" class="filter-section">
-    <div class="filter-header">
-      <a-button 
-        type="text" 
-        @click="toggleVisible"
-        class="filter-toggle-btn"
-      >
-        <template #icon>
-          <icon-filter />
-        </template>
-        筛选条件
-        <icon-down v-if="!visible" />
-        <icon-up v-else />
-      </a-button>
-      <a-button 
-        v-if="hasActiveFilters"
-        type="text" 
-        size="small"
-        @click="handleResetFilters"
-        class="filter-reset-btn"
-      >
-        重置
-      </a-button>
-    </div>
-    
     <transition name="collapse">
       <div v-show="visible" class="filter-content">
+        <!-- 重置按钮放在最左上角 -->
+        <div class="filter-header-with-reset">
+          <a-button 
+            v-if="hasActiveFilters"
+            type="text" 
+            size="small"
+            @click="handleResetFilters"
+            class="filter-reset-btn"
+            :title="'重置所有筛选条件'"
+          >
+            <template #icon>
+              <icon-refresh />
+            </template>
+          </a-button>
+        </div>
+        
         <div 
           v-for="filterGroup in filters" 
           :key="filterGroup.key"
@@ -57,7 +49,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { IconFilter, IconDown, IconUp } from '@arco-design/web-vue/es/icon';
+import { IconFilter, IconDown, IconUp, IconRefresh } from '@arco-design/web-vue/es/icon';
 
 const props = defineProps({
   filters: {
@@ -89,7 +81,7 @@ const toggleVisible = () => {
 };
 
 const handleToggleFilter = (filterKey, filterValue, filterName) => {
-  emit('toggle-filter', filterKey, filterValue, filterName);
+  emit('toggle-filter', { filterKey, filterValue, filterName });
 };
 
 const handleResetFilters = () => {
@@ -102,15 +94,15 @@ const handleResetFilters = () => {
   flex-shrink: 0;
   background: white;
   z-index: 99;
-  border-bottom: 1px solid var(--color-border-2);
   margin-bottom: 8px;
 }
 
-.filter-header {
+.filter-header-left {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  padding: 8px 16px;
+  padding: 8px 0 8px 0;
+  margin-bottom: 4px;
 }
 
 .filter-toggle-btn {
@@ -120,17 +112,41 @@ const handleResetFilters = () => {
   font-weight: 500;
 }
 
+.filter-header-with-reset {
+  position: absolute;
+  left: 16px;
+  top: 4px;
+  z-index: 10;
+  width: 28px;
+}
+
 .filter-reset-btn {
-  color: var(--color-text-3);
+  color: white;
   font-size: 12px;
+  padding: 4px;
+  height: 28px;
+  width: 28px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary-6);
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .filter-reset-btn:hover {
-  color: var(--color-primary-6);
+  color: white;
+  background-color: var(--color-primary-7);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .filter-content {
   padding: 0 16px 8px;
+  position: relative;
+  padding-left: 52px; /* 16px(左边距) + 28px(按钮宽度) + 8px(间距) = 52px */
 }
 
 .filter-group {
@@ -138,7 +154,6 @@ const handleResetFilters = () => {
   padding: 4px 12px;
   background: var(--color-fill-1);
   border-radius: 6px;
-  border-left: 3px solid var(--color-primary-light-3);
 }
 
 .filter-group:last-child {
@@ -163,7 +178,6 @@ const handleResetFilters = () => {
   background: var(--color-fill-3);
   padding: 4px 8px 4px 20px;
   border-radius: 4px;
-  border: 1px solid var(--color-border-2);
   position: relative;
 }
 
@@ -177,7 +191,6 @@ const handleResetFilters = () => {
   height: 8px;
   background: var(--color-primary-light-4);
   border-radius: 2px;
-  border: 1px solid var(--color-primary-light-2);
 }
 
 .filter-options-container {

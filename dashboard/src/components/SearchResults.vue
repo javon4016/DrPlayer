@@ -93,6 +93,15 @@
         <div class="bottom-spacer"></div>
       </a-scrollbar>
     </div>
+
+    <!-- ActionRenderer组件 -->
+    <ActionRenderer
+      v-if="showActionRenderer"
+      ref="actionRendererRef"
+      :action-data="currentActionData"
+      @close="handleActionClose"
+      @submit="handleActionSubmit"
+    />
   </div>
 </template>
 
@@ -102,6 +111,7 @@ import { useRouter } from 'vue-router'
 import { usePaginationStore } from '@/stores/paginationStore'
 import { usePageStateStore } from '@/stores/pageStateStore'
 import { useVisitedStore } from '@/stores/visitedStore'
+import ActionRenderer from '@/components/actions/ActionRenderer.vue'
 
 const router = useRouter()
 const paginationStore = usePaginationStore()
@@ -156,6 +166,11 @@ const emit = defineEmits(['video-click', 'exit-search', 'load-more'])
 const containerRef = ref(null)
 const scrollbarRef = ref(null)
 const scrollAreaHeight = ref(0)
+
+// ActionRenderer相关
+const actionRendererRef = ref(null)
+const showActionRenderer = ref(false)
+const currentActionData = ref(null)
 
 // 滚动事件处理
 const handleScroll = (e) => {
@@ -289,6 +304,25 @@ const checkTextOverflow = () => {
 // 视频点击处理
 const handleVideoClick = (video) => {
   if (video && video.vod_id) {
+    // 检查是否为action类型
+    if (video.vod_tag === 'action') {
+      try {
+        // 解析vod_id中的JSON字符串获取action配置
+        const actionConfig = JSON.parse(video.vod_id);
+        console.log('SearchResults解析action配置:', actionConfig);
+        
+        // 传递解析后的action配置给ActionRenderer
+        currentActionData.value = actionConfig;
+        showActionRenderer.value = true;
+        return;
+      } catch (error) {
+        console.error('SearchResults解析action配置失败:', error, 'vod_id:', video.vod_id);
+        // 如果解析失败，显示错误信息
+        alert(`Action配置解析失败: ${error.message}`);
+        return;
+      }
+    }
+    
     // 记录最后点击的视频
     visitedStore.setLastClicked(video.vod_id, video.vod_name)
     
@@ -384,6 +418,19 @@ watch(() => props.videos, () => {
 watch([() => props.keyword, () => props.currentPage, () => props.hasMore], () => {
   updateGlobalStats()
 })
+
+// ActionRenderer事件处理
+const handleActionClose = () => {
+  showActionRenderer.value = false;
+  currentActionData.value = null;
+}
+
+const handleActionSubmit = (result) => {
+  console.log('Action提交结果:', result);
+  showActionRenderer.value = false;
+  currentActionData.value = null;
+  // 可以在这里处理action的提交结果
+}
 </script>
 
 <style scoped>

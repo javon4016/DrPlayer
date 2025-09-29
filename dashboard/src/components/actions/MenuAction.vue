@@ -1,0 +1,1291 @@
+<template>
+  <ActionDialog
+    :visible="visible"
+    :title="config.title"
+    :width="config.width || 480"
+    :height="config.height"
+    :canceled-on-touch-outside="!config.keep"
+    @close="handleCancel"
+  >
+    <div class="menu-action-modern">
+      <!-- 消息区域 -->
+      <div v-if="config.msg" class="message-section">
+        <div class="message-content glass-effect">
+          <div class="message-bg gradient-primary"></div>
+          <div class="message-text">{{ config.msg }}</div>
+        </div>
+      </div>
+
+      <!-- 图片区域 -->
+      <div v-if="config.imageUrl" class="media-section">
+        <div class="media-container glass-effect">
+          <div class="media-bg gradient-secondary"></div>
+          <img
+            :src="config.imageUrl"
+            :style="{ height: config.imageHeight ? `${config.imageHeight}px` : 'auto' }"
+            class="media-image"
+            alt="Action Image"
+          />
+        </div>
+      </div>
+
+      <!-- 搜索区域 -->
+      <div v-if="config.searchable" class="search-section">
+        <div class="search-container">
+          <div class="search-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </div>
+          <input
+            v-model="searchKeyword"
+            type="text"
+            placeholder="搜索选项..."
+            class="search-input"
+            @input="handleSearch"
+          />
+        </div>
+      </div>
+
+      <!-- 菜单选项区域 -->
+      <div class="menu-section">
+        <div class="menu-options-container">
+          <div
+            v-for="(option, index) in menuOptions"
+            :key="option.value || index"
+            class="menu-option-card"
+            :class="{ 
+              'selected': isSelected(option),
+              'disabled': option.disabled,
+              'has-description': option.description
+            }"
+            @click="handleOptionClick(option, index)"
+          >
+            <!-- 选项图标 -->
+            <div v-if="option.icon" class="option-icon-container">
+              <!-- 网络图片 -->
+              <img v-if="option.icon.startsWith('http')" :src="option.icon" alt="" class="option-icon-image" />
+              <!-- SVG 图标 -->
+              <div v-else-if="option.icon.includes('<svg')" class="option-icon-svg" v-html="option.icon"></div>
+              <!-- Unicode 图标 -->
+              <span v-else-if="option.icon.startsWith('&#')" class="option-icon-unicode" v-html="option.icon"></span>
+              <!-- Emoji 图标 -->
+              <span v-else-if="isEmoji(option.icon)" class="option-icon-emoji">{{ option.icon }}</span>
+              <!-- CSS 类图标 -->
+              <span v-else class="option-icon-class" :class="option.icon"></span>
+            </div>
+
+            <!-- 选项内容 -->
+            <div class="option-content">
+              <div class="option-title">{{ option.name }}</div>
+              <div v-if="option.description" class="option-description">
+                {{ option.description }}
+              </div>
+            </div>
+
+            <!-- 选择指示器 -->
+            <div class="option-selector">
+              <!-- 复选框（多选） -->
+              <div v-if="isMultiSelect" class="checkbox-modern">
+                <input
+                  type="checkbox"
+                  :id="`menu-checkbox-${index}`"
+                  :checked="isSelected(option)"
+                  @change="handleOptionClick(option, index)"
+                  @click.stop
+                  class="checkbox-input"
+                />
+                <label :for="`menu-checkbox-${index}`" class="checkbox-label">
+                  <div class="checkbox-indicator">
+                    <svg v-if="isSelected(option)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20,6 9,17 4,12"></polyline>
+                    </svg>
+                  </div>
+                </label>
+              </div>
+
+              <!-- 单选框（单选） -->
+              <div v-else class="radio-modern">
+                <input
+                  type="radio"
+                  :id="`menu-radio-${index}`"
+                  :name="'menu-radio-group'"
+                  :checked="isSelected(option)"
+                  @change="handleOptionClick(option, index)"
+                  @click.stop
+                  class="radio-input"
+                />
+                <label :for="`menu-radio-${index}`" class="radio-label">
+                  <div class="radio-indicator">
+                    <div v-if="isSelected(option)" class="radio-dot"></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 多选操作按钮 -->
+      <div v-if="isMultiSelect" class="multi-select-controls">
+        <div class="control-buttons">
+          <button 
+            class="control-btn"
+            @click="selectAll"
+            :disabled="selectedOptions.length === menuOptions.length"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9,11 12,14 22,4"></polyline>
+              <path d="m21,3-6.5,6.5L11,6"></path>
+            </svg>
+            全选
+          </button>
+          <button 
+            class="control-btn"
+            @click="clearAll"
+            :disabled="selectedOptions.length === 0"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            全清
+          </button>
+          <button 
+            class="control-btn"
+            @click="invertSelection"
+            :disabled="menuOptions.length === 0"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              <path d="m9 14 2 2 4-4"></path>
+            </svg>
+            反选
+          </button>
+        </div>
+      </div>
+
+      <!-- 已选择项目显示（多选） -->
+      <div v-if="isMultiSelect && selectedOptions.length > 0" class="selected-section">
+        <div class="selected-container glass-effect">
+          <div class="selected-bg gradient-tertiary"></div>
+          <div class="selected-header">
+            <div class="selected-title">已选择项目</div>
+            <div class="selected-count">{{ selectedOptions.length }}</div>
+          </div>
+          <div class="selected-items-grid">
+            <div
+              v-for="option in selectedOptions"
+              :key="option.value"
+              class="selected-item-tag"
+              @click="removeSelection(option)"
+            >
+              <span class="selected-item-name">{{ option.name }}</span>
+              <div class="selected-item-remove">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 超时提示 -->
+      <div v-if="config.timeout && timeLeft > 0" class="timeout-section">
+        <div class="timeout-container">
+          <div class="timeout-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12,6 12,12 16,14"></polyline>
+            </svg>
+          </div>
+          <div class="timeout-text">{{ timeLeft }}秒后自动关闭</div>
+          <div class="timeout-progress">
+            <div 
+              class="timeout-progress-bar" 
+              :style="{ width: `${(timeLeft / config.timeout) * 100}%` }"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="footer-actions">
+        <!-- 取消按钮 -->
+        <button
+          v-if="showCancelButton"
+          class="btn-modern btn-secondary"
+          @click="handleCancel"
+        >
+          <span>取消</span>
+        </button>
+        
+        <!-- 确定按钮（多选或非自动提交时显示） -->
+        <button
+          v-if="showOkButton"
+          class="btn-modern btn-primary"
+          :disabled="!isValid"
+          @click="handleSubmit"
+        >
+          <span>确定</span>
+        </button>
+      </div>
+    </template>
+  </ActionDialog>
+</template>
+
+<script>
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import ActionDialog from './ActionDialog.vue'
+import { 
+  ButtonType, 
+  parseSelectData 
+} from './types.js'
+
+export default {
+  name: 'MenuAction',
+  components: {
+    ActionDialog
+  },
+  props: {
+    config: {
+      type: Object,
+      required: true
+    },
+    visible: {
+      type: Boolean,
+      default: true
+    }
+  },
+  emits: ['submit', 'cancel', 'close', 'action'],
+  setup(props, { emit }) {
+    const selectedOptions = ref([])
+    const searchKeyword = ref('')
+    const timeLeft = ref(0)
+    const timer = ref(null)
+
+    // 计算属性
+    const isMultiSelect = computed(() => {
+      return props.config.type === 'multiSelect'
+    })
+
+    const menuOptions = computed(() => {
+      let options = []
+      
+      // 优先使用option字段（符合文档规范）
+      if (props.config.option) {
+        options = Array.isArray(props.config.option) ? props.config.option : [props.config.option]
+        // 处理字符串格式：'菜单3$menu3'
+        options = options.map(item => {
+          if (typeof item === 'string') {
+            const [name, action] = item.split('$')
+            return { name: name || item, action: action || item, value: action || item }
+          }
+          return { 
+            name: item.name || item.title || item.label,
+            action: item.action || item.value,
+            value: item.action || item.value,
+            description: item.description
+          }
+        })
+      } else if (props.config.selectData) {
+        // 兼容旧的selectData格式
+        options = parseSelectData(props.config.selectData)
+      }
+      
+      // 搜索过滤
+      if (searchKeyword.value) {
+        const keyword = searchKeyword.value.toLowerCase()
+        options = options.filter(option => 
+          option.name.toLowerCase().includes(keyword) ||
+          (option.description && option.description.toLowerCase().includes(keyword))
+        )
+      }
+      
+      return options
+    })
+
+    const showOkButton = computed(() => {
+      const { button = ButtonType.OK_CANCEL } = props.config
+      const needOkButton = button === ButtonType.OK_CANCEL || button === ButtonType.OK_ONLY
+      
+      // 单选且自动提交时不显示确定按钮
+      if (!isMultiSelect.value && props.config.autoSubmit) {
+        return false
+      }
+      
+      return needOkButton
+    })
+
+    const showCancelButton = computed(() => {
+      const { button = ButtonType.OK_CANCEL } = props.config
+      return button === ButtonType.OK_CANCEL || button === ButtonType.CANCEL_ONLY
+    })
+
+    const isValid = computed(() => {
+      if (isMultiSelect.value) {
+        return selectedOptions.value.length > 0
+      } else {
+        return selectedOptions.value.length === 1
+      }
+    })
+
+    // 方法
+    const isSelected = (option) => {
+      return selectedOptions.value.some(selected => selected.value === option.value)
+    }
+
+    const handleOptionClick = (option, index) => {
+      if (option.disabled) return
+
+      if (isMultiSelect.value) {
+        // 多选模式
+        if (isSelected(option)) {
+          removeSelection(option)
+        } else {
+          selectedOptions.value.push(option)
+        }
+      } else {
+        // 单选模式
+        selectedOptions.value = [option]
+        
+        // 自动提交
+        if (props.config.autoSubmit) {
+          handleSubmit()
+        }
+      }
+    }
+
+    const removeSelection = (option) => {
+      const index = selectedOptions.value.findIndex(selected => selected.value === option.value)
+      if (index > -1) {
+        selectedOptions.value.splice(index, 1)
+      }
+    }
+
+    const selectAll = () => {
+      selectedOptions.value = [...menuOptions.value]
+    }
+
+    const clearAll = () => {
+      selectedOptions.value = []
+    }
+
+    const invertSelection = () => {
+      const currentSelected = new Set(selectedOptions.value.map(option => option.value))
+      selectedOptions.value = menuOptions.value.filter(option => !currentSelected.has(option.value))
+    }
+
+    const handleSearch = () => {
+      // 搜索逻辑在计算属性中处理
+    }
+
+    // 检测是否为emoji图标
+    const isEmoji = (str) => {
+      const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u
+      return emojiRegex.test(str)
+    }
+
+    const handleSubmit = () => {
+      if (!isValid.value) return
+
+      const result = {}
+      
+      if (isMultiSelect.value) {
+        result.selectedValues = selectedOptions.value.map(option => option.value)
+        result.selectedOptions = selectedOptions.value
+      } else {
+        const selected = selectedOptions.value[0]
+        result.selectedValue = selected.value
+        result.selectedOption = selected
+      }
+
+      emit('submit', result)
+    }
+
+    const handleCancel = () => {
+      emit('cancel')
+      emit('close')
+    }
+
+    // 超时处理
+    const startTimeout = () => {
+      if (!props.config.timeout || props.config.timeout <= 0) return
+
+      timeLeft.value = props.config.timeout
+      timer.value = setInterval(() => {
+        timeLeft.value--
+        if (timeLeft.value <= 0) {
+          clearInterval(timer.value)
+          handleCancel()
+        }
+      }, 1000)
+    }
+
+    const stopTimeout = () => {
+      if (timer.value) {
+        clearInterval(timer.value)
+        timer.value = null
+      }
+      timeLeft.value = 0
+    }
+
+    // 监听配置变化
+    watch(() => props.config, (newConfig) => {
+      selectedOptions.value = []
+      searchKeyword.value = ''
+      
+      // 设置默认选中项
+      if (newConfig.defaultValue) {
+        const options = parseSelectData(newConfig.selectData || '')
+        const defaultValues = Array.isArray(newConfig.defaultValue) 
+          ? newConfig.defaultValue 
+          : [newConfig.defaultValue]
+        
+        selectedOptions.value = options.filter(option => 
+          defaultValues.includes(option.value)
+        )
+      }
+      
+      if (newConfig.timeout) {
+        startTimeout()
+      } else {
+        stopTimeout()
+      }
+    }, { immediate: true })
+
+    // 监听显示状态
+    watch(() => props.visible, (visible) => {
+      if (visible) {
+        startTimeout()
+      } else {
+        stopTimeout()
+      }
+    })
+
+    onMounted(() => {
+      // 初始化默认选中项
+      if (props.config.defaultValue) {
+        const options = parseSelectData(props.config.selectData || '')
+        const defaultValues = Array.isArray(props.config.defaultValue) 
+          ? props.config.defaultValue 
+          : [props.config.defaultValue]
+        
+        selectedOptions.value = options.filter(option => 
+          defaultValues.includes(option.value)
+        )
+      }
+    })
+
+    onUnmounted(() => {
+      stopTimeout()
+    })
+
+    return {
+      selectedOptions,
+      searchKeyword,
+      timeLeft,
+      isMultiSelect,
+      menuOptions,
+      showOkButton,
+      showCancelButton,
+      isValid,
+      isSelected,
+      isEmoji,
+      handleOptionClick,
+      removeSelection,
+      selectAll,
+      clearAll,
+      invertSelection,
+      handleSearch,
+      handleSubmit,
+      handleCancel
+    }
+  }
+}
+</script>
+
+<style scoped>
+/* 主容器 */
+.menu-action-modern {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 0;
+}
+
+/* 消息区域 */
+.message-section {
+  margin-bottom: 0.5rem;
+}
+
+.message-content {
+  position: relative;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.message-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.1;
+  z-index: 0;
+}
+
+.message-text {
+  position: relative;
+  z-index: 1;
+  color: var(--action-color-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* 媒体区域 */
+.media-section {
+  margin-bottom: 0.5rem;
+}
+
+.media-container {
+  position: relative;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.media-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.05;
+  z-index: 0;
+}
+
+.media-image {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  border-radius: 0.5rem;
+  box-shadow: var(--action-shadow-medium);
+}
+
+/* 搜索区域 */
+.search-section {
+  margin-bottom: 0.5rem;
+}
+
+.search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  z-index: 2;
+  color: var(--action-color-text-secondary);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  border: 2px solid var(--action-color-border);
+  border-radius: 0.75rem;
+  background: var(--action-color-bg);
+  color: var(--action-color-text);
+  font-size: 0.875rem;
+  transition: all var(--action-transition-duration);
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: var(--action-color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--action-color-primary-rgb), 0.1);
+}
+
+.search-input::placeholder {
+  color: var(--action-color-text-secondary);
+}
+
+/* 菜单选项区域 */
+.menu-section {
+  flex: 1;
+}
+
+.menu-options-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.menu-options-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.menu-options-container::-webkit-scrollbar-track {
+  background: var(--action-color-bg-secondary);
+  border-radius: 3px;
+}
+
+.menu-options-container::-webkit-scrollbar-thumb {
+  background: var(--action-color-border);
+  border-radius: 3px;
+}
+
+.menu-options-container::-webkit-scrollbar-thumb:hover {
+  background: var(--action-color-text-secondary);
+}
+
+/* 菜单选项卡片 */
+.menu-option-card {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border: 2px solid var(--action-color-border);
+  border-radius: 0.75rem;
+  background: var(--action-color-bg);
+  cursor: pointer;
+  transition: all var(--action-transition-duration);
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-option-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, 
+    rgba(var(--action-color-primary-rgb), 0.05) 0%, 
+    rgba(var(--action-color-secondary-rgb), 0.05) 100%);
+  opacity: 0;
+  transition: opacity var(--action-transition-duration);
+  z-index: 0;
+}
+
+.menu-option-card:hover::before {
+  opacity: 1;
+}
+
+.menu-option-card:hover {
+  border-color: var(--action-color-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--action-shadow-large);
+}
+
+.menu-option-card.selected {
+  border-color: var(--action-color-primary);
+  background: rgba(var(--action-color-primary-rgb), 0.05);
+  box-shadow: var(--action-shadow-medium);
+}
+
+.menu-option-card.selected::before {
+  opacity: 1;
+}
+
+.menu-option-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.menu-option-card.disabled:hover {
+  border-color: var(--action-color-border);
+  box-shadow: none;
+}
+
+.menu-option-card.has-description {
+  align-items: flex-start;
+  padding: 1.25rem 1rem;
+}
+
+/* 选项图标 */
+.option-icon-container {
+  position: relative;
+  z-index: 1;
+  margin-right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  background: rgba(var(--action-color-primary-rgb), 0.1);
+}
+
+.option-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0.25rem;
+}
+
+.option-icon-svg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--action-color-primary);
+}
+
+.option-icon-svg svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
+}
+
+.option-icon-unicode {
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--action-color-primary);
+}
+
+.option-icon-emoji {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.option-icon-class {
+  font-size: 1rem;
+  color: var(--action-color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 选项内容 */
+.option-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+.option-title {
+  font-weight: 600;
+  color: var(--action-color-text);
+  margin-bottom: 0.125rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.option-description {
+  font-size: 0.75rem;
+  color: var(--action-color-text-secondary);
+  line-height: 1.4;
+  margin-top: 0.25rem;
+}
+
+/* 选择指示器 */
+.option-selector {
+  position: relative;
+  z-index: 1;
+  margin-left: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* 现代化复选框 */
+.checkbox-modern {
+  position: relative;
+}
+
+.checkbox-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.checkbox-label {
+  display: block;
+  cursor: pointer;
+}
+
+.checkbox-indicator {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--action-color-border);
+  border-radius: 0.375rem;
+  background: var(--action-color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--action-transition-duration);
+  color: white;
+}
+
+.checkbox-input:checked + .checkbox-label .checkbox-indicator {
+  background: var(--action-color-primary);
+  border-color: var(--action-color-primary);
+  transform: scale(1.05);
+}
+
+.checkbox-input:focus + .checkbox-label .checkbox-indicator {
+  box-shadow: 0 0 0 3px rgba(var(--action-color-primary-rgb), 0.2);
+}
+
+/* 现代化单选框 */
+.radio-modern {
+  position: relative;
+}
+
+.radio-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.radio-label {
+  display: block;
+  cursor: pointer;
+}
+
+.radio-indicator {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--action-color-border);
+  border-radius: 50%;
+  background: var(--action-color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--action-transition-duration);
+}
+
+.radio-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: white;
+  border-radius: 50%;
+  transform: scale(0);
+  transition: transform var(--action-transition-duration);
+}
+
+.radio-input:checked + .radio-label .radio-indicator {
+  background: var(--action-color-primary);
+  border-color: var(--action-color-primary);
+  transform: scale(1.05);
+}
+
+.radio-input:checked + .radio-label .radio-dot {
+  transform: scale(1);
+}
+
+.radio-input:focus + .radio-label .radio-indicator {
+  box-shadow: 0 0 0 3px rgba(var(--action-color-primary-rgb), 0.2);
+}
+
+/* 多选控制按钮 */
+.multi-select-controls {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.control-buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.control-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--glass-bg-primary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--shadow-sm);
+}
+
+.control-btn:hover:not(:disabled) {
+  background: var(--gradient-primary);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.control-btn svg {
+  flex-shrink: 0;
+}
+
+/* 已选择项目区域 */
+.selected-section {
+  margin-top: 1rem;
+}
+
+.selected-container {
+  position: relative;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.selected-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.08;
+  z-index: 0;
+}
+
+.selected-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.selected-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--action-color-text);
+}
+
+.selected-count {
+  background: var(--action-color-primary);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.selected-items-grid {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.selected-item-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(var(--action-color-primary-rgb), 0.1);
+  border: 1px solid rgba(var(--action-color-primary-rgb), 0.2);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all var(--action-transition-duration);
+  font-size: 0.75rem;
+}
+
+.selected-item-tag:hover {
+  background: rgba(var(--action-color-danger-rgb), 0.1);
+  border-color: rgba(var(--action-color-danger-rgb), 0.3);
+  transform: translateY(-1px);
+}
+
+.selected-item-name {
+  color: var(--action-color-text);
+  font-weight: 500;
+}
+
+.selected-item-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--action-color-text-secondary);
+  transition: color var(--action-transition-duration);
+}
+
+.selected-item-tag:hover .selected-item-remove {
+  color: var(--action-color-danger);
+}
+
+/* 超时区域 */
+.timeout-section {
+  margin-top: 0.5rem;
+}
+
+.timeout-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(var(--action-color-warning-rgb), 0.1);
+  border: 1px solid rgba(var(--action-color-warning-rgb), 0.2);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.timeout-icon {
+  color: var(--action-color-warning);
+  flex-shrink: 0;
+}
+
+.timeout-text {
+  color: var(--action-color-text);
+  font-weight: 500;
+  flex: 1;
+}
+
+.timeout-progress {
+  flex: 1;
+  height: 0.25rem;
+  background: rgba(var(--action-color-warning-rgb), 0.2);
+  border-radius: 0.125rem;
+  overflow: hidden;
+}
+
+.timeout-progress-bar {
+  height: 100%;
+  background: var(--action-color-warning);
+  transition: width 1s linear;
+  border-radius: 0.125rem;
+}
+
+/* 底部操作区域 */
+.footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+}
+
+/* 现代化按钮样式 */
+.btn-modern {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 2px solid transparent;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--action-transition-duration);
+  outline: none;
+  position: relative;
+  overflow: hidden;
+  min-width: 5rem;
+}
+
+.btn-modern::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity var(--action-transition-duration);
+}
+
+.btn-modern:hover::before {
+  opacity: 1;
+}
+
+.btn-modern span {
+  position: relative;
+  z-index: 1;
+}
+
+.btn-secondary {
+  background: var(--action-color-bg-secondary);
+  border-color: var(--action-color-border);
+  color: var(--action-color-text);
+}
+
+.btn-secondary:hover {
+  border-color: var(--action-color-text-secondary);
+  transform: translateY(-2px);
+  box-shadow: var(--action-shadow-medium);
+}
+
+.btn-primary {
+  background: var(--action-color-primary);
+  border-color: var(--action-color-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--action-color-primary-dark);
+  border-color: var(--action-color-primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--action-shadow-large);
+}
+
+.btn-primary:disabled {
+  background: var(--action-color-bg-secondary);
+  border-color: var(--action-color-border);
+  color: var(--action-color-text-secondary);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary:disabled::before {
+  opacity: 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .menu-action-modern {
+    gap: 1rem;
+  }
+  
+  .menu-option-card {
+    padding: 0.875rem;
+  }
+  
+  .option-icon-container {
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-right: 0.625rem;
+  }
+  
+  .selected-items-grid {
+    flex-direction: column;
+  }
+  
+  .selected-item-tag {
+    justify-content: space-between;
+  }
+  
+  .footer-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .btn-modern {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .menu-action-modern {
+    gap: 0.75rem;
+  }
+  
+  .message-content,
+  .media-container,
+  .selected-container {
+    padding: 0.75rem;
+  }
+  
+  .menu-option-card {
+    padding: 0.75rem;
+  }
+  
+  .option-icon-container {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-right: 0.5rem;
+  }
+  
+  .option-title {
+    font-size: 0.8125rem;
+  }
+  
+  .option-description {
+    font-size: 0.6875rem;
+  }
+}
+
+/* 深色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .menu-option-card {
+    background: rgba(255, 255, 255, 0.02);
+  }
+  
+  .menu-option-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .menu-option-card.selected {
+    background: rgba(var(--action-color-primary-rgb), 0.1);
+  }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+  .menu-option-card {
+    border-width: 3px;
+  }
+  
+  .checkbox-indicator,
+  .radio-indicator {
+    border-width: 3px;
+  }
+  
+  .btn-modern {
+    border-width: 3px;
+  }
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+  .menu-option-card,
+  .checkbox-indicator,
+  .radio-indicator,
+  .btn-modern,
+  .selected-item-tag,
+  .timeout-progress-bar {
+    transition: none;
+  }
+  
+  .menu-option-card:hover,
+  .btn-modern:hover,
+  .selected-item-tag:hover {
+    transform: none;
+  }
+}
+</style>

@@ -1,3 +1,6 @@
+/* 引入现代化设计系统 */
+@import './styles/design-system.css';
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

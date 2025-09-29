@@ -143,9 +143,10 @@ class VideoService {
    * @param {string} videoId - 视频ID
    * @param {string} apiUrl - 站点API地址
    * @param {boolean} skipCache - 是否跳过缓存
+   * @param {string} extend - 扩展参数
    * @returns {Promise} 视频详情数据
    */
-  async getVideoDetails(module, videoId, apiUrl, skipCache = false) {
+  async getVideoDetails(module, videoId, apiUrl, skipCache = false, extend = null) {
     if (!validateModule(module)) {
       throw new Error('无效的模块名称')
     }
@@ -171,6 +172,9 @@ class VideoService {
       const params = { ids: videoId }
       if (apiUrl) {
         params.apiUrl = apiUrl
+      }
+      if (extend) {
+        params.extend = extend
       }
       const response = await getVideoDetail(module, params)
       
@@ -251,11 +255,12 @@ class VideoService {
   /**
    * 获取播放地址
    * @param {string} module - 模块名称
-   * @param {string} playUrl - 播放地址或ID
-   * @param {string} apiUrl - 站点API地址
+   * @param {string} playUrl - 播放地址
+   * @param {string} apiUrl - API地址
+   * @param {string} extend - 扩展参数
    * @returns {Promise} 播放数据
    */
-  async getPlayUrl(module, playUrl, apiUrl) {
+  async getPlayUrl(module, playUrl, apiUrl, extend = null) {
     if (!validateModule(module)) {
       throw new Error('无效的模块名称')
     }
@@ -268,6 +273,9 @@ class VideoService {
       const params = { play: playUrl }
       if (apiUrl) {
         params.apiUrl = apiUrl
+      }
+      if (extend) {
+        params.extend = extend
       }
       const response = await getPlayData(module, params)
       
@@ -317,9 +325,11 @@ class VideoService {
   /**
    * 刷新模块数据
    * @param {string} module - 模块名称
+   * @param {string} extend - 扩展参数
+   * @param {string} apiUrl - API地址
    * @returns {Promise} 刷新结果
    */
-  async refreshModuleData(module) {
+  async refreshModuleData(module, extend = null, apiUrl = null) {
     if (!validateModule(module)) {
       throw new Error('无效的模块名称')
     }
@@ -328,7 +338,7 @@ class VideoService {
       // 清除相关缓存
       this.clearModuleCache(module)
       
-      const response = await refreshModule(module)
+      const response = await refreshModule(module, extend, apiUrl)
       
       return {
         success: true,

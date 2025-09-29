@@ -1,33 +1,63 @@
 <template>
-  <div class="category-nav-wrapper" ref="navWrapperRef">
-    <!-- 分类tabs -->
-    <a-tabs 
-       v-model:active-key="activeKey" 
-       class="category-tabs"
-       type="line"
-       size="large"
-       position="top"
-       :editable="false"
-       @change="handleTabChange"
-     >
-      <a-tab-pane v-if="hasRecommendVideos" key="recommendTuijian404" title="推荐" />
-      <a-tab-pane 
-         v-for="item in classList?.class || []" 
-         :key="item.type_id" 
-         :title="item.type_name" 
-       />
-    </a-tabs>
-    
-    <!-- 分类管理按钮 -->
-    <div class="category-manage" @click="openCategoryModal">
-      <icon-apps />
+  <div class="category-nav-container">
+    <div class="category-nav-wrapper" ref="navWrapperRef">
+      <!-- 分类tabs -->
+      <a-tabs 
+         v-model:active-key="activeKey" 
+         class="category-tabs"
+         type="line"
+         size="large"
+         position="top"
+         :editable="false"
+         @change="handleTabChange"
+       >
+        <a-tab-pane v-if="hasRecommendVideos" key="recommendTuijian404">
+          <template #title>
+            <span>推荐</span>
+          </template>
+        </a-tab-pane>
+        <a-tab-pane 
+           v-for="item in classList?.class || []" 
+           :key="item.type_id"
+         >
+          <template #title>
+             <div 
+               class="category-tab-title"
+               @click.stop="item.type_id === activeKey && hasFiltersForCategory(item.type_id) ? handleCategoryClick(item.type_id) : handleTabChange(item.type_id)"
+             >
+               <span class="category-name">{{ item.type_name }}</span>
+               <icon-filter 
+                 v-if="item.type_id === activeKey && hasFiltersForCategory(item.type_id)" 
+                 class="filter-icon"
+                 :class="{ 'filter-icon-active': filterVisible[item.type_id] }"
+               />
+             </div>
+           </template>
+        </a-tab-pane>
+      </a-tabs>
+      
+      <!-- 分类管理按钮 -->
+      <div class="category-manage" @click="openCategoryModal">
+        <icon-apps />
+      </div>
     </div>
+
+    <!-- 筛选区域 -->
+    <FilterSection
+      v-if="getFiltersForCategory(activeKey) && filterVisible[activeKey]"
+      :filters="getFiltersForCategory(activeKey)"
+      :selectedFilters="selectedFilters[activeKey] || {}"
+      :visible="true"
+      @toggle-filter="handleToggleFilter"
+      @reset-filters="handleResetFilters"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import { IconApps } from '@arco-design/web-vue/es/icon';
+import { IconApps, IconFilter } from '@arco-design/web-vue/es/icon';
+import FilterSection from './FilterSection.vue';
 
 const props = defineProps({
   classList: {
@@ -45,10 +75,18 @@ const props = defineProps({
   activeKey: {
     type: String,
     default: ''
+  },
+  filters: {
+    type: Object,
+    default: () => ({})
+  },
+  selectedFilters: {
+    type: Object,
+    default: () => ({})
   }
 });
 
-const emit = defineEmits(['tab-change', 'open-category-modal']);
+const emit = defineEmits(['tab-change', 'open-category-modal', 'toggle-filter', 'reset-filters']);
 
 // 计算默认的activeKey
 const getDefaultActiveKey = () => {
@@ -64,6 +102,7 @@ const getDefaultActiveKey = () => {
 // 响应式数据
 const activeKey = ref(props.activeKey || getDefaultActiveKey());
 const navWrapperRef = ref(null);
+const filterVisible = ref({});
 let wheelHandler = null;
 
 // 监听props变化，更新activeKey
@@ -78,9 +117,44 @@ watch(() => [props.hasRecommendVideos, props.classList, props.activeKey], () => 
   }
 }, { immediate: true });
 
+// 当分类切换时，隐藏之前分类的筛选条件
+watch(activeKey, (newKey, oldKey) => {
+  if (oldKey && filterVisible.value[oldKey]) {
+    filterVisible.value[oldKey] = false;
+  }
+});
+
 const handleTabChange = (key) => {
   activeKey.value = key;
   emit('tab-change', key);
+};
+
+// 处理分类点击（显示/隐藏筛选）
+const handleCategoryClick = (categoryId) => {
+  if (hasFiltersForCategory(categoryId)) {
+    filterVisible.value[categoryId] = !filterVisible.value[categoryId];
+  }
+};
+
+// 检查分类是否有筛选条件
+const hasFiltersForCategory = (categoryId) => {
+  const filters = props.filters[categoryId];
+  return filters && Object.keys(filters).length > 0;
+};
+
+// 获取分类的筛选条件
+const getFiltersForCategory = (categoryId) => {
+  return props.filters[categoryId] || null;
+};
+
+// 处理筛选切换
+const handleToggleFilter = (data) => {
+  emit('toggle-filter', data);
+};
+
+// 处理重置筛选
+const handleResetFilters = () => {
+  emit('reset-filters');
 };
 
 const openCategoryModal = () => {
@@ -113,57 +187,146 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.category-nav-container {
+  margin-bottom: 16px;
+}
+
 .category-nav-wrapper {
   display: flex;
   align-items: center;
+  position: relative;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 8px 8px 0 0;
   padding: 0 16px;
-  background: white;
-  border-bottom: 1px solid #f0f0f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 2;
+}
+
+.category-nav-container :deep(.filter-section) {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 0 0 8px 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: -1px;
+  z-index: 1;
 }
 
 .category-tabs {
   flex: 1;
   overflow: hidden;
-  min-width: 0; /* 允许在flex布局中收缩 */
 }
 
-/* 确保tabs的高度与管理按钮对齐 */
-.category-tabs :deep(.arco-tabs-nav-wrap) {
-  height: 40px;
-  display: flex;
-  align-items: center;
-}
-
-.category-tabs :deep(.arco-tabs-tab) {
-  height: 40px;
-  display: flex;
-  align-items: center;
-}
-
-/* 启用tabs横向滚动 */
 .category-tabs :deep(.arco-tabs-nav) {
-  overflow: visible; /* 允许内部列表展示溢出部分 */
+  margin-bottom: 0;
+  border-bottom: none;
 }
 
-.category-tabs :deep(.arco-tabs-nav-tab-list) {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  scroll-behavior: smooth;
-  display: flex;
-  flex-wrap: nowrap;
-  white-space: nowrap;
+.category-tabs :deep(.arco-tabs-nav-tab) {
+  padding: 12px 16px;
+  margin-right: 8px;
+  border-radius: 6px 6px 0 0;
+  transition: all 0.3s ease;
+  color: #666;
+  font-weight: 500;
 }
 
-.category-tabs :deep(.arco-tabs-nav-tab-list)::-webkit-scrollbar {
+.category-tabs :deep(.arco-tabs-nav-tab:hover) {
+  color: #165dff;
+}
+
+/* 使用更强的选择器来覆盖Arco Design默认样式 */
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active),
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active:hover),
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active:focus),
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active.arco-tabs-tab-active),
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active.arco-tabs-tab-active:hover) {
+  background-color: #165dff !important;
+  background: #165dff !important;
+  color: white !important;
+  font-weight: 600 !important;
+  border: none !important;
+  border-color: transparent !important;
+}
+
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active) .category-name,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active:hover) .category-name,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active:focus) .category-name,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active.arco-tabs-tab-active) .category-name,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active.arco-tabs-tab-active:hover) .category-name {
+  color: white !important;
+}
+
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active) .filter-icon,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active:hover) .filter-icon,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active:focus) .filter-icon,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active.arco-tabs-tab-active) .filter-icon,
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active.arco-tabs-tab-active:hover) .filter-icon {
+  color: white !important;
+  opacity: 1 !important;
+}
+
+.category-tabs :deep(.arco-tabs-nav-tab.arco-tabs-nav-tab-active) .filter-icon:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.category-tabs :deep(.arco-tabs-nav-ink) {
   display: none;
 }
 
-.category-tabs :deep(.arco-tabs-tab) {
+.category-tab-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.category-tabs :deep(.arco-tabs-nav-tab-active) .category-tab-title {
+  cursor: pointer;
+}
+
+.category-tabs :deep(.arco-tabs-nav-tab-active) .category-tab-title:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.category-name {
+  cursor: pointer;
+  flex: 1;
+}
+
+.filter-icon {
+  font-size: 12px;
+  transition: all 0.3s ease;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
   flex-shrink: 0;
-  white-space: nowrap;
-  min-width: auto;
+}
+
+/* 最终覆盖规则 - 使用最高优先级 */
+.category-tabs :deep(.arco-tabs-nav-tab[class*="active"]) {
+  background-color: #165dff !important;
+  background: #165dff !important;
+  color: white !important;
+}
+
+.category-tabs :deep(.arco-tabs-nav-tab[class*="active"] *) {
+  color: white !important;
+}
+
+.filter-icon:hover {
+  opacity: 1;
+  background: rgba(22, 93, 255, 0.1);
+}
+
+.filter-icon-active {
+  opacity: 1;
+  color: #165dff;
 }
 
 .category-manage {
@@ -172,17 +335,17 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 8px;
-  background: #f5f5f5;
+  border-radius: 6px;
+  background: rgba(22, 93, 255, 0.1);
+  color: #165dff;
   cursor: pointer;
-  transition: all 0.2s;
-  margin-left: 16px;
-  flex-shrink: 0;
-  transform: translateY(-6px);
+  transition: all 0.3s ease;
+  margin-left: 12px;
 }
 
 .category-manage:hover {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: #165dff;
+  color: white;
+  transform: scale(1.05);
 }
 </style>
