@@ -339,14 +339,20 @@ const removeFavorite = (item) => {
 
 const goToDetail = async (item) => {
   try {
+    // 调试：打印完整的收藏项
+    console.log('收藏项完整数据:', item)
+    console.log('收藏api_info:', item.api_info)
+    
     // 不再切换全局站源，而是通过路由参数传递站源信息
     const siteInfo = {
       name: item.api_info.site_name,
       api: item.api_info.api_url,
-      key: item.api_info.module
+      key: item.api_info.module,
+      ext: item.api_info.ext || null  // 从收藏数据中获取extend参数
     }
     
-    console.log('从收藏进入详情页，使用临时站源:', siteInfo.name)
+    console.log('从收藏进入详情页，使用临时站源:', siteInfo.name, '扩展参数:', siteInfo.ext)
+    console.log('siteInfo完整对象:', siteInfo)
     
     // 跳转到详情页，传递站源信息
     router.push({
@@ -368,6 +374,7 @@ const goToDetail = async (item) => {
           tempSiteName: siteInfo.name,
           tempSiteApi: siteInfo.api,
           tempSiteKey: siteInfo.key,
+          tempSiteExt: siteInfo.ext,  // 添加extend参数传递
           // 添加来源页面信息
           sourceRouteName: 'Collection',
           sourceRouteParams: JSON.stringify({}),

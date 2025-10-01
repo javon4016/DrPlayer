@@ -48,8 +48,40 @@
 
     <!-- 详情内容 -->
     <div v-else-if="videoDetail" class="detail-content">
+      <!-- 默认视频播放器组件 -->
+      <VideoPlayer 
+        v-if="showVideoPlayer && actualVideoUrl && playerType === 'default'"
+        :video-url="actualVideoUrl"
+        :episode-name="currentEpisodeName"
+        :poster="videoDetail?.vod_pic"
+        :visible="showVideoPlayer"
+        :player-type="playerType"
+        :episodes="currentRouteEpisodes"
+        :current-episode-index="currentEpisodeIndex"
+        @close="handlePlayerClose"
+        @player-change="handlePlayerTypeChange"
+        @next-episode="handleNextEpisode"
+      />
+
+      <!-- ArtPlayer 播放器组件 -->
+      <ArtVideoPlayer 
+        v-if="showVideoPlayer && actualVideoUrl && playerType === 'artplayer'"
+        :video-url="actualVideoUrl"
+        :episode-name="currentEpisodeName"
+        :poster="videoDetail?.vod_pic"
+        :visible="showVideoPlayer"
+        :player-type="playerType"
+        :episodes="currentRouteEpisodes"
+        :current-episode-index="currentEpisodeIndex"
+        :auto-next="true"
+        @close="handlePlayerClose"
+        @player-change="handlePlayerTypeChange"
+        @next-episode="handleNextEpisode"
+        @episode-selected="handleEpisodeSelected"
+      />
+
       <!-- 视频信息卡片 -->
-      <a-card class="video-info-card">
+      <a-card class="video-info-card" :class="{ 'collapsed-when-playing': showVideoPlayer }">
         <div class="video-header">
           <div class="video-poster" @click="showImageModal">
             <img :src="videoDetail.vod_pic" :alt="videoDetail.vod_name" @error="handleImageError" />
@@ -116,103 +148,16 @@
         </div>
       </a-card>
 
-      <!-- 播放线路和选集 -->
-      <a-card v-if="playRoutes.length > 0" class="play-section">
-        <h3>播放线路</h3>
-        
-        <!-- 线路选择 -->
-        <div class="route-tabs">
-          <a-button
-            v-for="(route, index) in playRoutes"
-            :key="index"
-            :type="currentRoute === index ? 'primary' : 'outline'"
-            @click="switchRoute(index)"
-            class="route-btn"
-          >
-            <span class="route-name">{{ route.name }}</span>
-            <a-badge :count="route.episodes.length" class="route-badge" />
-          </a-button>
-        </div>
-
-        <!-- 选集列表 -->
-        <div v-if="currentRouteEpisodes.length > 0" class="episodes-section">
-          <div class="episodes-header">
-            <h4>选集列表 ({{ currentRouteEpisodes.length }}集)</h4>
-            <div class="episodes-controls">
-              <!-- 排序按钮 -->
-              <a-button 
-                type="text" 
-                size="small" 
-                @click="toggleEpisodeSort"
-                :title="episodeSortOrder === 'asc' ? '切换为倒序' : '切换为正序'"
-                class="sort-btn"
-              >
-                <template #icon>
-                  <icon-sort-ascending v-if="episodeSortOrder === 'asc'" />
-                  <icon-sort-descending v-else />
-                </template>
-                {{ episodeSortOrder === 'asc' ? '正序' : '倒序' }}
-              </a-button>
-              
-              <!-- 显示策略选择 -->
-              <a-select 
-                v-model="episodeDisplayStrategy" 
-                @change="changeDisplayStrategy"
-                size="small"
-                class="strategy-select"
-                :style="{ width: '150px' }"
-                position="bl"
-                :popup-container="'body'"
-              >
-                <template #prefix>
-                  <icon-settings />
-                </template>
-                <a-option value="full">完整显示</a-option>
-                <a-option value="smart">智能去重</a-option>
-                <a-option value="simple">精简显示</a-option>
-              </a-select>
-              
-              <!-- 布局选项 -->
-              <a-select 
-                v-model="episodeLayoutColumns" 
-                @change="changeLayoutColumns"
-                size="small"
-                class="layout-select"
-                :style="{ width: '110px' }"
-                position="bl"
-                :popup-container="'body'"
-              >
-                <template #prefix>
-                  <icon-menu />
-                </template>
-                <a-option :value="12">12列</a-option>
-                <a-option :value="6">6列</a-option>
-                <a-option :value="3">3列</a-option>
-              </a-select>
-            </div>
-          </div>
-          <div class="episodes-grid" :style="{ '--episodes-columns': episodeLayoutColumns }">
-            <a-button
-              v-for="(episode, index) in currentRouteEpisodes"
-              :key="index"
-              :type="currentEpisode === index ? 'primary' : 'outline'"
-              @click="selectEpisode(index)"
-              class="episode-btn"
-              size="small"
-              :title="episode.name"
-            >
-              <span class="episode-text">{{ episode.displayName || episode.name }}</span>
-            </a-button>
-          </div>
-        </div>
 
 
-      </a-card>
-
-      <!-- 无播放资源提示 -->
-      <a-card v-else class="no-play-section">
-        <a-empty description="暂无播放资源" />
-      </a-card>
+      <!-- 播放线路和选集组件 -->
+      <EpisodeSelector 
+        :video-detail="videoDetail"
+        :current-route="currentRoute"
+        :current-episode="currentEpisode"
+        @route-change="switchRoute"
+        @episode-change="selectEpisode"
+      />
     </div>
 
     <!-- v-viewer 图片查看器 -->
@@ -226,11 +171,41 @@
         :title="imageData.name"
       />
     </div>
+
+    <!-- 解析提示弹窗 -->
+    <ActionDialog
+      :visible="showParseDialog"
+      :title="parseDialogConfig.title"
+      :width="400"
+      @close="showParseDialog = false"
+    >
+      <div class="parse-dialog-content">
+        <div class="parse-message">
+          {{ parseDialogConfig.message }}
+        </div>
+        <div class="parse-hint">
+          <div class="hint-icon">
+            <icon-eye />
+          </div>
+          <div class="hint-text">
+            敬请期待后续版本支持！
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="parse-dialog-footer">
+          <a-button type="primary" @click="showParseDialog = false">
+            我知道了
+          </a-button>
+        </div>
+      </template>
+    </ActionDialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import videoService from '@/api/services/video'
@@ -238,16 +213,16 @@ import { useSiteStore } from '@/stores/siteStore'
 import { useFavoriteStore } from '@/stores/favoriteStore'
 import { useHistoryStore } from '@/stores/historyStore'
 import { usePageStateStore } from '@/stores/pageStateStore'
+import VideoPlayer from '@/components/players/VideoPlayer.vue'
+import ArtVideoPlayer from '@/components/players/ArtVideoPlayer.vue'
+import EpisodeSelector from '@/components/players/EpisodeSelector.vue'
+import ActionDialog from '@/components/actions/ActionDialog.vue'
 import { 
   IconLeft, 
   IconPlayArrow, 
   IconCopy,
   IconHeart,
   IconHeartFill,
-  IconSortAscending,
-  IconSortDescending,
-  IconSettings,
-  IconMenu,
   IconEye
 } from '@arco-design/web-vue/es/icon'
 
@@ -278,16 +253,48 @@ const descriptionExpanded = ref(false)
 const currentRoute = ref(0)
 const currentEpisode = ref(0)
 const favoriteLoading = ref(false)
-// 选集排序和显示策略
-const episodeSortOrder = ref('asc') // 'asc' 正序, 'desc' 倒序
-const episodeDisplayStrategy = ref(localStorage.getItem('episodeDisplayStrategy') || 'full') // 'full' 完整显示, 'smart' 智能去重, 'simple' 精简显示
-const episodeLayoutColumns = ref(parseInt(localStorage.getItem('episodeLayoutColumns')) || 12) // 每行显示的按钮数量
 // 当前使用的站源信息（可能是全局站源或临时站源）
 const currentSiteInfo = ref({
   name: '',
   api: '',
   key: ''
 })
+
+// 视频播放器相关
+const showVideoPlayer = ref(false)
+// 解析后的播放URL（用于T4接口解析结果）
+const parsedVideoUrl = ref('')
+
+// 解析提示弹窗相关
+const showParseDialog = ref(false)
+const parseDialogConfig = ref({
+  title: '',
+  message: '',
+  type: '' // 'sniff' 或 'parse'
+})
+
+// 从localStorage读取用户的播放器偏好，默认为'default'
+const getPlayerPreference = () => {
+  try {
+    const saved = localStorage.getItem('drplayer_preferred_player_type')
+    return saved && ['default', 'artplayer'].includes(saved) ? saved : 'default'
+  } catch (error) {
+    console.warn('读取播放器偏好失败:', error)
+    return 'default'
+  }
+}
+
+// 保存播放器偏好到localStorage
+const savePlayerPreference = (type) => {
+  try {
+    localStorage.setItem('drplayer_preferred_player_type', type)
+    console.log('播放器偏好已保存:', type)
+  } catch (error) {
+    console.warn('保存播放器偏好失败:', error)
+  }
+}
+
+const playerType = ref(getPlayerPreference()) // 'default' 或 'artplayer'
 
 // 图片查看器相关
 const viewerImages = ref([])
@@ -339,38 +346,7 @@ const playRoutes = computed(() => {
   }))
 })
 
-const currentRouteEpisodes = computed(() => {
-  let episodes = playRoutes.value[currentRoute.value]?.episodes || []
-  
-  // 应用显示策略
-  episodes = episodes.map(episode => ({
-    ...episode,
-    displayName: processEpisodeName(episode.name)
-  }))
-  
-  // 应用排序
-  if (episodeSortOrder.value === 'desc') {
-    episodes = [...episodes].reverse()
-  }
-  
-  return episodes
-})
-
-const currentEpisodes = computed(() => {
-  return currentRouteEpisodes.value
-})
-
-const currentEpisodeUrl = computed(() => {
-  const episode = currentRouteEpisodes.value[currentEpisode.value]
-  return episode?.url || ''
-})
-
-const isCurrentFavorited = computed(() => {
-  if (!originalVideoInfo.value.id || !currentSiteInfo.value.api) return false
-  return favoriteStore.isFavorited(originalVideoInfo.value.id, currentSiteInfo.value.api)
-})
-
-// 方法
+// 解析选集数据
 const parseEpisodes = (urlString) => {
   if (!urlString) return []
   
@@ -382,6 +358,41 @@ const parseEpisodes = (urlString) => {
     }
   }).filter(item => item.url)
 }
+
+
+
+// 当前线路的选集列表
+const currentRouteEpisodes = computed(() => {
+  return playRoutes.value[currentRoute.value]?.episodes || []
+})
+
+const currentEpisodeUrl = computed(() => {
+  const episodes = playRoutes.value[currentRoute.value]?.episodes || []
+  const episode = episodes[currentEpisode.value]
+  return episode?.url || ''
+})
+
+// 实际播放URL（优先使用解析后的URL）
+const actualVideoUrl = computed(() => {
+  return parsedVideoUrl.value || currentEpisodeUrl.value
+})
+
+const currentEpisodeName = computed(() => {
+  const episodes = playRoutes.value[currentRoute.value]?.episodes || []
+  const episode = episodes[currentEpisode.value]
+  return episode?.name || '未知选集'
+})
+
+const currentEpisodeIndex = computed(() => {
+  return currentEpisode.value
+})
+
+const isCurrentFavorited = computed(() => {
+  if (!originalVideoInfo.value.id || !currentSiteInfo.value.api) return false
+  return favoriteStore.isFavorited(originalVideoInfo.value.id, currentSiteInfo.value.api)
+})
+
+// 方法
 
 const loadVideoDetail = async () => {
   if (!route.params.id) {
@@ -417,12 +428,17 @@ const loadVideoDetail = async () => {
   const fromCollection = route.query.fromCollection === 'true'
   const fromHistory = route.query.fromHistory === 'true'
   const fromPush = route.query.fromPush === 'true'
+  const fromSpecialAction = route.query.fromSpecialAction === 'true'
   
   try {
     // 确定使用的站源信息
     let module, apiUrl, siteName, extend
     
-    if ((fromCollection || fromHistory || fromPush) && route.query.tempSiteKey) {
+    if ((fromCollection || fromHistory || fromPush||fromSpecialAction) && route.query.tempSiteKey) {
+      // 调试：打印接收到的路由参数
+      console.log('VideoDetail接收到的路由参数:', route.query)
+      console.log('tempSiteExt参数值:', route.query.tempSiteExt)
+      
       // 从收藏、历史或推送进入，使用临时站源信息，不影响全局状态
       module = route.query.tempSiteKey
       apiUrl = route.query.tempSiteApi
@@ -552,7 +568,8 @@ const toggleFavorite = async () => {
         // API信息使用当前站源信息
         module: currentSiteInfo.value.key,
         api_url: currentSiteInfo.value.api,
-        site_name: currentSiteInfo.value.name
+        site_name: currentSiteInfo.value.name,
+        ext: currentSiteInfo.value.ext || null  // 添加站源扩展配置
       }
       
       const success = favoriteStore.addFavorite(favoriteData)
@@ -733,8 +750,137 @@ const switchRoute = (index) => {
   currentEpisode.value = 0 // 切换线路时重置选集
 }
 
-const selectEpisode = (index) => {
+// 处理EpisodeSelector组件的事件
+const handleRouteChange = (routeIndex) => {
+  switchRoute(routeIndex)
+}
+
+const handleEpisodeChange = (episodeIndex) => {
+  selectEpisode(episodeIndex)
+}
+
+// 处理VideoPlayer组件的关闭事件
+const handlePlayerClose = () => {
+  showVideoPlayer.value = false
+}
+
+// 处理播放器类型变更
+const handlePlayerTypeChange = (newType) => {
+  console.log('切换播放器类型:', newType)
+  playerType.value = newType
+  
+  // 保存用户的播放器偏好
+  savePlayerPreference(newType)
+}
+
+// 处理自动下一集事件
+const handleNextEpisode = (nextEpisodeIndex) => {
+  console.log('切换到下一集:', nextEpisodeIndex)
+  
+  // 检查索引是否有效
+  if (nextEpisodeIndex >= 0 && nextEpisodeIndex < currentRouteEpisodes.value.length) {
+    selectEpisode(nextEpisodeIndex)
+  } else {
+    console.warn('无效的选集索引:', nextEpisodeIndex)
+    Message.warning('无法播放下一集')
+  }
+}
+
+// 处理选集选择事件
+const handleEpisodeSelected = (episode) => {
+  console.log('从播放器选择剧集:', episode)
+  
+  // 查找选集在当前路线中的索引
+  const episodeIndex = currentRouteEpisodes.value.findIndex(ep => 
+    ep.name === episode.name && ep.url === episode.url
+  )
+  
+  if (episodeIndex !== -1) {
+    selectEpisode(episodeIndex)
+  } else {
+    console.warn('未找到选集:', episode)
+    Message.warning('选集切换失败')
+  }
+}
+
+const selectEpisode = async (index) => {
   currentEpisode.value = index
+  
+  // 获取当前选集的URL和线路信息
+  const episodeUrl = currentRouteEpisodes.value[index]?.url
+  const routeName = playRoutes.value[currentRoute.value]?.name
+  
+  if (!episodeUrl) {
+    console.log('选集URL为空，无法播放')
+    Message.error('选集URL为空，无法播放')
+    return
+  }
+
+  try {
+    console.log('开始解析选集播放地址:', { episodeUrl, routeName })
+    Message.info('正在解析播放地址...')
+    
+    // 调用T4播放API进行解析
+    const parseParams = {
+      play: episodeUrl,
+      flag: routeName,
+      apiUrl: currentSiteInfo.value.api,
+      extend: currentSiteInfo.value.ext
+    }
+    
+    const parseResult = await videoService.parseEpisodePlayUrl(currentSiteInfo.value.key, parseParams)
+    console.log('选集播放解析结果:', parseResult)
+    
+    // 根据解析结果处理播放
+     if (parseResult.playType === 'direct') {
+       // parse:0 - 直链播放
+       console.log('启动内置播放器播放直链视频:', parseResult.url)
+       parsedVideoUrl.value = parseResult.url
+       showVideoPlayer.value = true
+       Message.success(`开始播放: ${currentEpisodeName.value}`)
+     } else if (parseResult.playType === 'sniff') {
+       // parse:1 - 需要嗅探
+       console.log('需要嗅探播放:', parseResult)
+       // 清空解析URL，不启动播放器
+       parsedVideoUrl.value = ''
+       
+       // 显示嗅探提示弹窗
+       parseDialogConfig.value = {
+         title: '播放提示',
+         message: '该视频需要嗅探才能播放，当前版本暂不支持此功能。',
+         type: 'sniff'
+       }
+       showParseDialog.value = true
+     } else if (parseResult.playType === 'parse') {
+       // jx:1 - 需要解析
+       console.log('需要解析播放:', parseResult)
+       // 清空解析URL，不启动播放器
+       parsedVideoUrl.value = ''
+       
+       // 显示解析提示弹窗
+       parseDialogConfig.value = {
+         title: '播放提示',
+         message: '该视频需要解析才能播放，当前版本暂不支持此功能。',
+         type: 'parse'
+       }
+       showParseDialog.value = true
+     } else {
+       // 其他情况，回退到原始播放方式
+       console.log('使用原始播放方式:', episodeUrl)
+       parsedVideoUrl.value = ''
+       showVideoPlayer.value = true
+       Message.success(`开始播放: ${currentEpisodeName.value}`)
+     }
+  } catch (error) {
+     console.error('解析选集播放地址失败:', error)
+     Message.error('解析播放地址失败，请稍后重试')
+     
+     // 解析失败时回退到原始播放方式
+     console.log('回退到原始播放方式:', episodeUrl)
+     parsedVideoUrl.value = ''
+     showVideoPlayer.value = true
+     Message.warning(`播放可能不稳定: ${currentEpisodeName.value}`)
+   }
   
   // 添加到历史记录
   if (videoDetail.value && currentRouteEpisodes.value[index]) {
@@ -750,7 +896,8 @@ const selectEpisode = (index) => {
       api_info: {
         module: currentSiteInfo.value.key,
         api_url: currentSiteInfo.value.api,
-        site_name: currentSiteInfo.value.name
+        site_name: currentSiteInfo.value.name,
+        ext: currentSiteInfo.value.ext || null  // 添加站源扩展配置
       }
     }
     
@@ -765,85 +912,17 @@ const selectEpisode = (index) => {
       url: currentRouteEpisodes.value[index].url
     }
     
+    // 调试：检查添加历史记录时的ext参数
+    console.log('=== 添加历史记录调试 ===')
+    console.log('currentSiteInfo.value.ext:', currentSiteInfo.value.ext)
+    console.log('videoInfo.api_info.ext:', videoInfo.api_info.ext)
+    console.log('=== 调试结束 ===')
+    
     historyStore.addToHistory(videoInfo, routeInfo, episodeInfo)
   }
 }
 
-// 选集排序切换
-const toggleEpisodeSort = () => {
-  episodeSortOrder.value = episodeSortOrder.value === 'asc' ? 'desc' : 'asc'
-  // 排序切换后需要调整当前选集索引
-  if (episodeSortOrder.value === 'desc') {
-    const totalEpisodes = playRoutes.value[currentRoute.value]?.episodes.length || 0
-    currentEpisode.value = totalEpisodes - 1 - currentEpisode.value
-  } else {
-    const totalEpisodes = playRoutes.value[currentRoute.value]?.episodes.length || 0
-    currentEpisode.value = totalEpisodes - 1 - currentEpisode.value
-  }
-}
 
-// 显示策略切换
-const changeDisplayStrategy = (strategy) => {
-  episodeDisplayStrategy.value = strategy
-  localStorage.setItem('episodeDisplayStrategy', strategy)
-}
-
-// 布局列数切换
-const changeLayoutColumns = (columns) => {
-  episodeLayoutColumns.value = parseInt(columns)
-  localStorage.setItem('episodeLayoutColumns', columns)
-}
-
-// 获取显示策略文本
-const getDisplayStrategyText = () => {
-  switch (episodeDisplayStrategy.value) {
-    case 'full': return '完整显示'
-    case 'smart': return '智能去重'
-    case 'simple': return '精简显示'
-    default: return '完整显示'
-  }
-}
-
-// 处理选集名称显示
-const processEpisodeName = (episodeName) => {
-  if (!episodeName) return '未知集数'
-  
-  switch (episodeDisplayStrategy.value) {
-    case 'full':
-      return episodeName
-      
-    case 'smart':
-      // 智能去重：去除与视频标题重复的部分
-      const videoTitle = originalVideoInfo.value.name || videoDetail.value?.vod_name || ''
-      if (videoTitle && episodeName.includes(videoTitle)) {
-        // 去除标题部分，保留后缀
-        let processed = episodeName.replace(videoTitle, '').trim()
-        // 去除开头的特殊字符
-        processed = processed.replace(/^[_\-\s]+/, '')
-        return processed || episodeName
-      }
-      return episodeName
-      
-    case 'simple':
-      // 精简显示：提取数字部分
-      const numberMatch = episodeName.match(/(\d+)/g)
-      if (numberMatch && numberMatch.length > 0) {
-        // 取最后一个数字，并格式化为三位数
-        const lastNumber = numberMatch[numberMatch.length - 1]
-        return String(lastNumber).padStart(3, '0')
-      }
-      // 如果没有数字，尝试提取中文数字或其他标识
-      const chineseNumberMatch = episodeName.match(/[一二三四五六七八九十百千万]+/)
-      if (chineseNumberMatch) {
-        return chineseNumberMatch[0]
-      }
-      // 如果都没有，返回原名称的简化版本
-      return episodeName.length > 6 ? episodeName.substring(0, 6) + '...' : episodeName
-      
-    default:
-      return episodeName
-  }
-}
 
 const playVideo = () => {
   // 检查是否有历史记录
@@ -878,7 +957,9 @@ const playVideo = () => {
               if (currentEpisodeUrl.value) {
                 console.log('播放历史记录位置:', historyItem.current_episode_name)
                 Message.info(`继续播放: ${historyItem.current_episode_name}`)
-                window.open(currentEpisodeUrl.value, '_blank')
+                
+                // 启动内置播放器
+                showVideoPlayer.value = true
                 
                 // 更新历史记录的播放时间
                 updateHistoryRecord()
@@ -902,27 +983,86 @@ const playVideo = () => {
   }
 }
 
+// 智能查找第一个m3u8选集
+const findFirstM3u8Episode = () => {
+  console.log('开始智能查找第一个m3u8选集...')
+  
+  // 遍历所有线路
+  for (let routeIndex = 0; routeIndex < playRoutes.value.length; routeIndex++) {
+    const route = playRoutes.value[routeIndex]
+    console.log(`检查线路 ${routeIndex}: ${route.name}`)
+    
+    // 遍历当前线路的所有选集
+    for (let episodeIndex = 0; episodeIndex < route.episodes.length; episodeIndex++) {
+      const episode = route.episodes[episodeIndex]
+      
+      // 检查URL是否包含m3u8
+      if (episode.url && episode.url.toLowerCase().includes('.m3u8')) {
+        console.log(`找到第一个m3u8选集: 线路${routeIndex} - ${episode.name}`)
+        return {
+          routeIndex,
+          episodeIndex,
+          route: route.name,
+          episode: episode.name,
+          url: episode.url
+        }
+      }
+    }
+  }
+  
+  console.log('未找到m3u8选集，将使用默认选集')
+  return null
+}
+
 const playFirstEpisode = () => {
-  // 播放第一个线路的第一个选集（受排序影响）
-  if (playRoutes.value.length > 0) {
-    currentRoute.value = 0
+  // 首先尝试智能查找第一个m3u8选集
+  const m3u8Episode = findFirstM3u8Episode()
+  
+  if (m3u8Episode) {
+    // 找到m3u8选集，播放该选集
+    console.log(`智能播放m3u8选集: ${m3u8Episode.route} - ${m3u8Episode.episode}`)
+    currentRoute.value = m3u8Episode.routeIndex
     
     nextTick(() => {
-      if (currentRouteEpisodes.value.length > 0) {
-        currentEpisode.value = 0
-        
-        nextTick(() => {
-          if (currentEpisodeUrl.value) {
-            console.log('播放第一个选集:', currentRouteEpisodes.value[0].name)
-            Message.info(`开始播放: ${currentRouteEpisodes.value[0].name}`)
-            window.open(currentEpisodeUrl.value, '_blank')
-            
-            // 添加到历史记录
-            updateHistoryRecord()
-          }
-        })
-      }
+      currentEpisode.value = m3u8Episode.episodeIndex
+      
+      nextTick(() => {
+        if (currentEpisodeUrl.value) {
+          console.log('播放m3u8选集:', m3u8Episode.episode)
+          Message.info(`智能播放: ${m3u8Episode.episode}`)
+          
+          // 启动内置播放器
+          showVideoPlayer.value = true
+          
+          // 添加到历史记录
+          updateHistoryRecord()
+        }
+      })
     })
+  } else {
+    // 未找到m3u8选集，播放第一个线路的第一个选集（默认行为）
+    if (playRoutes.value.length > 0) {
+      currentRoute.value = 0
+      
+      nextTick(() => {
+        if (currentRouteEpisodes.value.length > 0) {
+          currentEpisode.value = 0
+          
+          nextTick(() => {
+            if (currentEpisodeUrl.value) {
+              console.log('播放默认选集:', currentRouteEpisodes.value[0].name)
+              Message.info(`开始播放: ${currentRouteEpisodes.value[0].name}`)
+              
+              // 启动内置播放器
+              showVideoPlayer.value = true
+              
+              // 添加到历史记录
+              updateHistoryRecord()
+            }
+          })
+        }
+      })
+    }
   }
 }
 
@@ -941,7 +1081,8 @@ const updateHistoryRecord = () => {
       api_info: {
         module: currentSiteInfo.value.key,
         api_url: currentSiteInfo.value.api,
-        site_name: currentSiteInfo.value.name
+        site_name: currentSiteInfo.value.name,
+        ext: currentSiteInfo.value.ext || null  // 添加站源扩展配置
       }
     }
     
@@ -955,6 +1096,12 @@ const updateHistoryRecord = () => {
       index: currentEpisode.value,
       url: currentRouteEpisodes.value[currentEpisode.value].url
     }
+    
+    // 调试：检查更新历史记录时的ext参数
+    console.log('=== 更新历史记录调试 ===')
+    console.log('currentSiteInfo.value.ext:', currentSiteInfo.value.ext)
+    console.log('videoInfo.api_info.ext:', videoInfo.api_info.ext)
+    console.log('=== 调试结束 ===')
     
     historyStore.addToHistory(videoInfo, routeInfo, episodeInfo)
   }
@@ -994,9 +1141,18 @@ watch(() => siteStore.nowSite, (newSite, oldSite) => {
   }
 }, { deep: true })
 
+
+
+
+
 // 组件挂载时的初始化（watch已经设置了immediate: true，无需重复调用）
 onMounted(() => {
   console.log('VideoDetail组件已挂载')
+})
+
+// 组件卸载时清理资源
+onUnmounted(() => {
+  console.log('VideoDetail组件卸载')
 })
 </script>
 
@@ -1105,8 +1261,73 @@ onMounted(() => {
   width: 100%;
 }
 
+
+
 .video-info-card {
   margin-bottom: 24px;
+  transition: all 0.3s ease;
+}
+
+/* 当播放器显示时折叠视频信息卡片 */
+.video-info-card.collapsed-when-playing {
+  margin-bottom: 16px;
+}
+
+.video-info-card.collapsed-when-playing .video-header {
+  margin-bottom: 12px;
+}
+
+.video-info-card.collapsed-when-playing .video-poster {
+  width: 120px;
+  height: 168px;
+}
+
+.video-info-card.collapsed-when-playing .video-info {
+  gap: 8px;
+}
+
+.video-info-card.collapsed-when-playing .title-main {
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.video-info-card.collapsed-when-playing .video-meta {
+  gap: 8px;
+}
+
+.video-info-card.collapsed-when-playing .meta-item {
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.video-info-card.collapsed-when-playing .video-description {
+  margin-top: 12px;
+}
+
+.video-info-card.collapsed-when-playing .video-description h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.video-info-card.collapsed-when-playing .description-content {
+  font-size: 13px;
+  line-height: 1.4;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.video-info-card.collapsed-when-playing .description-content.expanded {
+  max-height: none;
+}
+
+.video-info-card.collapsed-when-playing .play-actions {
+  gap: 8px;
+}
+
+.video-info-card.collapsed-when-playing .play-btn,
+.video-info-card.collapsed-when-playing .copy-btn {
+  height: 32px;
+  font-size: 13px;
 }
 
 .video-header {
@@ -1123,12 +1344,44 @@ onMounted(() => {
   overflow: hidden;
   background: var(--color-bg-3);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+  cursor: pointer;
 }
 
 .video-poster img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.poster-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.video-poster:hover .poster-overlay {
+  opacity: 1;
+}
+
+.poster-overlay .view-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.poster-overlay span {
+  font-size: 14px;
 }
 
 .video-meta {
@@ -1392,6 +1645,62 @@ onMounted(() => {
   padding: 40px;
 }
 
+/* 视频播放器样式 */
+.video-player-section {
+  margin-bottom: 20px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.player-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-1);
+  margin: 0;
+}
+
+.player-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.video-player-container {
+  position: relative;
+  width: 100%;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.video-player {
+  width: 100%;
+  height: auto;
+  min-height: 400px;
+  max-height: 70vh;
+  background: #000;
+  outline: none;
+}
+
+.video-player::-webkit-media-controls-panel {
+  background-color: transparent;
+}
+
+.video-player::-webkit-media-controls-play-button,
+.video-player::-webkit-media-controls-volume-slider,
+.video-player::-webkit-media-controls-timeline,
+.video-player::-webkit-media-controls-current-time-display,
+.video-player::-webkit-media-controls-time-remaining-display {
+  color: #fff;
+}
+
 /* 响应式设计 */
 @media (max-width: 1200px) {
   .detail-content {
@@ -1477,6 +1786,35 @@ onMounted(() => {
     width: 100%;
     height: 40px;
   }
+
+  /* 播放器响应式 */
+  .video-player-section {
+    margin-bottom: 16px;
+  }
+
+  .player-header h3 {
+    font-size: 16px;
+  }
+
+  .video-player {
+    min-height: 250px;
+  }
+
+  /* 折叠状态响应式 */
+  .video-info-card.collapsed-when-playing .video-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .video-info-card.collapsed-when-playing .video-poster {
+    width: 100px;
+    height: 140px;
+    align-self: center;
+  }
+
+  .video-info-card.collapsed-when-playing .title-main {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1500,5 +1838,74 @@ onMounted(() => {
   .episodes-grid {
     grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
   }
+
+  /* 小屏幕播放器适配 */
+  .video-player-section {
+    margin-bottom: 12px;
+  }
+
+  .player-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .player-header h3 {
+    font-size: 14px;
+  }
+
+  .video-player {
+    min-height: 200px;
+  }
+
+  /* 小屏幕折叠状态 */
+  .video-info-card.collapsed-when-playing .video-poster {
+    width: 80px;
+    height: 112px;
+  }
+
+  .video-info-card.collapsed-when-playing .title-main {
+    font-size: 14px;
+  }
+}
+
+/* 解析提示弹窗样式 */
+.parse-dialog-content {
+  padding: 20px 0;
+  text-align: center;
+}
+
+.parse-message {
+  font-size: 16px;
+  color: var(--color-text-1);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.parse-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  background: var(--color-bg-2);
+  border-radius: 8px;
+  border-left: 4px solid var(--color-primary);
+}
+
+.hint-icon {
+  color: var(--color-primary);
+  font-size: 18px;
+}
+
+.hint-text {
+  color: var(--color-text-2);
+  font-size: 14px;
+}
+
+.parse-dialog-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
 }
 </style>

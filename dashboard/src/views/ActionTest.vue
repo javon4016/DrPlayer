@@ -24,6 +24,7 @@
         <h2>基础Action测试</h2>
         <div class="test-buttons">
           <a-button type="outline" status="success" shape="round" @click="testInputAction">输入框测试</a-button>
+          <a-button type="outline" status="success" shape="round" @click="testQuickSelectAction">快速选择测试</a-button>
           <a-button type="outline" status="success" shape="round" @click="testEditAction">多行编辑测试</a-button>
           <a-button type="outline" status="success" shape="round" @click="testMultiInputAction">多输入框测试</a-button>
           <a-button type="outline" status="success" shape="round" @click="testMultiInputXAction">增强多输入框测试</a-button>
@@ -48,6 +49,20 @@
           <a-button type="outline" status="success" shape="round" @click="testWarning">Warning</a-button>
           <a-button type="outline" status="success" shape="round" @click="testLoading">Loading</a-button>
           <a-button type="outline" status="success" shape="round" @click="testProgress">Progress</a-button>
+        </div>
+      </div>
+
+      <!-- 专项动作测试 -->
+      <div class="test-section">
+        <h2>专项动作测试</h2>
+        <p class="section-description">测试T4接口返回的专项动作处理功能</p>
+        <div class="test-buttons">
+          <a-button type="outline" status="warning" shape="round" @click="testKeepAction">__keep__ 保持窗口</a-button>
+          <a-button type="outline" status="warning" shape="round" @click="testDetailAction">__detail__ 详情跳转</a-button>
+          <a-button type="outline" status="warning" shape="round" @click="testCopyAction">__copy__ 复制内容</a-button>
+          <a-button type="outline" status="warning" shape="round" @click="testSelfSearchAction">__self_search__ 源内搜索</a-button>
+          <a-button type="outline" status="warning" shape="round" @click="testRefreshListAction">__refresh_list__ 刷新列表</a-button>
+          <a-button type="outline" status="warning" shape="round" @click="testKtvPlayerAction">__ktvplayer__ KTV播放</a-button>
         </div>
       </div>
 
@@ -213,7 +228,7 @@
       v-if="currentAction"
       :action-data="currentAction"
       :visible="true"
-      @submit="handleActionSubmit"
+
       @cancel="handleActionCancel"
       @close="handleActionClose"
     />
@@ -223,7 +238,7 @@
       v-if="showDebugActionRenderer"
       :action-data="debugActionData"
       :visible="true"
-      @submit="handleDebugActionSubmit"
+
       @cancel="handleDebugActionClose"
       @close="handleDebugActionClose"
       @error="handleDebugActionError"
@@ -345,6 +360,26 @@ export default {
         addResult('InputAction', 'success', result)
       } catch (error) {
         addResult('InputAction', 'error', error.message)
+      }
+    }
+
+    const testQuickSelectAction = async () => {
+      try {
+        const result = await Actions.input({
+          actionId: '玩偶域名',
+          id: 'domain',
+          type: 'input',
+          width: 450,
+          title: '玩偶域名',
+          tip: '请输入玩偶域名',
+          value: '',
+          msg: '选择或输入使用的域名',
+          selectData: '1:=https://www.wogg.net/,2:=https://wogg.xxooo.cf/,3:=https://wogg.888484.xyz/,4:=https://www.wogg.bf/,5:=https://woggapi.333232.xyz/',
+          button: 0
+        })
+        addResult('QuickSelectAction', 'success', result)
+      } catch (error) {
+        addResult('QuickSelectAction', 'error', error.message)
       }
     }
 
@@ -914,6 +949,175 @@ export default {
       addResult('DebugRenderer', 'error', error.message || error)
     }
 
+    // 专项动作测试函数
+    const testKeepAction = async () => {
+      try {
+        // 模拟一个带有__keep__专项动作的输入框
+        const result = await Actions.input({
+          actionId: 'test_keep_action',
+          title: '__keep__专项动作测试',
+          msg: '输入任意内容，点击确认后将触发__keep__动作',
+          placeholder: '输入测试内容',
+          button: 0
+        })
+        
+        // 模拟T4接口返回__keep__专项动作
+        console.log('模拟__keep__专项动作响应:', {
+          action: {
+            actionId: '__keep__',
+            msg: '窗口保持打开，这是__keep__动作的效果',
+            reset: false
+          },
+          toast: '__keep__专项动作测试成功'
+        })
+        
+        addResult('KeepAction', 'success', result)
+      } catch (error) {
+        addResult('KeepAction', 'error', error.message)
+      }
+    }
+
+    const testDetailAction = async () => {
+      try {
+        // 模拟一个带有__detail__专项动作的输入框
+        const result = await Actions.input({
+          actionId: 'test_detail_action',
+          title: '__detail__专项动作测试',
+          msg: '输入视频ID，点击确认后将触发__detail__动作',
+          placeholder: '输入视频ID',
+          button: 0
+        })
+        
+        // 模拟T4接口返回__detail__专项动作
+        console.log('模拟__detail__专项动作响应:', {
+          action: {
+            actionId: '__detail__',
+            skey: 'test_site',
+            ids: result.value || 'test_video_id'
+          },
+          toast: '__detail__专项动作测试成功'
+        })
+        
+        addResult('DetailAction', 'success', result)
+      } catch (error) {
+        addResult('DetailAction', 'error', error.message)
+      }
+    }
+
+    const testCopyAction = async () => {
+      try {
+        // 模拟一个带有__copy__专项动作的输入框
+        const result = await Actions.input({
+          actionId: 'test_copy_action',
+          title: '__copy__专项动作测试',
+          msg: '输入要复制的内容，点击确认后将触发__copy__动作',
+          placeholder: '输入要复制的内容',
+          value: '这是要复制的测试内容',
+          button: 0
+        })
+        
+        // 模拟T4接口返回__copy__专项动作
+        console.log('模拟__copy__专项动作响应:', {
+          action: {
+            actionId: '__copy__',
+            content: result.value || '测试复制内容'
+          },
+          toast: '__copy__专项动作测试成功'
+        })
+        
+        addResult('CopyAction', 'success', result)
+      } catch (error) {
+        addResult('CopyAction', 'error', error.message)
+      }
+    }
+
+    const testSelfSearchAction = async () => {
+      try {
+        // 模拟一个带有__self_search__专项动作的输入框
+        const result = await Actions.input({
+          actionId: 'test_self_search_action',
+          title: '__self_search__专项动作测试',
+          msg: '输入搜索关键词，点击确认后将触发__self_search__动作',
+          placeholder: '输入搜索关键词',
+          value: '测试搜索',
+          button: 0
+        })
+        
+        // 模拟T4接口返回__self_search__专项动作
+        console.log('模拟__self_search__专项动作响应:', {
+          action: {
+            actionId: '__self_search__',
+            skey: 'test_site',
+            name: result.value || '测试搜索',
+            tid: '1',
+            flag: 'search',
+            folder: '电影$' + (result.value || '测试搜索') + '$1#电视剧$' + (result.value || '测试搜索') + '$2'
+          },
+          toast: '__self_search__专项动作测试成功'
+        })
+        
+        addResult('SelfSearchAction', 'success', result)
+      } catch (error) {
+        addResult('SelfSearchAction', 'error', error.message)
+      }
+    }
+
+    const testRefreshListAction = async () => {
+      try {
+        // 模拟一个带有__refresh_list__专项动作的输入框
+        const result = await Actions.input({
+          actionId: 'test_refresh_list_action',
+          title: '__refresh_list__专项动作测试',
+          msg: '点击确认后将触发__refresh_list__动作',
+          placeholder: '可选：输入刷新类型',
+          button: 0
+        })
+        
+        // 模拟T4接口返回__refresh_list__专项动作
+        console.log('模拟__refresh_list__专项动作响应:', {
+          action: {
+            actionId: '__refresh_list__',
+            type: result.value || 'video'
+          },
+          toast: '__refresh_list__专项动作测试成功'
+        })
+        
+        addResult('RefreshListAction', 'success', result)
+      } catch (error) {
+        addResult('RefreshListAction', 'error', error.message)
+      }
+    }
+
+    const testKtvPlayerAction = async () => {
+      try {
+        // 模拟一个带有__ktvplayer__专项动作的输入框
+        const result = await Actions.input({
+          actionId: 'test_ktvplayer_action',
+          title: '__ktvplayer__专项动作测试',
+          msg: '输入歌曲名称，点击确认后将触发__ktvplayer__动作',
+          placeholder: '输入歌曲名称',
+          value: '测试歌曲',
+          button: 0
+        })
+        
+        // 模拟T4接口返回__ktvplayer__专项动作
+        console.log('模拟__ktvplayer__专项动作响应:', {
+          action: {
+            actionId: '__ktvplayer__',
+            name: result.value || '测试歌曲',
+            id: 'test_song_id',
+            url: 'https://example.com/test_song.mp3',
+            type: 'ktv'
+          },
+          toast: '__ktvplayer__专项动作测试成功'
+        })
+        
+        addResult('KtvPlayerAction', 'success', result)
+      } catch (error) {
+        addResult('KtvPlayerAction', 'error', error.message)
+      }
+    }
+
     // 状态管理方法
     const clearHistory = () => {
       actionStateManager.clearHistory()
@@ -1085,6 +1289,7 @@ export default {
       formatTime,
       formatResult,
       testInputAction,
+      testQuickSelectAction,
       testEditAction,
       testMultiInputAction,
       testMultiInputXAction,
@@ -1111,6 +1316,15 @@ export default {
       testQRText,
       testQRWifi,
       testQRContact,
+      
+      // 专项动作测试函数
+      testKeepAction,
+      testDetailAction,
+      testCopyAction,
+      testSelfSearchAction,
+      testRefreshListAction,
+      testKtvPlayerAction,
+      
       clearHistory,
       resetStatistics,
       showHistory,

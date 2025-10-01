@@ -103,7 +103,7 @@
       :extend="props.extend"
       :api-url="props.apiUrl"
       @close="handleActionClose"
-      @submit="handleActionSubmit"
+
       @special-action="handleSpecialAction"
     />
   </div>

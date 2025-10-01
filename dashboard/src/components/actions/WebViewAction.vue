@@ -211,7 +211,7 @@
 <script>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import ActionDialog from './ActionDialog.vue'
-import { ButtonType } from './types.js'
+import { ButtonType, normalizeButtonType } from './types.js'
 
 export default {
   name: 'WebViewAction',
@@ -263,12 +263,12 @@ export default {
     })
 
     const showOkButton = computed(() => {
-      const { button = ButtonType.CANCEL_ONLY } = props.config
+      const button = normalizeButtonType(props.config.button)
       return button === ButtonType.OK_CANCEL || button === ButtonType.OK_ONLY
     })
 
     const showCancelButton = computed(() => {
-      const { button = ButtonType.CANCEL_ONLY } = props.config
+      const button = normalizeButtonType(props.config.button)
       return button === ButtonType.OK_CANCEL || button === ButtonType.CANCEL_ONLY
     })
 

@@ -16,7 +16,7 @@
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
             </svg>
           </div>
-          <p class="message-text">{{ config.msg }}</p>
+          <p class="message-text">{{ currentMessage }}</p>
         </div>
       </div>
 
@@ -55,7 +55,21 @@
       </div>
 
       <!-- 输入区域 -->
-      <div class="input-section">
+      <div v-if="!config.qrcode" class="input-section">
+        <!-- 快速选择 - 在输入框上方 -->
+        <div v-if="quickSelectOptions.length > 0" class="quick-select">
+          <div class="quick-select-options">
+            <a-tag
+              v-for="option in quickSelectOptions"
+              :key="option.value"
+              class="quick-select-tag"
+              @click="selectQuickOption(option)"
+            >
+              {{ option.name }}
+            </a-tag>
+          </div>
+        </div>
+
         <div class="input-group">
           <label v-if="config.tip" class="input-label">
             {{ config.tip }}
@@ -123,7 +137,7 @@
             <!-- 错误提示 -->
             <div v-if="errorMessage" class="error-message">
               <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293-1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
               </svg>
               <span>{{ errorMessage }}</span>
             </div>
@@ -144,20 +158,7 @@
         </div>
       </div>
 
-      <!-- 快速选择 -->
-      <div v-if="quickSelectOptions.length > 0" class="quick-select-section">
-        <div class="quick-select-label">快速选择</div>
-        <div class="quick-select-grid">
-          <button
-            v-for="option in quickSelectOptions"
-            :key="option.value"
-            class="quick-select-item"
-            @click="selectQuickOption(option)"
-          >
-            {{ option.name }}
-          </button>
-        </div>
-      </div>
+
 
       <!-- 超时提示 -->
       <div v-if="config.timeout && timeLeft > 0" class="timeout-section">
@@ -189,7 +190,16 @@
           <span>取消</span>
         </button>
         
-        <!-- 确定按钮 -->
+        <!-- 重置按钮 - 仅在 button=3 时显示 -->
+        <button
+          v-if="showResetButton"
+          class="btn-modern btn-secondary"
+          @click="handleReset"
+        >
+          <span>重置</span>
+        </button>
+        
+        <!-- 确认按钮 -->
         <button
           v-if="showOkButton"
           class="btn-modern btn-primary"
@@ -211,7 +221,6 @@
     :visible="showTextEditor"
     title="大文本编辑器"
     :width="800"
-    :height="600"
     @close="closeTextEditor"
   >
     <div class="text-editor">
@@ -224,11 +233,11 @@
     </div>
 
     <template #footer>
-      <div class="action-dialog-footer">
-        <button class="action-button" @click="closeTextEditor">
+      <div class="modern-footer">
+        <button class="btn-modern btn-secondary" @click="closeTextEditor">
           取消
         </button>
-        <button class="action-button action-button-primary" @click="saveEditorText">
+        <button class="btn-modern btn-primary" @click="saveEditorText">
           确定
         </button>
       </div>
@@ -243,8 +252,13 @@ import {
   ButtonType, 
   parseSelectData, 
   generateQRCodeUrl, 
-  debounce 
+  debounce,
+  normalizeButtonType 
 } from './types.js'
+import { executeAction } from '@/api/modules/module.js'
+import { showToast } from '@/stores/toast.js'
+import siteService from '@/api/services/site'
+import { useRouter } from 'vue-router'
 
 export default {
   name: 'InputAction',
@@ -259,10 +273,24 @@ export default {
     visible: {
       type: Boolean,
       default: true
+    },
+    // T4接口调用相关属性
+    module: {
+      type: String,
+      default: ''
+    },
+    extend: {
+      type: Object,
+      default: () => ({})
+    },
+    apiUrl: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['submit', 'cancel', 'close', 'action'],
+  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset'],
   setup(props, { emit }) {
+    const router = useRouter()
     const inputRef = ref(null)
     const textEditorRef = ref(null)
     const inputValue = ref('')
@@ -272,6 +300,7 @@ export default {
     const timer = ref(null)
     const showTextEditor = ref(false)
     const editorText = ref('')
+    const currentMessage = ref(props.config.msg || '')
 
     // 计算属性
     const isMultiLine = computed(() => {
@@ -300,13 +329,18 @@ export default {
     })
 
     const showOkButton = computed(() => {
-      const { button = ButtonType.OK_CANCEL } = props.config
-      return button === ButtonType.OK_CANCEL || button === ButtonType.OK_ONLY
+      const button = normalizeButtonType(props.config.button)
+      return button === ButtonType.OK_CANCEL || button === ButtonType.OK_ONLY || button === ButtonType.CUSTOM
     })
 
     const showCancelButton = computed(() => {
-      const { button = ButtonType.OK_CANCEL } = props.config
-      return button === ButtonType.OK_CANCEL || button === ButtonType.CANCEL_ONLY
+      const button = normalizeButtonType(props.config.button)
+      return button === ButtonType.OK_CANCEL || button === ButtonType.CANCEL_ONLY || button === ButtonType.CUSTOM
+    })
+
+    const showResetButton = computed(() => {
+      const button = normalizeButtonType(props.config.button)
+      return button === ButtonType.CUSTOM
     })
 
     const hasError = computed(() => {
@@ -370,7 +404,7 @@ export default {
       validateInput(value)
     }
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
       if (!isValid.value) return
 
       const result = {}
@@ -381,14 +415,383 @@ export default {
       }
       
       // 输入值
-      result[props.config.id || 'value'] = inputValue.value
+      const value = inputValue.value
+      result[props.config.id || 'value'] = value
+
+      // 调用T4接口
+      if (props.config.actionId) {
+        try {
+          console.log('111:',props.config.actionId)
+          const response = await callT4Action(props.config.actionId, value)
+          
+          console.log('222:',typeof response)
+          
+          // 检查响应是否为普通文本
+          if (typeof response === 'string') {
+            // 普通文本响应，使用全局Toast显示消息
+            showToast(response, 'success')
+            // 立即关闭弹窗，Toast独立显示
+            emit('close')
+            return
+          }
+          
+          // 处理JSON格式的专项动作响应
+          if (response && response.action) {
+            const actionData = response.action
+            const toastData = response.toast
+            
+            // 显示toast消息
+            if (toastData) {
+              showToast(toastData, 'success')
+            }
+            
+            // 处理不同的专项动作
+            switch (actionData.actionId) {
+              case '__keep__':
+                // 保持弹窗打开状态
+                if (actionData.msg) {
+                  // 更新弹窗内的消息文本
+                  currentMessage.value = actionData.msg
+                }
+                if (actionData.reset) {
+                  // 清除输入框内容
+                  inputValue.value = ''
+                  errorMessage.value = ''
+                  emit('reset')
+                }
+                return // 不关闭弹窗
+                
+              case '__detail__':
+                // 详情页跳转
+                console.log('详情页跳转:', actionData)
+                await handleDetailAction(actionData)
+                emit('close')
+                return
+                
+              case '__copy__':
+                // 复制到剪贴板
+                await handleCopyAction(actionData,toastData)
+                emit('close')
+                return
+                
+              case '__self_search__':
+                // 源内搜索
+                await handleSelfSearchAction(actionData)
+                emit('close')
+                return
+                
+              case '__refresh_list__':
+                // 刷新列表
+                await handleRefreshListAction(actionData)
+                emit('close')
+                return
+                
+              case '__ktvplayer__':
+                // KTV播放
+                await handleKtvPlayerAction(actionData)
+                emit('close')
+                return
+                
+              default:
+                // 检查是否为普通动作（包含type字段）
+                if (actionData.type) {
+                  console.log('检测到普通动作，触发新的ActionRenderer:', actionData)
+                  // 通过action事件将新的动作数据传递给ActionRenderer
+                  emit('action', actionData)
+                  // 不要立即关闭弹窗，让ActionRenderer处理新动作配置
+                  return
+                } else {
+                  console.warn('未知的专项动作:', actionData.actionId)
+                }
+                break
+            }
+          }
+          
+          
+        } catch (error) {
+          console.error('确认按钮T4接口调用失败:', error)
+          showToast('操作失败，请重试', 'error')
+          return // 不关闭弹窗
+        }
+      }
 
       emit('submit', result)
     }
 
-    const handleCancel = () => {
+    // 专项动作处理函数
+    const handleDetailAction = async (actionData) => {
+      try {
+        const { skey, ids } = actionData
+        
+        if (!skey || !ids) {
+          showToast('详情页跳转参数不完整', 'error')
+          return
+        }
+        
+        // 根据skey获取对应的站源信息
+        const site = siteService.getSiteByKey(skey)
+        if (!site) {
+          showToast(`未找到站源: ${skey}`, 'error')
+          return
+        }
+        
+        console.log('跳转到详情页:', {
+          skey,
+          ids,
+          site: site.name
+        })
+
+        console.log('site:',site)
+        
+        // 跳转到详情页，传递站源信息
+        router.push({
+          name: 'VideoDetail',
+          params: { id: ids },
+          query: {
+            // 传递站源信息，不影响全局状态
+            tempSiteName: site.name,
+            tempSiteApi: site.api,
+            tempSiteKey: site.key,
+            tempSiteExt: site.ext,
+            // 标识从专项动作进入
+            fromSpecialAction: 'true',
+            actionType: '__detail__'
+          }
+        })
+        
+        showToast(`正在加载 ${site.name} 的详情...`, 'info')
+        
+      } catch (error) {
+        console.error('详情页跳转失败:', error)
+        showToast('详情页跳转失败', 'error')
+      }
+    }
+    
+    const handleCopyAction = async (actionData,toastData) => {
+      try {
+        const { content } = actionData
+        
+        if (!content) {
+          showToast('没有可复制的内容', 'error')
+          return
+        }
+        
+        await navigator.clipboard.writeText(content)
+        if(!toastData){
+        showToast('已复制到剪贴板', 'success')
+        }
+        
+      } catch (error) {
+        console.error('复制失败:', error)
+        showToast('复制失败', 'error')
+      }
+    }
+    
+    const handleSelfSearchAction = async (actionData) => {
+      try {
+        const { skey, name, tid, flag, folder } = actionData
+        
+        // 构造搜索参数
+        const searchParams = {
+          name: name || '搜索',
+          tid: tid || '',
+          flag: flag || '',
+          folder: folder || ''
+        }
+        
+        // 如果指定了目标源，切换到该源
+        if (skey) {
+          const site = siteService.getSiteByKey(skey)
+          if (site) {
+            siteService.setCurrentSite(skey)
+            showToast(`已切换到 ${site.name}`, 'info')
+          }
+        }
+        
+        // 跳转到搜索页面或触发搜索
+        console.log('执行源内搜索:', searchParams)
+        showToast('正在执行源内搜索...', 'info')
+        
+        // 这里可以根据具体需求实现搜索逻辑
+        // 比如跳转到搜索页面或者触发搜索事件
+        
+      } catch (error) {
+        console.error('源内搜索失败:', error)
+        showToast('源内搜索失败', 'error')
+      }
+    }
+    
+    const handleRefreshListAction = async (actionData) => {
+      try {
+        console.log('执行刷新列表:', actionData)
+        
+        // 获取当前路由信息
+        const currentRoute = router.currentRoute.value
+        const routeName = currentRoute.name
+        
+        // 根据不同页面类型执行相应的刷新操作
+        switch (routeName) {
+          case 'Video':
+            // 视频列表页面刷新
+            window.dispatchEvent(new CustomEvent('refreshVideoList', {
+              detail: { ...actionData, type: 'video' }
+            }))
+            break
+            
+          case 'Live':
+            // 直播列表页面刷新
+            window.dispatchEvent(new CustomEvent('refreshLiveList', {
+              detail: { ...actionData, type: 'live' }
+            }))
+            break
+            
+          case 'Collection':
+            // 收藏列表页面刷新
+            window.dispatchEvent(new CustomEvent('refreshCollectionList', {
+              detail: { ...actionData, type: 'collection' }
+            }))
+            break
+            
+          case 'History':
+            // 历史记录页面刷新
+            window.dispatchEvent(new CustomEvent('refreshHistoryList', {
+              detail: { ...actionData, type: 'history' }
+            }))
+            break
+            
+          case 'BookGallery':
+            // 书籍列表页面刷新
+            window.dispatchEvent(new CustomEvent('refreshBookList', {
+              detail: { ...actionData, type: 'book' }
+            }))
+            break
+            
+          default:
+            // 通用刷新事件
+            window.dispatchEvent(new CustomEvent('refreshList', {
+              detail: { ...actionData, routeName }
+            }))
+            break
+        }
+        
+        // 如果指定了特定的刷新类型，也发送对应事件
+        if (actionData.type) {
+          window.dispatchEvent(new CustomEvent(`refresh${actionData.type}List`, {
+            detail: actionData
+          }))
+        }
+        
+        showToast('列表刷新中...', 'info')
+        
+        // 延迟显示刷新完成提示
+        setTimeout(() => {
+          showToast('列表已刷新', 'success')
+        }, 500)
+        
+      } catch (error) {
+        console.error('刷新列表失败:', error)
+        showToast('刷新列表失败', 'error')
+      }
+    }
+    
+    const handleKtvPlayerAction = async (actionData) => {
+      try {
+        const { name, id, url, type = 'ktv' } = actionData
+        
+        if (!name || !id) {
+          showToast('KTV播放参数不完整', 'error')
+          return
+        }
+        
+        console.log('启动KTV播放:', {
+          name,
+          id,
+          url,
+          type
+        })
+        
+        // 构建播放参数
+        const playParams = {
+          title: name,
+          videoId: id,
+          playUrl: url || id, // 如果没有url则使用id作为播放地址
+          playType: type,
+          isKtv: true,
+          // KTV特有参数
+          showLyrics: true,
+          enableKaraokeMode: true,
+          fromAction: '__ktvplayer__'
+        }
+        
+        // 检查是否有专门的KTV播放页面
+        try {
+          // 尝试跳转到KTV播放页面
+          router.push({
+            name: 'KtvPlayer',
+            params: { id: id },
+            query: {
+              title: name,
+              url: url || id,
+              type: type,
+              mode: 'ktv'
+            }
+          })
+          
+          showToast(`正在启动KTV播放: ${name}`, 'success')
+          
+        } catch (routeError) {
+          // 如果没有专门的KTV页面，尝试使用通用播放器
+          console.log('KTV专用页面不存在，使用通用播放器')
+          
+          // 发送KTV播放事件给播放器组件
+          window.dispatchEvent(new CustomEvent('startKtvPlay', {
+            detail: playParams
+          }))
+          
+          // 或者跳转到通用播放页面并标记为KTV模式
+          router.push({
+            name: 'VideoPlayer',
+            params: { id: id },
+            query: {
+              title: name,
+              url: url || id,
+              type: type,
+              ktvMode: 'true',
+              showLyrics: 'true',
+              fromAction: '__ktvplayer__'
+            }
+          })
+          
+          showToast(`正在播放: ${name}`, 'success')
+        }
+        
+      } catch (error) {
+        console.error('KTV播放失败:', error)
+        showToast('KTV播放失败', 'error')
+      }
+    }
+
+    const handleCancel = async () => {
+      // 检查是否有自定义取消行为
+      if (props.config.cancelAction && props.config.cancelValue !== undefined) {
+        try {
+          await callT4Action(props.config.cancelAction, props.config.cancelValue)
+        } catch (error) {
+          console.error('取消按钮T4接口调用失败:', error)
+          // 即使接口调用失败，也继续执行默认的取消行为
+        }
+      }
+      
       emit('cancel')
       emit('close')
+    }
+
+    const handleReset = () => {
+      inputValue.value = ''
+      errorMessage.value = ''
+      if (inputRef.value) {
+        inputRef.value.focus()
+      }
     }
 
     // 大文本编辑器方法
@@ -477,6 +880,63 @@ export default {
       timeLeft.value = 0
     }
 
+    // T4接口调用方法
+    const callT4Action = async (action, value) => {
+      if (!props.module && !props.apiUrl) {
+        console.warn('未提供module或apiUrl，无法调用T4接口')
+        return null
+      }
+
+      // 构造正确的T4接口格式
+      // ac=list&action=[actionId]&value={"[id]":[value]}
+      const valueObject = {}
+      const actionId = props.config.id || 'value'
+      valueObject[actionId] = value
+
+      const actionData = {
+        ac: 'list',
+        action,
+        value: JSON.stringify(valueObject)
+      }
+
+      // 添加扩展参数
+      if (props.extend && props.extend.ext) {
+        actionData.extend = props.extend.ext
+      }
+
+      // 添加API URL
+      if (props.apiUrl) {
+        actionData.apiUrl = props.apiUrl
+      }
+
+      console.log('InputAction调用T4接口:', {
+        module: props.module,
+        actionData,
+        apiUrl: props.apiUrl
+      })
+
+      let result = null
+      if (props.module) {
+        console.log('调用模块:', props.module)
+        result = await executeAction(props.module, actionData)
+      } else if (props.apiUrl) {
+        // 直接调用API
+        console.log('直接调用API:', props.apiUrl)
+        const axios = (await import('axios')).default
+        const response = await axios.post(props.apiUrl, actionData, {
+          timeout: 30000,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        })
+        result = response.data
+      }
+
+      console.log('T4接口返回结果:', result)
+      return result
+    }
+
     // 监听配置变化
     watch(() => props.config, (newConfig) => {
       inputValue.value = newConfig.value || ''
@@ -520,17 +980,20 @@ export default {
       errorMessage,
       imageCoords,
       timeLeft,
+      currentMessage,
       isMultiLine,
       inputType,
       quickSelectOptions,
       qrcodeUrl,
       showOkButton,
       showCancelButton,
+      showResetButton,
       hasError,
       isValid,
       handleInput,
       handleSubmit,
       handleCancel,
+      handleReset,
       handleImageClick,
       selectQuickOption,
       onImageLoad,
@@ -678,6 +1141,12 @@ export default {
   color: rgba(0, 0, 0, 0.7);
   font-size: 0.875rem;
   font-weight: 500;
+  word-wrap: break-word;
+  word-break: break-all;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 /* 输入区域 */
@@ -854,48 +1323,46 @@ export default {
 }
 
 /* 快速选择区域 */
-.quick-select-section {
-  margin-bottom: 0.5rem;
+.quick-select {
+  margin-bottom: 1rem;
 }
 
-.quick-select-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: rgba(0, 0, 0, 0.8);
-  margin-bottom: 0.75rem;
-}
-
-.quick-select-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+.quick-select-options {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
+  align-items: flex-start;
 }
 
-.quick-select-item {
-  padding: 0.75rem 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--ds-radius-md);
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(0, 0, 0, 0.8);
-  font-size: 0.875rem;
-  font-weight: 500;
+.quick-select-tag {
   cursor: pointer;
   transition: all var(--ds-duration-fast) ease;
-  text-align: center;
+  margin: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: #6b7280 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 6px 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: auto !important;
+  min-width: auto !important;
+  line-height: 1 !important;
 }
 
-.quick-select-item:hover {
-  border-color: rgba(59, 130, 246, 0.5);
-  background: rgba(59, 130, 246, 0.1);
-  color: rgb(59, 130, 246);
+.quick-select-tag:hover {
+  background-color: #4b5563 !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
 }
 
-.quick-select-item:active {
+.quick-select-tag:active {
   transform: translateY(0);
+  background-color: #374151 !important;
 }
 
 /* 超时区域 */
@@ -1027,15 +1494,16 @@ export default {
 /* 大文本编辑器样式 */
 .text-editor {
   padding: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .text-editor-textarea {
   flex: 1;
   width: 100%;
-  min-height: 300px;
+  height: 300px; /* 设置固定高度，避免溢出 */
+  max-height: 400px; /* 设置最大高度限制 */
   padding: 1.25rem;
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--ds-radius-lg);
@@ -1048,6 +1516,8 @@ export default {
   color: rgba(0, 0, 0, 0.85);
   resize: none;
   outline: none;
+  overflow-y: auto; /* 添加滚动条 */
+  box-sizing: border-box; /* 确保padding包含在尺寸内 */
   transition: all var(--ds-duration-fast) ease;
 }
 
@@ -1097,6 +1567,10 @@ export default {
 
   .quick-select-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .quick-select-tag {
+    margin: 0.125rem;
   }
 
   .input-status {
@@ -1152,7 +1626,7 @@ export default {
 @media (prefers-contrast: high) {
   .input-wrapper-modern,
   .textarea-wrapper-modern,
-  .quick-select-item,
+  .quick-select-tag,
   .btn-modern {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -1164,7 +1638,7 @@ export default {
 @media (prefers-reduced-motion: reduce) {
   .input-wrapper-modern,
   .textarea-wrapper-modern,
-  .quick-select-item,
+  .quick-select-tag,
   .btn-modern,
   .expand-btn,
   .action-image-modern {
@@ -1176,7 +1650,7 @@ export default {
   }
 
   .btn-modern:hover,
-  .quick-select-item:hover,
+  .quick-select-tag:hover,
   .action-image-modern:hover {
     transform: none;
   }

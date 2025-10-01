@@ -43,7 +43,8 @@ export const useFavoriteStore = defineStore('favorite', () => {
       api_info: {
         module: videoData.module || '',
         api_url: videoData.api_url || '',
-        site_name: videoData.site_name || ''
+        site_name: videoData.site_name || '',
+        ext: videoData.ext || null  // 添加站源扩展配置
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()

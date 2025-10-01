@@ -17,9 +17,11 @@
   },
   "dependencies": {
     "@fastify/static": "^8.2.0",
+    "artplayer": "^5.3.0",
     "axios": "1.12.0",
     "echarts": "^5.6.0",
     "fastify": "^5.6.1",
+    "hls.js": "^1.6.13",
     "json-server": "^0.17.4",
     "pinia": "^2.2.6",
     "v-viewer": "^3.0.22",

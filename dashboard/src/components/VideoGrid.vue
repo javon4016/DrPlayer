@@ -59,7 +59,6 @@
       :extend="props.extend"
       :api-url="props.apiUrl"
       @close="handleActionClose"
-      @submit="handleActionSubmit"
       @special-action="handleSpecialAction"
     />
   </div>
@@ -71,6 +70,8 @@ import { useRouter } from 'vue-router';
 import { Message } from '@arco-design/web-vue';
 import { useVisitedStore } from '@/stores/visitedStore';
 import ActionRenderer from '@/components/actions/ActionRenderer.vue';
+import videoService from '@/api/services/video';
+import { showToast } from '@/stores/toast.js'
 
 const props = defineProps({
   videos: {
@@ -128,7 +129,7 @@ const currentActionData = ref(null);
 
 
 // 视频点击处理
-const handleVideoClick = (video) => {
+const handleVideoClick = async (video) => {
   if (video && video.vod_id) {
     // 检查是否为action类型
     if (video.vod_tag === 'action') {
@@ -142,14 +143,10 @@ const handleVideoClick = (video) => {
         showActionRenderer.value = true;
         return;
       } catch (error) {
-        console.log('VideoGrid vod_id不是JSON格式，作为普通文本处理:', video.vod_id);
+        console.log('VideoGrid vod_id不是JSON格式，调用T4 action接口:', video.vod_id);
         
-        // 如果解析失败，说明vod_id是普通文本，显示Toast提示
-        Message.info({
-          content: video.vod_id,
-          duration: 3000,
-          closable: true
-        });
+        // 如果解析失败，说明vod_id是普通文本，需要调用T4 action接口获取真正的action配置
+        await handleT4ActionCall(video.vod_id);
         return;
       }
     }
@@ -178,6 +175,46 @@ const handleVideoClick = (video) => {
         params: { id: video.vod_id },
         query: routeQuery
       });
+  }
+};
+
+// T4 Action接口调用处理
+const handleT4ActionCall = async (actionName) => {
+  try {
+    // 使用 videoService 执行 T4 action
+    const result = await videoService.executeT4Action(
+      props.module || 'default', 
+      actionName,
+      {
+        apiUrl: props.apiUrl,
+        extend: props.extend.ext
+      }
+    );
+
+    console.log('result:', result);
+    
+    // 检查返回结果是否包含action配置
+    if (result && result.action) {
+      // 传递解析后的action配置给ActionRenderer
+      currentActionData.value = result.action;
+      showActionRenderer.value = true;
+    } else if(result){
+      showToast('执行源内搜索', 'success')
+    }else {
+      // 如果没有返回action配置，显示错误提示
+      Message.error({
+        content: `无法获取动作配置: ${actionName}`,
+        duration: 3000,
+        closable: true
+      });
+    }
+  } catch (error) {
+    console.error('T4 action执行失败:', error);
+    Message.error({
+      content: `动作执行失败: ${error.message}`,
+      duration: 3000,
+      closable: true
+    });
   }
 };
 

@@ -6,10 +6,15 @@
       :is="currentComponent"
       :config="parsedConfig"
       :visible="isVisible"
+      :module="module"
+      :extend="extend"
+      :api-url="apiUrl"
       @submit="handleSubmit"
       @cancel="handleCancel"
       @close="handleClose"
       @action="handleAction"
+      @toast="handleToast"
+      @reset="handleReset"
     />
 
     <!-- 错误提示 -->
@@ -45,12 +50,6 @@
       </div>
     </ActionDialog>
 
-    <!-- Toast提示 -->
-    <Transition name="action-toast">
-      <div v-if="toast" class="action-toast" :class="toastType">
-        {{ toast }}
-      </div>
-    </Transition>
   </div>
 </template>
 
@@ -65,6 +64,7 @@ import {
   createActionError 
 } from './types.js'
 import { executeAction } from '@/api/modules/module.js'
+import { showToast } from '@/stores/toast.js'
 
 // 懒加载Action组件
 const InputAction = defineAsyncComponent(() => import('./InputAction.vue'))
@@ -125,9 +125,6 @@ export default {
     const error = ref(null)
     const isLoading = ref(false)
     const isVisible = ref(props.visible)
-    const toast = ref('')
-    const toastType = ref('success')
-    const toastTimer = ref(null)
 
     // 组件映射
     const componentMap = {
@@ -144,19 +141,30 @@ export default {
 
     // 当前组件
     const currentComponent = computed(() => {
-      if (!parsedConfig.value) return null
-      return componentMap[parsedConfig.value.type] || null
+      if (!parsedConfig.value) {
+        console.log('ActionRenderer currentComponent: parsedConfig.value 为空')
+        return null
+      }
+      const component = componentMap[parsedConfig.value.type] || null
+      console.log('ActionRenderer currentComponent:', {
+        type: parsedConfig.value.type,
+        component: component,
+        parsedConfig: parsedConfig.value
+      })
+      return component
     })
 
     // 解析Action配置
     const parseConfig = (data) => {
       try {
+        console.log('ActionRenderer parseConfig 开始解析:', data)
         if (!data) {
           parsedConfig.value = null
           return
         }
 
         const config = parseActionConfig(data)
+        console.log('ActionRenderer parseConfig 解析后的配置:', config)
         validateActionConfig(config)
         
         // 处理特殊动作
@@ -164,9 +172,13 @@ export default {
         
         parsedConfig.value = config
         error.value = null
+        console.log('ActionRenderer parseConfig 设置 parsedConfig.value:', parsedConfig.value)
 
         if (props.autoShow) {
           isVisible.value = true
+          console.log('ActionRenderer parseConfig 设置 isVisible.value = true, autoShow:', props.autoShow)
+        } else {
+          console.log('ActionRenderer parseConfig autoShow 为 false，不自动显示')
         }
       } catch (err) {
         console.error('解析Action配置失败:', err)
@@ -419,6 +431,19 @@ export default {
 
     // 处理动作
     const handleAction = async (action, value) => {
+      // 如果action是一个对象（新的动作配置），则重新解析
+      if (typeof action === 'object' && action.type) {
+        console.log('ActionRenderer接收到新的动作配置:', action)
+        // 先隐藏当前弹窗
+        isVisible.value = false
+        // 等待一个短暂的时间让当前弹窗完全关闭
+        await new Promise(resolve => setTimeout(resolve, 100))
+        // 然后解析新的配置
+        parseConfig(action)
+        return
+      }
+      
+      // 否则按原来的逻辑处理
       await handleSubmit({ action, value })
     }
 
@@ -427,20 +452,7 @@ export default {
       error.value = null
     }
 
-    // 显示Toast
-    const showToast = (message, type = 'success') => {
-      if (toastTimer.value) {
-        clearTimeout(toastTimer.value)
-      }
 
-      toast.value = message
-      toastType.value = type
-
-      toastTimer.value = setTimeout(() => {
-        toast.value = ''
-        toastTimer.value = null
-      }, 3000)
-    }
 
     // 监听actionData变化
     watch(() => props.actionData, (newData) => {
@@ -477,23 +489,33 @@ export default {
       }
     }
 
+    // 处理Toast消息
+    const handleToast = (message, type = 'success') => {
+      showToast(message, type)
+    }
+
+    // 处理重置事件
+    const handleReset = () => {
+      // 可以在这里添加额外的重置逻辑
+      console.log('InputAction触发重置事件')
+    }
+
     return {
       parsedConfig,
       currentComponent,
       error,
       isLoading,
       isVisible,
-      toast,
-      toastType,
       handleSubmit,
       handleCancel,
       handleClose,
       handleAction,
+      handleToast,
+      handleReset,
       clearError,
       show,
       hide,
-      executeAction,
-      showToast
+      executeAction
     }
   }
 }
@@ -502,54 +524,6 @@ export default {
 <style scoped>
 .action-renderer {
   position: relative;
-}
-
-/* Toast样式 */
-.action-toast {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  border-radius: 6px;
-  color: white;
-  font-size: 14px;
-  z-index: 2000;
-  max-width: 400px;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.action-toast.success {
-  background: #52c41a;
-}
-
-.action-toast.error {
-  background: #f5222d;
-}
-
-.action-toast.warning {
-  background: #faad14;
-}
-
-.action-toast.info {
-  background: #1890ff;
-}
-
-/* Toast动画 */
-.action-toast-enter-active,
-.action-toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.action-toast-enter-from {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-20px);
-}
-
-.action-toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-20px);
 }
 
 /* 错误样式 */

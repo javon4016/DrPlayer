@@ -146,7 +146,7 @@
       :api-url="testApiUrl"
       :extend="testExtend"
       @close="handleActionClose"
-      @submit="handleActionSubmit"
+
       @error="handleActionError"
     />
   </div>

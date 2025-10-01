@@ -399,10 +399,11 @@ const goToDetail = async (item) => {
     const siteInfo = {
       name: item.api_info.site_name,
       api: item.api_info.api_url,
-      key: item.api_info.module
+      key: item.api_info.module,
+      ext: item.api_info.ext || null  // 从收藏数据中获取extend参数
     }
     
-    console.log('从书画柜进入详情页，使用临时站源:', siteInfo.name)
+    console.log('从书画柜进入详情页，使用临时站源:', siteInfo.name, '扩展参数:', siteInfo.ext)
     
     // 跳转到详情页，传递站源信息
     router.push({
@@ -424,6 +425,7 @@ const goToDetail = async (item) => {
           tempSiteName: siteInfo.name,
           tempSiteApi: siteInfo.api,
           tempSiteKey: siteInfo.key,
+          tempSiteExt: siteInfo.ext,  // 添加extend参数传递
           // 添加来源页面信息
           sourceRouteName: 'BookGallery',
           sourceRouteParams: JSON.stringify({}),

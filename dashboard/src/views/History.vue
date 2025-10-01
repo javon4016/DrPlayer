@@ -234,6 +234,18 @@ const filteredHistory = computed(() => {
 // 生命周期
 onMounted(() => {
   historyStore.loadHistories()
+  
+  // 临时调试：检查现有历史记录数据结构
+  setTimeout(() => {
+    console.log('=== 历史记录数据结构调试 ===')
+    console.log('历史记录总数:', historyStore.historyCount)
+    if (historyStore.histories.length > 0) {
+      console.log('第一条历史记录完整数据:', historyStore.histories[0])
+      console.log('第一条历史记录api_info:', historyStore.histories[0].api_info)
+      console.log('第一条历史记录是否有ext字段:', 'ext' in historyStore.histories[0].api_info)
+    }
+    console.log('=== 调试结束 ===')
+  }, 1000)
 })
 
 // 方法
@@ -309,24 +321,28 @@ const removeHistory = (item) => {
     cancelText: '保留',
     okButtonProps: { status: 'danger' },
     onOk: () => {
-      const success = historyStore.removeFromHistory(item.id, item.api_info.api_url)
-      if (success) {
-        Message.success('已删除历史记录')
-      }
+      historyStore.removeFromHistory(item)
+      Message.success('已删除历史记录')
     }
   })
 }
 
 const goToDetail = async (item) => {
   try {
+    // 调试：打印完整的历史记录项
+    console.log('历史记录项完整数据:', item)
+    console.log('历史记录api_info:', item.api_info)
+    
     // 通过路由参数传递站源信息
     const siteInfo = {
       name: item.api_info.site_name,
       api: item.api_info.api_url,
-      key: item.api_info.module
+      key: item.api_info.module,
+      ext: item.api_info.ext || null  // 从历史数据中获取extend参数
     }
     
-    console.log('从历史进入详情页，使用临时站源:', siteInfo.name)
+    console.log('从历史进入详情页，使用临时站源:', siteInfo.name, '扩展参数:', siteInfo.ext)
+    console.log('siteInfo完整对象:', siteInfo)
     
     // 跳转到详情页，传递站源信息和历史记录信息
     router.push({
@@ -348,6 +364,7 @@ const goToDetail = async (item) => {
           tempSiteName: siteInfo.name,
           tempSiteApi: siteInfo.api,
           tempSiteKey: siteInfo.key,
+          tempSiteExt: siteInfo.ext,  // 添加extend参数传递
           // 传递历史记录信息，用于恢复播放状态
           historyRoute: item.current_route_name,
           historyEpisode: item.current_episode_name,

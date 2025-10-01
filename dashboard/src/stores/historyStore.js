@@ -63,6 +63,11 @@ export const useHistoryStore = defineStore('history', () => {
   const addToHistory = (videoInfo, routeInfo, episodeInfo) => {
     const now = new Date().toISOString()
     
+    // 调试：检查传入的videoInfo
+    console.log('=== historyStore.addToHistory 调试 ===')
+    console.log('传入的videoInfo.api_info:', videoInfo.api_info)
+    console.log('传入的videoInfo.api_info.ext:', videoInfo.api_info.ext)
+    
     // 检查是否已存在相同的视频
     const existingIndex = histories.value.findIndex(
       item => item.id === videoInfo.id && item.api_info.api_url === videoInfo.api_info.api_url
@@ -84,16 +89,24 @@ export const useHistoryStore = defineStore('history', () => {
         ...histories.value[existingIndex],
         ...historyItem
       }
+      console.log('更新后的历史记录api_info:', histories.value[existingIndex].api_info)
     } else {
       // 添加新记录
       historyItem.created_at = now
       histories.value.push(historyItem)
+      console.log('新添加的历史记录api_info:', historyItem.api_info)
     }
-
+    
+    console.log('=== historyStore.addToHistory 调试结束 ===')
     saveHistories()
   }
 
   const removeFromHistory = (item) => {
+    if (!item || !item.id || !item.api_info || !item.api_info.api_url) {
+      console.error('删除历史记录失败：参数无效', item)
+      return false
+    }
+    
     const index = histories.value.findIndex(
       h => h.id === item.id && h.api_info.api_url === item.api_info.api_url
     )
@@ -101,6 +114,11 @@ export const useHistoryStore = defineStore('history', () => {
     if (index !== -1) {
       histories.value.splice(index, 1)
       saveHistories()
+      console.log('删除历史记录成功:', item.name)
+      return true
+    } else {
+      console.warn('未找到要删除的历史记录:', item)
+      return false
     }
   }
 

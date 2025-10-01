@@ -43,7 +43,29 @@ export const ButtonType = {
   OK_CANCEL: 0,
   OK_ONLY: 1,
   CANCEL_ONLY: 2,
-  CUSTOM: 3
+  CUSTOM: 3,
+}
+
+/**
+ * 规范化按钮类型值
+ * 如果传入的值不存在于ButtonType枚举中，则默认返回CUSTOM
+ * @param {*} buttonType - 按钮类型值
+ * @returns {number} 规范化后的按钮类型值
+ */
+export const normalizeButtonType = (buttonType) => {
+  // 如果buttonType是undefined或null，使用默认值OK_CANCEL
+  if (buttonType === undefined || buttonType === null) {
+    return ButtonType.OK_CANCEL
+  }
+  
+  // 检查是否为有效的ButtonType值
+  const validValues = Object.values(ButtonType)
+  if (validValues.includes(buttonType)) {
+    return buttonType
+  }
+  
+  // 如果不是有效值，默认返回CUSTOM
+  return ButtonType.CUSTOM
 }
 
 /**
@@ -286,7 +308,19 @@ export const parseSelectData = (selectData) => {
       return JSON.parse(selectData)
     }
     
-    // 支持简单的分隔符格式
+    // 支持 [tag]:=[value] 格式，用逗号分隔
+    if (selectData.includes(':=')) {
+      return selectData.split(',').map(item => {
+        const trimmedItem = item.trim()
+        const [name, value] = trimmedItem.split(':=')
+        return {
+          name: name ? name.trim() : trimmedItem,
+          value: value ? value.trim() : trimmedItem
+        }
+      }).filter(item => item.name) // 过滤掉空项
+    }
+    
+    // 支持简单的分隔符格式（兼容旧格式）
     return selectData.split('|').map(item => {
       const [name, value] = item.split('=')
       return {
