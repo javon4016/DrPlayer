@@ -80,8 +80,40 @@
         @episode-selected="handleEpisodeSelected"
       />
 
+      <!-- 小说阅读器组件 -->
+      <BookReader 
+        v-if="showBookReader && parsedNovelContent"
+        :book-detail="videoDetail"
+        :chapter-content="parsedNovelContent"
+        :chapters="currentRouteEpisodes"
+        :current-chapter-index="currentEpisode"
+        :visible="showBookReader"
+        @close="handleReaderClose"
+        @next-chapter="handleNextChapter"
+        @prev-chapter="handlePrevChapter"
+        @chapter-selected="handleChapterSelected"
+        @chapter-change="handleChapterChange"
+      />
+
+      <!-- 漫画阅读器组件 -->
+      <ComicReader 
+        v-if="showComicReader && parsedComicContent"
+        :comic-detail="videoDetail"
+        :comic-title="videoDetail?.vod_name"
+        :chapter-name="currentEpisodeName"
+        :chapters="currentRouteEpisodes"
+        :current-chapter-index="currentEpisode"
+        :comic-content="parsedComicContent"
+        :visible="showComicReader"
+        @close="handleReaderClose"
+        @next-chapter="handleNextChapter"
+        @prev-chapter="handlePrevChapter"
+        @chapter-selected="handleChapterSelected"
+        @settings-change="handleSettingsChange"
+      />
+
       <!-- 视频信息卡片 -->
-      <a-card class="video-info-card" :class="{ 'collapsed-when-playing': showVideoPlayer }">
+      <a-card class="video-info-card" :class="{ 'collapsed-when-playing': showVideoPlayer || showBookReader }">
         <div class="video-header">
           <div class="video-poster" @click="showImageModal">
             <img :src="videoDetail.vod_pic" :alt="videoDetail.vod_name" @error="handleImageError" />
@@ -117,9 +149,11 @@
             <div v-if="currentEpisodeUrl" class="play-actions">
               <a-button type="primary" size="large" @click="playVideo" class="play-btn">
                 <template #icon>
-                  <icon-play-arrow />
+                  <icon-play-arrow v-if="!isNovelContent && !isComicContent" />
+                  <icon-book v-else-if="isNovelContent" />
+                  <icon-image v-else-if="isComicContent" />
                 </template>
-                播放视频
+                {{ isNovelContent ? '开始阅读' : isComicContent ? '开始看漫画' : '播放视频' }}
               </a-button>
               <a-button @click="copyPlayUrl" class="copy-btn">
                 <template #icon>
@@ -183,7 +217,31 @@
         <div class="parse-message">
           {{ parseDialogConfig.message }}
         </div>
-        <div class="parse-hint">
+        
+
+        
+        <!-- 嗅探结果显示 -->
+        <div v-if="sniffResults.length > 0" class="sniff-results">
+          <div class="results-title">嗅探到的视频链接：</div>
+          <div class="results-list">
+            <div 
+              v-for="(result, index) in sniffResults.slice(0, 3)" 
+              :key="index"
+              class="result-item"
+            >
+              <div class="result-index">{{ index + 1 }}</div>
+              <div class="result-info">
+                <div class="result-url">{{ result.url }}</div>
+                <div class="result-type" v-if="result.type">{{ result.type }}</div>
+              </div>
+            </div>
+            <div v-if="sniffResults.length > 3" class="more-results">
+              还有 {{ sniffResults.length - 3 }} 个链接...
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="!sniffing" class="parse-hint">
           <div class="hint-icon">
             <icon-eye />
           </div>
@@ -195,7 +253,7 @@
       
       <template #footer>
         <div class="parse-dialog-footer">
-          <a-button type="primary" @click="showParseDialog = false">
+          <a-button type="primary" @click="showParseDialog = false" :disabled="sniffing">
             我知道了
           </a-button>
         </div>
@@ -209,6 +267,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import videoService from '@/api/services/video'
+import { sniffVideoWithConfig, isSnifferEnabled } from '@/api/services/sniffer'
 import { useSiteStore } from '@/stores/siteStore'
 import { useFavoriteStore } from '@/stores/favoriteStore'
 import { useHistoryStore } from '@/stores/historyStore'
@@ -216,6 +275,8 @@ import { usePageStateStore } from '@/stores/pageStateStore'
 import VideoPlayer from '@/components/players/VideoPlayer.vue'
 import ArtVideoPlayer from '@/components/players/ArtVideoPlayer.vue'
 import EpisodeSelector from '@/components/players/EpisodeSelector.vue'
+import BookReader from '@/components/readers/BookReader.vue'
+import ComicReader from '@/components/readers/ComicReader.vue'
 import ActionDialog from '@/components/actions/ActionDialog.vue'
 import { 
   IconLeft, 
@@ -223,7 +284,9 @@ import {
   IconCopy,
   IconHeart,
   IconHeartFill,
-  IconEye
+  IconEye,
+  IconBook,
+  IconImage
 } from '@arco-design/web-vue/es/icon'
 
 const route = useRoute()
@@ -265,6 +328,16 @@ const showVideoPlayer = ref(false)
 // 解析后的播放URL（用于T4接口解析结果）
 const parsedVideoUrl = ref('')
 
+// 小说阅读器相关
+const showBookReader = ref(false)
+// 解析后的小说内容（用于T4接口解析结果）
+const parsedNovelContent = ref(null)
+
+// 漫画阅读器相关
+const showComicReader = ref(false)
+// 解析后的漫画内容（用于T4接口解析结果）
+const parsedComicContent = ref(null)
+
 // 解析提示弹窗相关
 const showParseDialog = ref(false)
 const parseDialogConfig = ref({
@@ -272,6 +345,10 @@ const parseDialogConfig = ref({
   message: '',
   type: '' // 'sniff' 或 'parse'
 })
+
+// 嗅探相关
+const sniffing = ref(false)
+const sniffResults = ref([])
 
 // 从localStorage读取用户的播放器偏好，默认为'default'
 const getPlayerPreference = () => {
@@ -390,6 +467,16 @@ const currentEpisodeIndex = computed(() => {
 const isCurrentFavorited = computed(() => {
   if (!originalVideoInfo.value.id || !currentSiteInfo.value.api) return false
   return favoriteStore.isFavorited(originalVideoInfo.value.id, currentSiteInfo.value.api)
+})
+
+// 判断当前内容是否为小说
+const isNovelContent = computed(() => {
+  return parsedNovelContent.value !== null
+})
+
+// 判断当前内容是否为漫画
+const isComicContent = computed(() => {
+  return showComicReader.value
 })
 
 // 方法
@@ -764,6 +851,44 @@ const handlePlayerClose = () => {
   showVideoPlayer.value = false
 }
 
+// 处理阅读器组件的关闭事件（小说和漫画）
+const handleReaderClose = () => {
+  showBookReader.value = false
+  showComicReader.value = false
+  parsedNovelContent.value = null
+  parsedComicContent.value = null
+}
+
+// 处理阅读器章节切换事件
+const handleChapterChange = (chapterIndex) => {
+  console.log('切换到章节:', chapterIndex)
+  selectEpisode(chapterIndex)
+}
+
+// 处理下一章事件
+const handleNextChapter = () => {
+  if (currentEpisode.value < currentRouteEpisodes.value.length - 1) {
+    const nextIndex = currentEpisode.value + 1
+    console.log('切换到下一章:', nextIndex)
+    selectEpisode(nextIndex)
+  }
+}
+
+// 处理上一章事件
+const handlePrevChapter = () => {
+  if (currentEpisode.value > 0) {
+    const prevIndex = currentEpisode.value - 1
+    console.log('切换到上一章:', prevIndex)
+    selectEpisode(prevIndex)
+  }
+}
+
+// 处理章节选择事件
+const handleChapterSelected = (chapterIndex) => {
+  console.log('选择章节:', chapterIndex)
+  selectEpisode(chapterIndex)
+}
+
 // 处理播放器类型变更
 const handlePlayerTypeChange = (newType) => {
   console.log('切换播放器类型:', newType)
@@ -803,6 +928,12 @@ const handleEpisodeSelected = (episode) => {
   }
 }
 
+// 处理阅读器设置变更事件
+const handleSettingsChange = (settings) => {
+  console.log('阅读器设置变更:', settings)
+  // 这里可以添加设置保存逻辑，如果需要的话
+}
+
 const selectEpisode = async (index) => {
   currentEpisode.value = index
   
@@ -834,28 +965,105 @@ const selectEpisode = async (index) => {
     // 根据解析结果处理播放
      if (parseResult.playType === 'direct') {
        // parse:0 - 直链播放
-       console.log('启动内置播放器播放直链视频:', parseResult.url)
-       parsedVideoUrl.value = parseResult.url
-       showVideoPlayer.value = true
-       Message.success(`开始播放: ${currentEpisodeName.value}`)
+       // 检查是否为小说内容
+       if (parseResult.url && parseResult.url.startsWith('novel://')) {
+         console.log('检测到小说内容:', parseResult.url)
+         try {
+           // 解析小说内容
+           const novelData = parseResult.url.replace('novel://', '')
+           const novelContent = JSON.parse(novelData)
+           
+           console.log('解析小说内容成功:', novelContent)
+           
+           // 设置小说内容并显示阅读器
+           parsedNovelContent.value = {
+             title: novelContent.title || currentEpisodeName.value,
+             content: novelContent.content || '',
+             chapterIndex: index,
+             totalChapters: currentRouteEpisodes.value.length
+           }
+           
+           // 关闭视频播放器和漫画阅读器，显示小说阅读器
+           showVideoPlayer.value = false
+           showComicReader.value = false
+           showBookReader.value = true
+           
+           Message.success(`开始阅读: ${novelContent.title || currentEpisodeName.value}`)
+         } catch (error) {
+           console.error('解析小说内容失败:', error)
+           Message.error('解析小说内容失败')
+         }
+       } else if (parseResult.url && parseResult.url.startsWith('pics://')) {
+         console.log('检测到漫画内容:', parseResult.url)
+         try {
+           // 解析漫画内容
+           const comicData = parseResult.url.replace('pics://', '')
+           const imageUrls = comicData.split('&&').filter(url => url.trim())
+           
+           console.log('解析漫画内容成功:', imageUrls)
+           
+           // 设置漫画内容并显示阅读器
+           parsedComicContent.value = {
+             title: currentEpisodeName.value,
+             images: imageUrls,
+             chapterIndex: index,
+             totalChapters: currentRouteEpisodes.value.length
+           }
+           
+           // 关闭视频播放器和小说阅读器，显示漫画阅读器
+           showVideoPlayer.value = false
+           showBookReader.value = false
+           showComicReader.value = true
+           
+           Message.success(`开始看漫画: ${currentEpisodeName.value}`)
+         } catch (error) {
+           console.error('解析漫画内容失败:', error)
+           Message.error('解析漫画内容失败')
+         }
+       } else {
+         // 普通视频内容
+         console.log('启动内置播放器播放直链视频:', parseResult.url)
+         parsedVideoUrl.value = parseResult.url
+         parsedNovelContent.value = null
+         parsedComicContent.value = null
+         showBookReader.value = false
+         showComicReader.value = false
+         showVideoPlayer.value = true
+         Message.success(`开始播放: ${currentEpisodeName.value}`)
+       }
      } else if (parseResult.playType === 'sniff') {
        // parse:1 - 需要嗅探
        console.log('需要嗅探播放:', parseResult)
-       // 清空解析URL，不启动播放器
-       parsedVideoUrl.value = ''
        
-       // 显示嗅探提示弹窗
-       parseDialogConfig.value = {
-         title: '播放提示',
-         message: '该视频需要嗅探才能播放，当前版本暂不支持此功能。',
-         type: 'sniff'
+       // 检查嗅探功能是否启用
+       if (!isSnifferEnabled()) {
+         // 清空解析URL和小说内容，不启动播放器
+         parsedVideoUrl.value = ''
+         parsedNovelContent.value = null
+         showBookReader.value = false
+         
+         // 显示嗅探配置提示弹窗
+         parseDialogConfig.value = {
+           title: '嗅探功能未启用',
+           message: '该视频需要嗅探才能播放，请先在设置中配置嗅探器接口。',
+           type: 'sniff'
+         }
+         showParseDialog.value = true
+       } else {
+         // 执行嗅探，传递原始的T4数据（parseResult.data）
+         const sniffSuccess = await sniffVideoUrl(parseResult.data)
+         if (!sniffSuccess) {
+           // 嗅探失败，已在sniffVideoUrl函数中通过Message.error显示错误信息
+           // 不需要额外的弹窗处理
+         }
        }
-       showParseDialog.value = true
      } else if (parseResult.playType === 'parse') {
        // jx:1 - 需要解析
        console.log('需要解析播放:', parseResult)
-       // 清空解析URL，不启动播放器
+       // 清空解析URL和小说内容，不启动播放器
        parsedVideoUrl.value = ''
+       parsedNovelContent.value = null
+       showBookReader.value = false
        
        // 显示解析提示弹窗
        parseDialogConfig.value = {
@@ -868,6 +1076,8 @@ const selectEpisode = async (index) => {
        // 其他情况，回退到原始播放方式
        console.log('使用原始播放方式:', episodeUrl)
        parsedVideoUrl.value = ''
+       parsedNovelContent.value = null
+       showBookReader.value = false
        showVideoPlayer.value = true
        Message.success(`开始播放: ${currentEpisodeName.value}`)
      }
@@ -878,6 +1088,8 @@ const selectEpisode = async (index) => {
      // 解析失败时回退到原始播放方式
      console.log('回退到原始播放方式:', episodeUrl)
      parsedVideoUrl.value = ''
+     parsedNovelContent.value = null
+     showBookReader.value = false
      showVideoPlayer.value = true
      Message.warning(`播放可能不稳定: ${currentEpisodeName.value}`)
    }
@@ -922,7 +1134,104 @@ const selectEpisode = async (index) => {
   }
 }
 
+// 嗅探视频链接
+const sniffVideoUrl = async (parseDataOrUrl) => {
+  let loadingMessage = null
+  
+  try {
+    // 检查嗅探功能是否启用
+    if (!isSnifferEnabled()) {
+      throw new Error('嗅探功能未启用，请在设置中配置嗅探器')
+    }
 
+    sniffing.value = true
+    sniffResults.value = []
+    
+    // 使用全局消息提示，设置duration为0让消息持续显示直到手动关闭
+    loadingMessage = Message.info({
+      content: '正在全力嗅探中，请稍等...',
+      duration: 0
+    })
+
+    console.log('开始嗅探视频链接:', parseDataOrUrl)
+    
+    // 检查是否是T4解析数据格式
+    let sniffData
+    if (typeof parseDataOrUrl === 'object' && parseDataOrUrl.parse === 1) {
+      // T4解析数据格式，直接使用
+      sniffData = parseDataOrUrl
+      console.log('使用T4解析数据进行嗅探:', sniffData)
+    } else {
+      // 普通URL格式
+      sniffData = typeof parseDataOrUrl === 'string' ? parseDataOrUrl : parseDataOrUrl.toString()
+      console.log('使用普通URL进行嗅探:', sniffData)
+    }
+
+    // 调用嗅探服务
+    const result = await sniffVideoWithConfig(sniffData, {
+      mode: '0', // 单个链接模式
+      is_pc: '0' // 移动设备模式
+    })
+
+    console.log('嗅探结果:', result)
+
+    if (result.success && result.data) {
+      // 处理不同的返回格式
+      let videoData
+      let videoCount
+      
+      if (Array.isArray(result.data)) {
+        // 多个链接模式：返回数组
+        if (result.data.length === 0) {
+          throw new Error('嗅探失败，未找到有效的视频链接')
+        }
+        videoData = result.data
+        videoCount = result.data.length
+        sniffResults.value = result.data
+      } else if (result.data.url) {
+        // 单个链接模式：返回单个对象
+        videoData = [result.data] // 转换为数组格式以保持一致性
+        videoCount = 1
+        sniffResults.value = videoData
+      } else {
+        throw new Error('嗅探结果格式无效')
+      }
+      
+      // 关闭loading消息
+      loadingMessage.close()
+      
+      // 自动选择第一个链接进行播放
+      const firstVideo = videoData[0]
+      if (firstVideo && firstVideo.url) {
+        console.log('使用嗅探到的第一个链接:', firstVideo.url)
+        parsedVideoUrl.value = firstVideo.url
+        parsedNovelContent.value = null
+        parsedComicContent.value = null
+        showBookReader.value = false
+        showComicReader.value = false
+        showVideoPlayer.value = true
+        
+        Message.success(`嗅探成功，开始播放: ${currentEpisodeName.value}`)
+        return true
+      } else {
+        throw new Error('嗅探到的链接无效')
+      }
+    } else {
+      throw new Error(result.message || '嗅探失败，未找到有效的视频链接')
+    }
+
+  } catch (error) {
+    console.error('嗅探失败:', error)
+    // 关闭loading消息（如果存在）
+    if (loadingMessage) {
+      loadingMessage.close()
+    }
+    Message.error(`嗅探失败: ${error.message}`)
+    return false
+  } finally {
+    sniffing.value = false
+  }
+}
 
 const playVideo = async () => {
   // 检查是否有历史记录
@@ -1867,5 +2176,99 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   padding-top: 16px;
+}
+
+/* 嗅探进度样式 */
+.sniff-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--color-bg-2);
+  border-radius: 8px;
+  margin: 16px 0;
+  border-left: 4px solid var(--color-warning);
+}
+
+.progress-icon {
+  color: var(--color-warning);
+}
+
+.progress-text {
+  color: var(--color-text-1);
+  font-size: 14px;
+}
+
+/* 嗅探结果样式 */
+.sniff-results {
+  margin: 16px 0;
+  text-align: left;
+}
+
+.results-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-1);
+  margin-bottom: 12px;
+}
+
+.results-list {
+  background: var(--color-bg-2);
+  border-radius: 8px;
+  padding: 12px;
+  border-left: 4px solid var(--color-success);
+}
+
+.result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.result-item:last-child {
+  margin-bottom: 0;
+}
+
+.result-index {
+  background: var(--color-success);
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.result-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-url {
+  font-size: 12px;
+  color: var(--color-text-2);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.result-type {
+  font-size: 11px;
+  color: var(--color-text-3);
+  margin-top: 2px;
+}
+
+.more-results {
+  font-size: 12px;
+  color: var(--color-text-3);
+  text-align: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-2);
 }
 </style>
