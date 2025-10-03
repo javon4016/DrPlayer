@@ -3,6 +3,20 @@
     <h3>正在播放: {{ episodeName }}</h3>
     <div class="player-controls">
       <div class="compact-button-group">
+        <!-- 调试按钮 - 仅在有直链和请求头时显示 -->
+        <div 
+          v-if="showDebugButton"
+          class="compact-btn debug-btn" 
+          @click="$emit('toggle-debug')"
+          title="调试信息"
+        >
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="btn-text">调试</span>
+        </div>
         <!-- 自动连播按钮 -->
         <div 
           v-if="showAutoNext && episodes.length > 1"
@@ -110,6 +124,10 @@ const props = defineProps({
   showCountdown: {
     type: Boolean,
     default: true
+  },
+  showDebugButton: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -119,6 +137,7 @@ defineEmits([
   'toggle-countdown', 
   'player-change',
   'open-skip-settings',
+  'toggle-debug',
   'close'
 ])
 </script>
@@ -200,6 +219,15 @@ defineEmits([
 .compact-btn.close-btn:hover {
   background: #f8d7da;
   color: #721c24;
+}
+
+.compact-btn.debug-btn {
+  color: #6f42c1;
+}
+
+.compact-btn.debug-btn:hover {
+  background: #e2d9f3;
+  color: #5a2d91;
 }
 
 .btn-icon {

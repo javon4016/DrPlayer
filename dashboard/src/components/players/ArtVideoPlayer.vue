@@ -7,10 +7,12 @@
       :auto-next-enabled="autoNextEnabled"
       :countdown-enabled="countdownEnabled"
       :skip-enabled="skipEnabled"
+      :show-debug-button="showDebugButton"
       @toggle-auto-next="toggleAutoNext"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
       @open-skip-settings="openSkipSettingsDialog"
+      @toggle-debug="toggleDebugDialog"
       @close="closePlayer"
     />
     <div class="art-player-wrapper" v-show="props.visible">
@@ -50,6 +52,16 @@
       @close="closeSkipSettingsDialog"
       @save="saveSkipSettings"
     />
+    
+    <!-- 调试信息弹窗组件 -->
+    <DebugInfoDialog
+      :visible="showDebugDialog"
+      :video-url="videoUrl"
+      :headers="headers"
+      :player-type="'artplayer'"
+      :detected-format="detectedFormat"
+      @close="closeDebugDialog"
+    />
   </div>
   </a-card>
 </template>
@@ -60,13 +72,15 @@ import { Message } from '@arco-design/web-vue'
 import { IconClose } from '@arco-design/web-vue/es/icon'
 import Artplayer from 'artplayer'
 import Hls from 'hls.js'
+import { MediaPlayerManager, detectVideoFormat, createCustomPlayer, destroyCustomPlayer } from '@/utils/MediaPlayerManager'
 
 // 配置自定义倍速选项
 Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5]
 import PlayerHeader from './PlayerHeader.vue'
 import SkipSettingsDialog from './SkipSettingsDialog.vue'
+import DebugInfoDialog from './DebugInfoDialog.vue'
 import { useSkipSettings } from '@/composables/useSkipSettings'
-import { applyCSPBypass, setVideoReferrerPolicy, REFERRER_POLICIES } from '@/utils/csp'
+import { applyCSPBypass, setVideoReferrerPolicy, REFERRER_POLICIES, getCSPConfig } from '@/utils/csp'
 
 // Props - 已添加 HLS 支持、动态高度自适应和自动下一集功能
 const props = defineProps({
@@ -102,6 +116,11 @@ const props = defineProps({
   autoNext: {
     type: Boolean,
     default: true
+  },
+  // 自定义请求头，用于HLS播放
+  headers: {
+    type: Object,
+    default: () => ({})
   }
 })
 
@@ -111,6 +130,7 @@ const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'ep
 // 响应式数据
 const artPlayerContainer = ref(null)
 const artPlayerInstance = ref(null)
+const mediaPlayerManager = ref(null) // 媒体播放器管理器
 const retryCount = ref(0) // 重连次数计数器
 const maxRetries = ref(3) // 最大重连次数
 const isRetrying = ref(false) // 是否正在重连
@@ -122,6 +142,15 @@ const autoNextCountdown = ref(0) // 自动下一集倒计时
 const autoNextTimer = ref(null) // 自动下一集定时器
 const showAutoNextDialog = ref(false) // 显示自动下一集对话框
 const countdownEnabled = ref(false) // 倒计时开关，默认关闭
+
+// 调试相关
+const showDebugDialog = ref(false)
+const detectedFormat = ref('')
+
+// 计算属性：是否显示调试按钮
+const showDebugButton = computed(() => {
+  return !!props.videoUrl
+})
 
 // 选集弹窗相关数据已移除，现在使用ArtPlayer的layer功能
 
@@ -241,6 +270,13 @@ const initArtPlayer = async (url) => {
     return
   }
   
+  // 初始化或清理媒体播放器管理器
+  if (!mediaPlayerManager.value) {
+    mediaPlayerManager.value = new MediaPlayerManager()
+  } else {
+    mediaPlayerManager.value.destroy()
+  }
+  
   // 如果播放器实例已存在，使用 switchUrl 方法切换视频源
   if (artPlayerInstance.value) {
     console.log('使用 switchUrl 方法切换视频源:', url)
@@ -250,6 +286,9 @@ const initArtPlayer = async (url) => {
       await artPlayerInstance.value.switchUrl(url)
       console.log('视频源切换成功')
       
+      // 重置片头片尾跳过状态
+      resetSkipState()
+      
       // 重新应用片头片尾设置
       applySkipSettings()
       
@@ -258,16 +297,9 @@ const initArtPlayer = async (url) => {
       console.error('switchUrl 切换失败，回退到销毁重建方式:', error)
       // 如果 switchUrl 失败，回退到原来的销毁重建方式
       
-      // 清理缓冲区清理定时器
-      if (artPlayerInstance.value.bufferCleanupInterval) {
-        clearInterval(artPlayerInstance.value.bufferCleanupInterval)
-        artPlayerInstance.value.bufferCleanupInterval = null
-      }
-      
-      // 清理 HLS 实例
-      if (artPlayerInstance.value.hls) {
-        artPlayerInstance.value.hls.destroy()
-        artPlayerInstance.value.hls = null
+      // 清理媒体播放器管理器
+      if (mediaPlayerManager.value) {
+        mediaPlayerManager.value.destroy()
       }
       
       artPlayerInstance.value.destroy()
@@ -276,8 +308,10 @@ const initArtPlayer = async (url) => {
   }
   
   try {
-    // 检查是否为 HLS 流
-    const isHLS = url.includes('.m3u8') || url.includes('m3u8')
+    // 检测视频格式
+    const videoFormat = detectVideoFormat(url)
+    detectedFormat.value = videoFormat
+    console.log('检测到视频格式:', videoFormat)
     
     // 创建 ArtPlayer 实例
     const art = new Artplayer({
@@ -311,187 +345,39 @@ const initArtPlayer = async (url) => {
       theme: '#23ade5',
       lang: 'zh-cn',
       whitelist: ['*'],
-      // 移除crossOrigin设置以避免CORS问题
-      // moreVideoAttr: {
-      //   crossOrigin: 'anonymous',
-      // },
       // 自定义视频类型处理
-      type: isHLS ? 'm3u8' : '',
-      // 自定义加载器
-      customType: isHLS ? {
-        m3u8: function (video, url, art) {
-          if (Hls.isSupported()) {
-            const hls = new Hls({
-              // HLS 配置选项
-              enableWorker: true,
-              lowLatencyMode: false, // 关闭低延迟模式，提高稳定性
-              
-              // 缓冲区配置 - 关键优化
-              backBufferLength: 15, // 减少后缓冲长度，避免内存占用过多
-              maxBufferLength: 30,  // 减少最大缓冲长度到30秒，避免内存问题
-              maxBufferSize: 30 * 1000 * 1000, // 减少最大缓冲大小到30MB
-              maxBufferHole: 0.3,   // 减少最大缓冲空洞到0.3秒
-              
-              // 网络配置
-              maxLoadingDelay: 3,   // 减少最大加载延迟到3秒
-              maxRetryDelay: 6,     // 减少最大重试延迟到6秒
-              maxRetry: 2,          // 减少最大重试次数到2次，避免过度重试
-              
-              // 片段配置
-              fragLoadingTimeOut: 15000,    // 减少片段加载超时到15秒
-              manifestLoadingTimeOut: 8000, // 减少清单加载超时到8秒
-              fragLoadingMaxRetry: 2,       // 片段加载最大重试次数
-              manifestLoadingMaxRetry: 2,   // 清单加载最大重试次数
-              
-              // 启用自动质量切换
-              enableSoftwareAES: true,
-              startLevel: -1,       // 自动选择起始质量
-              capLevelToPlayerSize: true, // 根据播放器大小限制质量
-              
-              // 错误恢复配置
-              liveSyncDurationCount: 3,
-              liveMaxLatencyDurationCount: Infinity,
-              liveDurationInfinity: false,
-              
-              // 新增配置项，提高稳定性
-              nudgeOffset: 0.1,     // 微调偏移量
-              nudgeMaxRetry: 3,     // 微调最大重试次数
-              maxSeekHole: 2,       // 最大寻址空洞
-              
-              // 调试配置（生产环境可关闭）
-              debug: false,
-            })
-            
-            hls.loadSource(url)
-            hls.attachMedia(video)
-            
-            // 存储 hls 实例到 art 对象上，方便后续清理
-            art.hls = hls
-            
-            // HLS 事件监听
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              console.log('HLS manifest 解析完成')
-            })
-            
-            // 错误重试计数器
-            let networkErrorRetries = 0
-            let mediaErrorRetries = 0
-            const maxErrorRetries = 2 // 减少重试次数
-            
-            hls.on(Hls.Events.ERROR, (event, data) => {
-              // 只记录致命错误，减少控制台噪音
-              if (data.fatal) {
-                console.error('HLS 致命错误:', data.type, data.details)
-                
-                switch (data.type) {
-                  case Hls.ErrorTypes.NETWORK_ERROR:
-                    networkErrorRetries++
-                    
-                    if (networkErrorRetries <= maxErrorRetries) {
-                      console.log(`网络错误恢复中... (${networkErrorRetries}/${maxErrorRetries})`)
-                      // 延迟重试，避免频繁请求
-                      setTimeout(() => {
-                        hls.startLoad()
-                      }, 1000 * networkErrorRetries) // 递增延迟
-                    } else {
-                      console.error('网络错误重试次数超限')
-                      Message.error('网络连接不稳定，请检查网络后重试')
-                      hls.destroy()
-                    }
-                    break
-                    
-                  case Hls.ErrorTypes.MEDIA_ERROR:
-                    mediaErrorRetries++
-                    
-                    if (mediaErrorRetries <= maxErrorRetries) {
-                      console.log(`媒体错误恢复中... (${mediaErrorRetries}/${maxErrorRetries})`)
-                      setTimeout(() => {
-                        hls.recoverMediaError()
-                      }, 500 * mediaErrorRetries) // 递增延迟
-                    } else {
-                      console.error('媒体错误恢复次数超限')
-                      Message.error('视频解码错误，请尝试刷新页面')
-                      hls.destroy()
-                    }
-                    break
-                    
-                  default:
-                    // 对于其他致命错误，不显示用户提示，只记录日志
-                    console.error('无法恢复的HLS错误:', data.details)
-                    hls.destroy()
-                    break
-                }
-              } else {
-                // 非致命错误，只在调试模式下记录
-                if (data.details !== 'bufferAppendError' && data.details !== 'bufferStalledError') {
-                  console.debug('HLS 非致命错误:', data.details)
-                }
-                
-                // 对于缓冲区错误，尝试自动恢复
-                if (data.details === 'bufferStalledError') {
-                  console.debug('检测到缓冲停滞，自动处理中...')
-                  // HLS.js 会自动处理这类错误，无需手动干预
-                }
-              }
-            })
-            
-            // 监听缓冲区事件，用于性能优化
-            hls.on(Hls.Events.BUFFER_APPENDED, () => {
-              // 缓冲区数据追加成功，可以在这里做一些清理工作
-            })
-            
-            hls.on(Hls.Events.BUFFER_EOS, () => {
-              console.debug('缓冲区到达流结束')
-            })
-            
-            // 监听缓冲区清理事件
-            hls.on(Hls.Events.BUFFER_FLUSHED, () => {
-              console.debug('缓冲区已清理')
-            })
-            
-            // 重置错误计数器（当播放成功时）
-            hls.on(Hls.Events.FRAG_LOADED, () => {
-              // 片段加载成功，重置错误计数
-              if (networkErrorRetries > 0 || mediaErrorRetries > 0) {
-                console.log('连接恢复正常，重置错误计数器')
-                networkErrorRetries = 0
-                mediaErrorRetries = 0
-              }
-            })
-            
-            // 监听质量切换事件
-            hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-              console.debug(`质量切换到: ${data.level}`)
-            })
-            
-            // 定期清理缓冲区，避免内存占用过多
-            let bufferCleanupInterval = setInterval(() => {
-              if (hls && video && !video.paused) {
-                const currentTime = video.currentTime
-                // 清理当前播放位置前15秒以外的缓冲区
-                if (currentTime > 15) {
-                  try {
-                    hls.trigger(Hls.Events.BUFFER_FLUSHING, {
-                      startOffset: 0,
-                      endOffset: currentTime - 15,
-                      type: 'video'
-                    })
-                  } catch (e) {
-                    console.debug('缓冲区清理失败:', e)
-                  }
-                }
-              }
-            }, 30000) // 每30秒清理一次
-            
-            // 存储清理定时器，用于后续清理
-            art.bufferCleanupInterval = bufferCleanupInterval
-          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safari 原生支持 HLS
-            video.src = url
-          } else {
-            console.error('此浏览器不支持 HLS 播放')
-            Message.error('此浏览器不支持 HLS 播放')
+      type: videoFormat === 'hls' ? 'm3u8' : videoFormat === 'flv' ? 'flv' : videoFormat === 'dash' ? 'mpd' : '',
+      // 自定义加载器 - 直接使用createCustomPlayer
+      customType: videoFormat !== 'native' ? {
+        [videoFormat === 'hls' ? 'm3u8' : videoFormat === 'flv' ? 'flv' : videoFormat === 'dash' ? 'mpd' : videoFormat]: function (video, url, art) {
+          // 直接使用createCustomPlayer函数
+          const cspConfig = getCSPConfig()
+          const headers = {
+            ...(props.headers || {}),
+            ...(cspConfig.autoBypass ? {} : {})
           }
+          
+          // 根据格式创建对应的播放器
+          let player = null
+          switch (videoFormat) {
+            case 'hls':
+              player = createCustomPlayer.hls(video, url, headers)
+              break
+            case 'flv':
+              player = createCustomPlayer.flv(video, url, headers)
+              break
+            case 'dash':
+              player = createCustomPlayer.dash(video, url, headers)
+              break
+          }
+          
+          // 将播放器实例保存到art实例中，方便后续管理
+          if (player) {
+            art.customPlayer = player
+            art.customPlayerFormat = videoFormat
+          }
+          
+          console.log(`${videoFormat.toUpperCase()} 播放器加载成功`)
         }
       } : {},
       // 自定义控制栏
@@ -869,6 +755,15 @@ const toggleCountdown = () => {
   }
 }
 
+// 调试弹窗控制方法
+const toggleDebugDialog = () => {
+  showDebugDialog.value = !showDebugDialog.value
+}
+
+const closeDebugDialog = () => {
+  showDebugDialog.value = false
+}
+
 // 滚动到当前选集位置
 const scrollToCurrentEpisode = async () => {
   // 等待DOM更新
@@ -1089,6 +984,9 @@ watch(() => props.visible, async (newVisible) => {
     await initArtPlayer(props.videoUrl)
   } else if (!newVisible) {
     // 隐藏时清理资源
+    if (mediaPlayerManager.value) {
+      mediaPlayerManager.value.destroy()
+    }
     if (artPlayerInstance.value) {
       artPlayerInstance.value.destroy()
       artPlayerInstance.value = null
@@ -1128,18 +1026,19 @@ onUnmounted(() => {
   // 清理自动下一集相关资源
   cancelAutoNext()
   
+  // 清理媒体播放器管理器
+  if (mediaPlayerManager.value) {
+    mediaPlayerManager.value.destroy()
+  }
+  
   // 销毁播放器实例
   if (artPlayerInstance.value) {
-    // 清理缓冲区清理定时器
-    if (artPlayerInstance.value.bufferCleanupInterval) {
-      clearInterval(artPlayerInstance.value.bufferCleanupInterval)
-      artPlayerInstance.value.bufferCleanupInterval = null
-    }
-    
-    // 清理 HLS 实例
-    if (artPlayerInstance.value.hls) {
-      artPlayerInstance.value.hls.destroy()
-      artPlayerInstance.value.hls = null
+    // 清理自定义播放器
+    if (artPlayerInstance.value.customPlayer && artPlayerInstance.value.customPlayerFormat) {
+      const format = artPlayerInstance.value.customPlayerFormat
+      if (destroyCustomPlayer[format]) {
+        destroyCustomPlayer[format](artPlayerInstance.value.customPlayer)
+      }
     }
     
     // 销毁播放器实例

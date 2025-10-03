@@ -19,7 +19,7 @@ async function buildAndDeploy() {
     
     try {
         // 执行构建命令
-        execSync('yarn build:fastify', { stdio: 'inherit', cwd: __dirname });
+        execSync('pnpm build:fastify', { stdio: 'inherit', cwd: __dirname });
         console.log('✅ 构建完成');
         
         // 确保apps目录存在

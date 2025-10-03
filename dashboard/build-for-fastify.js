@@ -18,7 +18,7 @@ async function buildForFastify() {
         console.log('📦 正在构建应用...');
         
         // 2. 执行构建
-        execSync('yarn build', { 
+        execSync('pnpm build', { 
             stdio: 'inherit',
             env: {
                 ...process.env,

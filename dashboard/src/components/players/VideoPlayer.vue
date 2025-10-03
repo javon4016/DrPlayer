@@ -8,10 +8,12 @@
       :auto-next-enabled="autoNext"
       :countdown-enabled="showCountdown"
       :skip-enabled="skipEnabled"
+      :show-debug-button="showDebugButton"
       @toggle-auto-next="toggleAutoNext"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
       @open-skip-settings="openSkipSettingsDialog"
+      @toggle-debug="toggleDebugDialog"
       @close="closePlayer"
     />
     <div class="video-player-container">
@@ -77,6 +79,16 @@
         @close="closeSkipSettingsDialog"
         @save="saveSkipSettings"
       />
+      
+      <!-- 调试信息弹窗组件 -->
+      <DebugInfoDialog
+        :visible="showDebugDialog"
+        :video-url="videoUrl"
+        :headers="headers"
+        :player-type="'default'"
+        :detected-format="detectedFormat"
+        @close="closeDebugDialog"
+      />
     </div>
   </a-card>
 </template>
@@ -88,8 +100,10 @@ import { IconClose } from '@arco-design/web-vue/es/icon'
 import Hls from 'hls.js'
 import PlayerHeader from './PlayerHeader.vue'
 import SkipSettingsDialog from './SkipSettingsDialog.vue'
+import DebugInfoDialog from './DebugInfoDialog.vue'
 import { useSkipSettings } from '@/composables/useSkipSettings'
-import { applyCSPBypass, setVideoReferrerPolicy, REFERRER_POLICIES } from '@/utils/csp'
+import { applyCSPBypass, setVideoReferrerPolicy, REFERRER_POLICIES, getCSPConfig } from '@/utils/csp'
+import { MediaPlayerManager, detectVideoFormat } from '@/utils/MediaPlayerManager'
 
 // Props
 const props = defineProps({
@@ -121,6 +135,11 @@ const props = defineProps({
   currentEpisodeIndex: {
     type: Number,
     default: 0
+  },
+  // 自定义请求头，用于HLS播放
+  headers: {
+    type: Object,
+    default: () => ({})
   }
 })
 
@@ -129,7 +148,7 @@ const emit = defineEmits(['close', 'error', 'player-change', 'next-episode'])
 
 // 响应式数据
 const videoPlayer = ref(null)
-const hlsInstance = ref(null)
+const mediaPlayerManager = ref(null)
 const autoNext = ref(true) // 默认开启自动连播
 const showCountdown = ref(false)
 const showAutoNextDialog = ref(false)
@@ -137,6 +156,15 @@ const autoNextCountdown = ref(10)
 const countdownTimer = ref(null)
 const isProcessingAutoNext = ref(false) // 防止重复触发自动连播
 const currentSpeed = ref(1) // 当前播放倍速
+
+// 调试相关
+const showDebugDialog = ref(false)
+const detectedFormat = ref('')
+
+// 计算属性：是否显示调试按钮
+const showDebugButton = computed(() => {
+  return !!props.videoUrl
+})
 
 // 检查是否有下一集
 const hasNextEpisode = () => {
@@ -185,11 +213,14 @@ const {
   skipOutroTimer,
   initSkipSettings,
   applySkipSettings,
+  applyIntroSkipImmediate,
   handleTimeUpdate,
   resetSkipState,
   openSkipSettingsDialog,
   closeSkipSettingsDialog,
-  saveSkipSettings: saveSkipSettingsComposable
+  saveSkipSettings: saveSkipSettingsComposable,
+  onUserSeekStart,
+  onUserSeekEnd
 } = useSkipSettings({
   onSkipToNext: playNextEpisode,
   getCurrentTime: () => videoPlayer.value?.currentTime || 0,
@@ -239,6 +270,15 @@ const changePlaybackRate = () => {
     videoPlayer.value.playbackRate = parseFloat(currentSpeed.value)
     console.log('播放倍速已设置为:', currentSpeed.value)
   }
+}
+
+// 调试弹窗控制方法
+const toggleDebugDialog = () => {
+  showDebugDialog.value = !showDebugDialog.value
+}
+
+const closeDebugDialog = () => {
+  showDebugDialog.value = false
 }
 
 // 链接类型判断函数
@@ -302,10 +342,12 @@ const initVideoPlayer = (url) => {
     return
   }
   
-  // 清理之前的HLS实例
-  if (hlsInstance.value) {
-    hlsInstance.value.destroy()
-    hlsInstance.value = null
+  // 初始化MediaPlayerManager
+  if (!mediaPlayerManager.value) {
+    mediaPlayerManager.value = new MediaPlayerManager(videoPlayer.value)
+  } else {
+    // 清理之前的播放器实例
+    mediaPlayerManager.value.destroy()
   }
   
   const video = videoPlayer.value
@@ -341,131 +383,118 @@ const initVideoPlayer = (url) => {
     }
   }
 
-  // 检测视频格式
-  const isM3u8 = url.toLowerCase().includes('.m3u8') || url.toLowerCase().includes('m3u8')
-  
-  if (isM3u8) {
-    // 处理m3u8格式
-    if (Hls.isSupported()) {
-      // 使用HLS.js播放m3u8
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90
-      })
+  // 使用MediaPlayerManager加载视频
+  try {
+    // 重置片头片尾跳过状态（对所有格式都适用）
+    resetSkipState()
+    
+    const format = detectVideoFormat(url)
+    detectedFormat.value = format
+    console.log(`检测到视频格式: ${format}`)
+    
+    // 准备自定义请求头
+    const headers = props.headers || {}
+    
+    // 使用MediaPlayerManager加载视频
+    const player = mediaPlayerManager.value.loadVideo(url, headers)
+    
+    if (player) {
+      console.log(`使用${format}播放器加载视频成功`)
       
-      hls.loadSource(url)
-      hls.attachMedia(video)
-      
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('HLS manifest 解析完成，开始播放')
-        video.play().catch(err => {
-          console.warn('自动播放失败:', err)
+      // 为HLS播放器添加事件监听
+      if (format === 'hls' && player) {
+        player.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('HLS manifest 解析完成，开始播放')
+          video.play().catch(err => {
+            console.warn('自动播放失败:', err)
+          })
         })
-      })
-      
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        console.error('HLS播放错误:', data)
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              Message.error('网络错误，请检查网络连接')
-              hls.startLoad()
-              break
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              Message.error('媒体错误，尝试恢复播放')
-              hls.recoverMediaError()
-              break
-            default:
-              // 播放器错误时，检查是否为网页链接
-              if (!isDirectVideoLink(url)) {
-                console.log('HLS播放失败，检测到可能是网页链接，在新窗口打开:', url)
-                Message.info('视频播放失败，检测到网页链接，正在新窗口打开...')
-                window.open(url, '_blank')
-                emit('close') // 关闭播放器
-              } else {
+        
+        player.on(Hls.Events.ERROR, (event, data) => {
+          console.error('HLS播放错误:', data)
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                Message.error('网络错误，请检查网络连接')
+                player.startLoad()
+                break
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                Message.error('媒体错误，尝试恢复播放')
+                player.recoverMediaError()
+                break
+              default:
                 Message.error('播放器错误，请重试')
                 emit('error', '播放器错误')
-              }
-              hls.destroy()
-              break
+                break
+            }
           }
-        }
-      })
+        })
+      }
       
-      hlsInstance.value = hls
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari原生支持HLS
-      video.src = url
-      video.addEventListener('loadedmetadata', () => {
+      // 为所有格式的播放器添加统一的video元素事件监听器
+      const handleLoadedMetadata = () => {
         video.play().catch(err => {
           console.warn('自动播放失败:', err)
+          Message.warning('自动播放失败，请手动点击播放')
         })
-      })
-    } else {
-      Message.error('您的浏览器不支持HLS播放')
-      emit('error', '浏览器不支持HLS播放')
-      return // 如果不支持HLS，直接返回，不添加事件监听器
-    }
-  } else {
-    // 处理其他格式的视频（mp4, webm, avi等）
-    video.src = url
-    
-    // 添加事件监听器
-    const handleLoadedMetadata = () => {
-      video.play().catch(err => {
-        console.warn('自动播放失败:', err)
-        Message.warning('自动播放失败，请手动点击播放')
-      })
+        
+        // 应用片头片尾设置
+        applySkipSettings()
+      }
       
-      // 应用片头片尾设置
-      applySkipSettings()
-    }
-    
-    const handleError = (e) => {
-      console.error('视频播放错误:', e)
-      
-      // 如果播放失败，再次检查是否为网页链接
-      if (!isDirectVideoLink(url)) {
-        Message.info('视频播放失败，检测到网页链接，正在新窗口打开...')
-        window.open(url, '_blank')
-        emit('close') // 关闭播放器
-      } else {
+      const handleError = (e) => {
+        console.error('视频播放错误:', e)
         Message.error('视频播放失败，请检查视频链接或格式')
         emit('error', '视频播放失败')
       }
-    }
+      
+      const handlePlaying = () => {
+        // 立即尝试片头跳过（针对视频刚开始播放的情况）
+        const immediateSkipped = applyIntroSkipImmediate()
+        
+        // 如果立即跳过未执行，则使用常规跳过逻辑
+        if (!immediateSkipped) {
+          applySkipSettings()
+          
+          // 为了确保片头跳过生效，再次检查（短延迟）
+          setTimeout(() => {
+            applySkipSettings()
+          }, 50)
+        }
+      }
+      
+      const handleSeeking = () => {
+        onUserSeekStart()
+      }
+      
+      const handleSeeked = () => {
+        onUserSeekEnd()
+      }
+      
+      // 移除之前的事件监听器（如果有）
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      video.removeEventListener('error', handleError)
+      video.removeEventListener('playing', handlePlaying)
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+      video.removeEventListener('seeking', handleSeeking)
+      video.removeEventListener('seeked', handleSeeked)
+      
+      // 添加新的事件监听器
+      video.addEventListener('loadedmetadata', handleLoadedMetadata)
+      video.addEventListener('error', handleError)
+      video.addEventListener('playing', handlePlaying)
+      video.addEventListener('timeupdate', handleTimeUpdate)
+      video.addEventListener('seeking', handleSeeking)
+      video.addEventListener('seeked', handleSeeked)
+    } else {
+        // 原生视频播放 - 直接设置src
+        video.src = url
+      }
     
-    const handleLoadStart = () => {
-      // 重置片头片尾跳过状态
-      resetSkipState()
-    }
-    
-    const handlePlaying = () => {
-      // 延迟一点应用跳过设置，确保视频已经开始播放
-      setTimeout(() => {
-        applySkipSettings()
-      }, 100)
-    }
-    
-    // 移除之前的事件监听器（如果有）
-    video.removeEventListener('loadedmetadata', handleLoadedMetadata)
-    video.removeEventListener('error', handleError)
-    video.removeEventListener('loadstart', handleLoadStart)
-    video.removeEventListener('playing', handlePlaying)
-    video.removeEventListener('timeupdate', handleTimeUpdate)
-    video.removeEventListener('ended', handleVideoEnded)
-    
-    // 添加新的事件监听器
-    video.addEventListener('loadedmetadata', handleLoadedMetadata)
-    video.addEventListener('error', handleError)
-    video.addEventListener('loadstart', handleLoadStart)
-    video.addEventListener('playing', handlePlaying)
-    video.addEventListener('timeupdate', handleTimeUpdate)
-    video.addEventListener('ended', handleVideoEnded)
-    
-    // 开始加载视频
-    video.load()
+  } catch (error) {
+    console.error('视频加载失败:', error)
+    Message.error('视频加载失败，请重试')
+    emit('error', '视频加载失败')
   }
   
   // 统一添加视频结束事件监听器（避免重复添加）
@@ -533,9 +562,8 @@ watch(() => props.visible, (newVisible) => {
     })
   } else if (!newVisible) {
     // 隐藏时清理资源
-    if (hlsInstance.value) {
-      hlsInstance.value.destroy()
-      hlsInstance.value = null
+    if (mediaPlayerManager.value) {
+      mediaPlayerManager.value.destroy()
     }
   }
 })
@@ -556,9 +584,8 @@ onUnmounted(() => {
     videoPlayer.value.load() // 这会清理所有事件监听器
   }
   
-  if (hlsInstance.value) {
-    hlsInstance.value.destroy()
-    hlsInstance.value = null
+  if (mediaPlayerManager.value) {
+    mediaPlayerManager.value.destroy()
   }
   
   // 清理倒计时定时器

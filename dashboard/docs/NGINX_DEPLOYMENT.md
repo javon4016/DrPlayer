@@ -19,7 +19,7 @@ Vue Router使用`createWebHistory`模式时，路由是通过浏览器的History
 #### 1. 构建应用
 ```bash
 # 使用根目录打包脚本
-yarn build:root
+pnpm build:root
 ```
 
 #### 2. 部署文件
@@ -47,7 +47,7 @@ sudo nano /etc/nginx/sites-available/default
 #### 1. 构建应用
 ```bash
 # 使用子目录打包脚本
-yarn build:apps
+pnpm build:apps
 ```
 
 #### 2. 部署文件

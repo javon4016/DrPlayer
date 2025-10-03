@@ -555,7 +555,9 @@ export default {
             tempSiteExt: site.ext,
             // 标识从专项动作进入
             fromSpecialAction: 'true',
-            actionType: '__detail__'
+            actionType: '__detail__',
+            // 添加来源图片信息，用于详情页图片备用（专项动作通常没有图片）
+            sourcePic: ''
           }
         })
         

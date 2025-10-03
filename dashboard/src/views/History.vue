@@ -372,7 +372,9 @@ const goToDetail = async (item) => {
           // 添加来源页面信息
           sourceRouteName: 'History',
           sourceRouteParams: JSON.stringify({}),
-          sourceRouteQuery: JSON.stringify({})
+          sourceRouteQuery: JSON.stringify({}),
+          // 添加来源图片信息，用于详情页图片备用
+          sourcePic: item.pic
         }
     })
   } catch (error) {

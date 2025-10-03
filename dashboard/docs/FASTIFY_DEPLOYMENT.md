@@ -23,7 +23,7 @@ node build-for-fastify.js
 
 # 方法2：手动设置环境变量
 set VITE_BASE_PATH=/apps/drplayer/
-yarn build
+pnpm build
 ```
 
 ### 2. 复制构建文件

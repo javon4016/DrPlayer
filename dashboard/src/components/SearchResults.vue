@@ -390,7 +390,9 @@ const handleVideoClick = (video) => {
           sourceRouteName: props.sourceRoute?.name,
           sourceRouteParams: JSON.stringify(props.sourceRoute?.params || {}),
           sourceRouteQuery: JSON.stringify(props.sourceRoute?.query || {}),
-          fromSearch: 'true' // 标识来自搜索结果
+          fromSearch: 'true', // 标识来自搜索结果
+          // 添加来源图片信息，用于详情页图片备用
+          sourcePic: video.vod_pic
         }
       });
   }

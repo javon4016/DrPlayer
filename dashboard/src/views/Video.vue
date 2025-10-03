@@ -441,7 +441,9 @@ const handleRefreshList = () => {
            sourceRouteName: route.name,
            sourceRouteParams: JSON.stringify(route.params),
            sourceRouteQuery: JSON.stringify({ ...route.query, activeKey: currentActiveKey.value }),
-           fromSearch: fromSearch // 标识是否来自搜索
+           fromSearch: fromSearch, // 标识是否来自搜索
+           // 添加来源图片信息，用于详情页图片备用
+           sourcePic: video.vod_pic
          }
        });
   }
@@ -504,7 +506,9 @@ const handlePush = async (vodId) => {
         // 传递来源页面信息
         sourceRouteName: route.name,
         sourceRouteParams: JSON.stringify(route.params),
-        sourceRouteQuery: JSON.stringify(route.query)
+        sourceRouteQuery: JSON.stringify(route.query),
+        // 添加来源图片信息，用于详情页图片备用（推送时通常没有图片）
+        sourcePic: ''
       }
     });
     
