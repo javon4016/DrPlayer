@@ -220,7 +220,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
+import mpegts from 'mpegts.js'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { 
@@ -236,6 +237,7 @@ import liveService from '@/api/services/live.js'
 const router = useRouter()
 
 // 响应式数据
+let mpegtsPlayer = null
 const loading = ref(false)
 const error = ref('')
 const liveData = ref(null)
@@ -332,7 +334,6 @@ const selectGroup = (groupName) => {
 const selectChannel = (channel) => {
   selectedChannel.value = channel
   videoError.value = ''
-  
   // 使用nextTick确保DOM更新后再设置线路ID
   nextTick(() => {
     if (channel && channel.routes && channel.routes.length > 0) {
@@ -341,15 +342,44 @@ const selectChannel = (channel) => {
     } else {
       currentRouteId.value = 1
     }
-    
     // 重置视频播放器
     if (videoPlayer.value) {
       videoPlayer.value.load()
     }
+    setupMpegtsPlayer()
   })
 }
 
 // 获取当前频道的播放URL
+function setupMpegtsPlayer() {
+  // 销毁旧播放器
+  if (mpegtsPlayer) {
+    mpegtsPlayer.destroy()
+    mpegtsPlayer = null
+  }
+  const url = getCurrentChannelUrl()
+  if (!url || !videoPlayer.value) return
+  // 判断是否为 mpegts 流（简单判断 .ts 或 mpegts 协议）
+  if (url.endsWith('.ts') || url.includes('mpegts') || url.includes('udpxy') || 
+      url.includes('/udp/') || url.includes('rtp://') || url.includes('udp://')) {
+    if (mpegts.isSupported()) {
+      mpegtsPlayer = mpegts.createPlayer({
+        type: 'mpegts',
+        url
+      })
+      mpegtsPlayer.attachMediaElement(videoPlayer.value)
+      mpegtsPlayer.load()
+      mpegtsPlayer.play()
+    }
+  }
+}
+
+onUnmounted(() => {
+  if (mpegtsPlayer) {
+    mpegtsPlayer.destroy()
+    mpegtsPlayer = null
+  }
+})
 const getCurrentChannelUrl = () => {
   if (!selectedChannel.value) return ''
   
@@ -365,20 +395,17 @@ const getCurrentChannelUrl = () => {
 const switchRoute = (event) => {
   const routeId = Number(event.target ? event.target.value : event)
   if (!selectedChannel.value || !selectedChannel.value.routes) return
-  
   const route = selectedChannel.value.routes.find(r => r.id === routeId)
   if (route) {
     currentRouteId.value = routeId
     videoError.value = ''
-    
-    // 重新加载视频
     nextTick(() => {
       if (videoPlayer.value) {
         videoPlayer.value.src = route.url
         videoPlayer.value.load()
       }
+      setupMpegtsPlayer()
     })
-    
     Message.success(`已切换到${route.name}`)
   }
 }
@@ -442,6 +469,7 @@ const retryVideo = () => {
   if (videoPlayer.value) {
     videoError.value = ''
     videoPlayer.value.load()
+    setupMpegtsPlayer()
   }
 }
 

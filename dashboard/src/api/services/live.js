@@ -126,10 +126,12 @@ class LiveService {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-
+      // 跳过空行
+      if (!line) continue;
+      
       if (line.startsWith('#EXTINF:')) {
         // 解析频道信息 - 修复正则表达式来正确处理属性和频道名称
-        const match = line.match(/#EXTINF:(-?\d+),(.*)$/)
+        const match = line.match(/^#EXTINF:([-\.\d]+)\s*(.*)$/);
         if (match) {
           const duration = match[1]
           const fullStr = match[2].trim()
