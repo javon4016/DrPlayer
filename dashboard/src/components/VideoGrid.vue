@@ -114,7 +114,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['load-more', 'scroll-bottom', 'refresh-list']);
+const emit = defineEmits(['load-more', 'scroll-bottom', 'refresh-list', 'special-action']);
 
 const router = useRouter();
 const visitedStore = useVisitedStore();
@@ -417,29 +417,12 @@ const handleActionSubmit = (result) => {
 const handleSpecialAction = (actionType, actionData) => {
   console.log('VideoGrid处理专项动作:', actionType, actionData);
   
-  switch (actionType) {
-    case 'self-search':
-      // 处理源内搜索
-      console.log('执行源内搜索:', actionData);
-      break;
-    case 'detail':
-      // 处理详情页跳转
-      console.log('跳转到详情页:', actionData);
-      break;
-    case 'ktv-player':
-      // 处理KTV播放
-      console.log('启动KTV播放:', actionData);
-      break;
-    case 'refresh-list':
-      // 处理刷新列表
-      console.log('刷新列表:', actionData);
-      // 可以触发父组件的刷新事件
-      emit('refresh-list');
-      break;
-    default:
-      console.log('未知的专项动作:', actionType, actionData);
-      break;
-  }
+  // 将special-action事件传递给父组件处理
+  emit('special-action', actionType, actionData);
+  
+  // 关闭ActionRenderer
+  showActionRenderer.value = false;
+  currentActionData.value = null;
 };
 
 // 暴露方法给父组件

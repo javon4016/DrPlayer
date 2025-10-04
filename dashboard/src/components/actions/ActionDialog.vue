@@ -110,9 +110,22 @@ export default {
     customClass: {
       type: String,
       default: ''
+    },
+    // T4接口相关属性
+    module: {
+      type: String,
+      default: ''
+    },
+    extend: {
+      type: Object,
+      default: () => ({})
+    },
+    apiUrl: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['update:visible', 'close', 'open', 'opened', 'closed'],
+  emits: ['update:visible', 'close', 'open', 'opened', 'closed', 'toast', 'reset'],
   setup(props, { emit }) {
     const isClosing = ref(false)
     const isMobile = ref(false)

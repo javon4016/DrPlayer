@@ -5,20 +5,23 @@
     :width="config.width || 600"
     :height="config.height"
     :canceled-on-touch-outside="!config.keep"
+    :module="module"
+    :extend="extend"
+    :api-url="apiUrl"
     @close="handleCancel"
+    @toast="(message, type) => emit('toast', message, type)"
+    @reset="() => emit('reset')"
   >
     <div class="multi-input-action-modern">
       <!-- 消息区域 -->
       <div v-if="config.msg" class="message-section">
         <div class="message-content">
           <div class="message-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="m2 17 10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="m2 12 10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
             </svg>
           </div>
-          <p class="message-text">{{ config.msg }}</p>
+          <p class="message-text">{{ currentMessage }}</p>
         </div>
       </div>
 
@@ -36,65 +39,65 @@
 
       <!-- 输入项列表 -->
       <div class="inputs-section">
-        <div class="inputs-grid">
+        <div class="inputs-container">
           <div
             v-for="(input, index) in inputItems"
             :key="input.id || index"
-            class="input-card"
+            class="input-item"
           >
-            <!-- 输入项头部 -->
-            <div class="input-card-header">
-              <div class="input-label-group">
-                <label v-if="input.name" class="input-label-modern">
-                  {{ input.name }}
-                  <span v-if="input.required" class="required-indicator">*</span>
-                </label>
-                <div v-if="input.help" class="input-help-text">
-                  {{ input.help }}
-                </div>
+            <!-- 输入项标签 -->
+            <div v-if="input.name" class="input-label-container">
+              <label class="input-label">
+                {{ input.name }}
+                <span v-if="input.required" class="required-indicator">*</span>
+              </label>
+              <div v-if="input.help" class="input-help">
+                {{ input.help }}
               </div>
-              
-              <!-- 删除按钮（仅增强模式且可删除时显示） -->
-              <button
-                v-if="isEnhanced && inputItems.length > 1"
-                class="remove-btn"
-                @click="removeInputItem(index)"
-                title="删除此项"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
             </div>
 
             <!-- 输入区域 -->
-            <div class="input-area">
-              <!-- 单行输入 -->
-              <div v-if="!input.multiLine || input.multiLine <= 1" class="input-wrapper-modern">
-                <input
-                  v-model="inputValues[index]"
-                  :type="getInputType(input)"
-                  :placeholder="input.tip || input.name"
-                  class="input-field-modern"
-                  :class="{ 
-                    error: inputErrors[index],
-                    success: !inputErrors[index] && inputValues[index] && input.required
-                  }"
-                  @input="handleInputChange(index, $event)"
-                  @blur="validateInput(index)"
-                />
-                <div class="input-actions">
+            <div class="input-group">
+              <!-- 快速选择 - 在输入框上方 -->
+              <div v-if="input.selectData" class="quick-select">
+                <div class="quick-select-options">
                   <button
-                    v-if="inputValues[index] && inputValues[index].length > 20"
-                    class="expand-btn"
-                    @click="openTextEditor(index)"
-                    title="打开大文本编辑器"
+                    v-for="option in parseSelectData(input.selectData)"
+                    :key="option.value"
+                    class="quick-select-tag"
+                    @click="selectQuickOption(index, option)"
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    {{ option.name }}
                   </button>
+                </div>
+              </div>
+
+              <!-- 单行输入 -->
+              <div v-if="!input.multiLine || input.multiLine <= 1" class="input-container">
+                <div class="input-wrapper-modern">
+                  <input
+                    v-model="inputValues[index]"
+                    :type="getInputType(input)"
+                    :placeholder="input.tip || input.name"
+                    class="input-field-modern"
+                    :class="{ 
+                      error: inputErrors[index],
+                      success: !inputErrors[index] && inputValues[index] && input.required
+                    }"
+                    @input="handleInputChange(index, $event)"
+                    @blur="validateInput(index)"
+                  />
+                  <div class="input-actions">
+                    <button
+                      class="expand-btn"
+                      @click="openTextEditor(index)"
+                      title="打开大文本编辑器"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 7h14v2H5zm0 4h14v2H5zm0 4h10v2H5z"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -114,47 +117,46 @@
                     @blur="validateInput(index)"
                   ></textarea>
                   <button
-                    class="textarea-expand"
+                    class="expand-btn textarea-expand"
                     @click="openTextEditor(index)"
                     title="打开大文本编辑器"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 7h14v2H5zm0 4h14v2H5zm0 4h10v2H5z"/>
                     </svg>
                   </button>
                 </div>
               </div>
 
               <!-- 状态指示器 -->
-              <div v-if="inputErrors[index] || (inputValues[index] && inputValues[index].length > 0)" class="input-status">
+              <div class="input-status">
+                <!-- 错误提示 -->
                 <div v-if="inputErrors[index]" class="error-message">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                    <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2"/>
-                    <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2"/>
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293-1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
                   </svg>
-                  {{ inputErrors[index] }}
+                  <span>{{ inputErrors[index] }}</span>
                 </div>
-                <div v-if="inputValues[index]" class="char-count">
+
+                <!-- 字符计数 -->
+                <div v-if="inputValues[index] && inputValues[index].length > 0" class="char-count">
                   {{ inputValues[index].length }} 字符
                 </div>
               </div>
             </div>
 
-            <!-- 快速选择区域 -->
-            <div v-if="input.selectData" class="quick-select-section">
-              <div class="quick-select-label">快速选择</div>
-              <div class="quick-select-grid">
-                <button
-                  v-for="option in parseSelectData(input.selectData)"
-                  :key="option.value"
-                  class="quick-select-item"
-                  @click="selectQuickOption(index, option)"
-                >
-                  {{ option.name }}
-                </button>
-              </div>
-            </div>
+            <!-- 删除按钮（仅增强模式且可删除时显示） -->
+            <button
+              v-if="isEnhanced && inputItems.length > 1"
+              class="remove-btn"
+              @click="removeInputItem(index)"
+              title="删除此项"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -231,11 +233,16 @@
           class="btn-modern btn-secondary"
           @click="handleCancel"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/>
-            <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2"/>
-          </svg>
-          取消
+          <span>取消</span>
+        </button>
+        
+        <!-- 重置按钮 - 仅在 button=3 时显示 -->
+        <button
+          v-if="showResetButton"
+          class="btn-modern btn-secondary"
+          @click="handleReset"
+        >
+          <span>重置</span>
         </button>
         
         <!-- 确定按钮 -->
@@ -246,10 +253,10 @@
           :disabled="!isValid"
           @click="handleSubmit"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <polyline points="20,6 9,17 4,12" stroke="currentColor" stroke-width="2"/>
+          <span>确定</span>
+          <svg v-if="isValid" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
           </svg>
-          确定
         </button>
       </div>
     </template>
@@ -260,7 +267,6 @@
     :visible="showTextEditor"
     title="大文本编辑器"
     :width="800"
-    :height="600"
     @close="closeTextEditor"
   >
     <div class="text-editor">
@@ -275,16 +281,9 @@
     <template #footer>
       <div class="modern-footer">
         <button class="btn-modern btn-secondary" @click="closeTextEditor">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/>
-            <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2"/>
-          </svg>
           取消
         </button>
         <button class="btn-modern btn-primary" @click="saveEditorText">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <polyline points="20,6 9,17 4,12" stroke="currentColor" stroke-width="2"/>
-          </svg>
           确定
         </button>
       </div>
@@ -301,6 +300,10 @@ import {
   debounce,
   normalizeButtonType 
 } from './types.js'
+import { executeAction } from '@/api/modules/module.js'
+import { showToast } from '@/stores/toast.js'
+import siteService from '@/api/services/site'
+import { useRouter } from 'vue-router'
 
 export default {
   name: 'MultiInputAction',
@@ -315,15 +318,30 @@ export default {
     visible: {
       type: Boolean,
       default: true
+    },
+    // T4接口调用相关属性
+    module: {
+      type: String,
+      default: ''
+    },
+    extend: {
+      type: Object,
+      default: () => ({})
+    },
+    apiUrl: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['submit', 'cancel', 'close', 'action'],
+  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset', 'special-action'],
   setup(props, { emit }) {
+    const router = useRouter()
     const inputValues = ref([])
     const inputErrors = ref([])
     const inputItems = ref([])
     const timeLeft = ref(0)
     const timer = ref(null)
+    const currentMessage = ref(props.config.msg || '')
 
     // 大文本编辑器相关
     const textEditorRef = ref(null)
@@ -338,12 +356,17 @@ export default {
 
     const showOkButton = computed(() => {
       const button = normalizeButtonType(props.config.button)
-      return button === ButtonType.OK_CANCEL || button === ButtonType.OK_ONLY
+      return button === ButtonType.OK_CANCEL || button === ButtonType.OK_ONLY || button === ButtonType.CUSTOM
     })
 
     const showCancelButton = computed(() => {
       const button = normalizeButtonType(props.config.button)
-      return button === ButtonType.OK_CANCEL || button === ButtonType.CANCEL_ONLY
+      return button === ButtonType.OK_CANCEL || button === ButtonType.CANCEL_ONLY || button === ButtonType.CUSTOM
+    })
+
+    const showResetButton = computed(() => {
+      const button = normalizeButtonType(props.config.button)
+      return button === ButtonType.CUSTOM
     })
 
     const isValid = computed(() => {
@@ -439,6 +462,179 @@ export default {
       validateInput(index)
     }, 300)
 
+    // T4接口调用
+    const callT4Action = async (actionId, inputData) => {
+      if (!props.module && !props.apiUrl) {
+        console.warn('未提供module或apiUrl，无法调用T4接口')
+        return null
+      }
+      try {
+        const actionData = {
+          action:actionId,
+          value: JSON.stringify(inputData)
+        }
+        // 添加扩展参数
+        if (props.extend && props.extend.ext) {
+          actionData.extend = props.extend.ext
+        }
+
+        // 添加API URL
+        if (props.apiUrl) {
+          actionData.apiUrl = props.apiUrl
+        }
+        console.log('InputAction调用T4接口:', {
+          module: props.module,
+          actionData,
+          apiUrl: props.apiUrl
+        })
+
+        const response = await executeAction(props.module, actionData)
+        return response
+      } catch (error) {
+        console.error('T4接口调用失败:', error)
+        throw error
+      }
+    }
+
+    // 专项动作处理函数
+    const handleDetailAction = async (actionData) => {
+      try {
+        const { skey, ids } = actionData
+        
+        if (!skey || !ids) {
+          showToast('详情页跳转参数不完整', 'error')
+          return
+        }
+        
+        const site = siteService.getSiteByKey(skey)
+        if (!site) {
+          showToast(`未找到站源: ${skey}`, 'error')
+          return
+        }
+        
+        router.push({
+          name: 'VideoDetail',
+          params: { id: ids },
+          query: {
+            tempSiteName: site.name,
+            tempSiteApi: site.api,
+            tempSiteKey: site.key,
+            tempSiteExt: site.ext,
+            fromSpecialAction: 'true',
+            actionType: '__detail__',
+            sourcePic: ''
+          }
+        })
+        
+        showToast(`正在加载 ${site.name} 的详情...`, 'info')
+        
+      } catch (error) {
+        console.error('详情页跳转失败:', error)
+        showToast('详情页跳转失败', 'error')
+      }
+    }
+    
+    const handleCopyAction = async (actionData, toastData) => {
+      try {
+        const { content } = actionData
+        
+        if (!content) {
+          showToast('没有可复制的内容', 'error')
+          return
+        }
+        
+        await navigator.clipboard.writeText(content)
+        if (!toastData) {
+          showToast('已复制到剪贴板', 'success')
+        }
+        
+      } catch (error) {
+        console.error('复制失败:', error)
+        showToast('复制失败', 'error')
+      }
+    }
+    
+    const handleSelfSearchAction = async (actionData) => {
+      try {
+        const { skey, name, tid, flag, folder } = actionData
+        
+        const searchParams = {
+          name: name || '搜索',
+          tid: tid || '',
+          flag: flag || '',
+          folder: folder || ''
+        }
+        
+        if (skey) {
+          const site = siteService.getSiteByKey(skey)
+          if (site) {
+            siteService.setCurrentSite(skey)
+            showToast(`已切换到 ${site.name}`, 'info')
+          }
+        }
+        
+        console.log('执行源内搜索:', searchParams)
+        showToast('正在执行源内搜索...', 'info')
+        
+        // 触发special-action事件，传递给父组件处理
+        emit('special-action', '__self_search__', {
+          tid: searchParams.tid,
+          name: searchParams.name,
+          type_id: searchParams.tid,
+          type_name: searchParams.name,
+          actionData: searchParams
+        })
+        
+      } catch (error) {
+        console.error('源内搜索失败:', error)
+        showToast('源内搜索失败', 'error')
+      }
+    }
+    
+    const handleRefreshListAction = async (actionData) => {
+      try {
+        console.log('执行刷新列表:', actionData)
+        
+        const currentRoute = router.currentRoute.value
+        const routeName = currentRoute.name
+        
+        switch (routeName) {
+          case 'Video':
+            window.dispatchEvent(new CustomEvent('refreshVideoList', {
+              detail: actionData
+            }))
+            showToast('视频列表已刷新', 'success')
+            break
+            
+          case 'Live':
+            window.dispatchEvent(new CustomEvent('refreshLiveList', {
+              detail: actionData
+            }))
+            showToast('直播列表已刷新', 'success')
+            break
+            
+          default:
+            showToast('列表已刷新', 'success')
+            break
+        }
+        
+      } catch (error) {
+        console.error('刷新列表失败:', error)
+        showToast('刷新列表失败', 'error')
+      }
+    }
+    
+    const handleKtvPlayerAction = async (actionData) => {
+      try {
+        console.log('执行KTV播放:', actionData)
+        showToast('正在启动KTV播放...', 'info')
+        
+      } catch (error) {
+        console.error('KTV播放失败:', error)
+        showToast('KTV播放失败', 'error')
+      }
+    }
+
     // 事件处理
     const handleInputChange = (index, event) => {
       const value = event.target.value
@@ -446,7 +642,7 @@ export default {
       debouncedValidate(index)
     }
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
       // 验证所有输入
       let allValid = true
       for (let i = 0; i < inputItems.value.length; i++) {
@@ -465,12 +661,96 @@ export default {
         result[key] = inputValues.value[index]
       })
 
+      // 调用T4接口
+      if (props.config.actionId) {
+        try {
+          console.log('多输入框T4接口调用:', props.config.actionId, result)
+          const response = await callT4Action(props.config.actionId, result)
+          
+          // 检查响应是否为普通文本
+          if (typeof response === 'string') {
+            showToast(response, 'success')
+            emit('close')
+            return
+          }
+          
+          // 处理JSON格式的专项动作响应
+          if (response && response.action) {
+            const actionData = response.action
+            const toastData = response.toast
+            
+            if (toastData) {
+              showToast(toastData, 'success')
+            }
+            
+            switch (actionData.actionId) {
+              case '__keep__':
+                if (actionData.msg) {
+                  currentMessage.value = actionData.msg
+                }
+                if (actionData.reset) {
+                  inputValues.value = inputValues.value.map(() => '')
+                  inputErrors.value = inputErrors.value.map(() => '')
+                  emit('reset')
+                }
+                return
+                
+              case '__detail__':
+                await handleDetailAction(actionData)
+                emit('close')
+                return
+                
+              case '__copy__':
+                await handleCopyAction(actionData, toastData)
+                emit('close')
+                return
+                
+              case '__self_search__':
+                await handleSelfSearchAction(actionData)
+                emit('close')
+                return
+                
+              case '__refresh_list__':
+                await handleRefreshListAction(actionData)
+                emit('close')
+                return
+                
+              case '__ktvplayer__':
+                await handleKtvPlayerAction(actionData)
+                emit('close')
+                return
+                
+              default:
+                if (actionData.type) {
+                  console.log('检测到普通动作，触发新的ActionRenderer:', actionData)
+                  emit('action', actionData)
+                  return
+                } else {
+                  console.warn('未知的专项动作:', actionData.actionId)
+                }
+                break
+            }
+          }
+          
+        } catch (error) {
+          console.error('多输入框T4接口调用失败:', error)
+          showToast('操作失败，请重试', 'error')
+          return
+        }
+      }
+
       emit('submit', result)
     }
 
     const handleCancel = () => {
       emit('cancel')
       emit('close')
+    }
+
+    const handleReset = () => {
+      inputValues.value = inputValues.value.map(() => '')
+      inputErrors.value = inputErrors.value.map(() => '')
+      emit('reset')
     }
 
     // 大文本编辑器方法
@@ -540,7 +820,6 @@ export default {
         }
       })
       
-      // 验证所有输入
       inputItems.value.forEach((_, index) => {
         validateInput(index)
       })
@@ -571,6 +850,7 @@ export default {
     // 监听配置变化
     watch(() => props.config, (newConfig) => {
       initializeInputs()
+      currentMessage.value = newConfig.msg || ''
       
       if (newConfig.timeout) {
         startTimeout()
@@ -601,26 +881,28 @@ export default {
       inputErrors,
       inputItems,
       timeLeft,
+      currentMessage,
       isEnhanced,
       showOkButton,
       showCancelButton,
+      showResetButton,
       isValid,
       getInputType,
       validateInput,
       handleInputChange,
       handleSubmit,
       handleCancel,
+      handleReset,
       selectQuickOption,
       addInputItem,
       removeInputItem,
       clearAll,
       fillExample,
       parseSelectData,
-      // 大文本编辑器相关
-      textEditorRef,
+      // 大文本编辑器
       showTextEditor,
+      textEditorRef,
       editorText,
-      currentEditIndex,
       openTextEditor,
       closeTextEditor,
       saveEditorText
@@ -635,174 +917,159 @@ export default {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: 1.5rem;
 }
 
 /* 消息区域 */
 .message-section {
-  background: linear-gradient(135deg, var(--glass-bg-primary), var(--glass-bg-secondary));
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-card);
+  margin-bottom: 0.5rem;
 }
 
 .message-content {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-md);
+  gap: 0.75rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--ds-radius-lg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .message-icon {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  background: var(--gradient-primary);
-  border-radius: var(--radius-md);
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow: var(--shadow-sm);
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: var(--ds-radius-md);
+  color: rgb(59, 130, 246);
 }
 
 .message-text {
   margin: 0;
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.8);
+  font-size: 0.875rem;
+  line-height: 1.5;
   font-weight: 500;
 }
 
 /* 媒体区域 */
 .media-section {
-  display: flex;
-  justify-content: center;
+  margin-bottom: 0.5rem;
 }
 
 .image-container {
-  background: var(--glass-bg-light);
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
+  text-align: center;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--ds-radius-lg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .action-image-modern {
   max-width: 100%;
   height: auto;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--ds-radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all var(--ds-duration-fast) ease;
 }
 
 /* 输入区域 */
 .inputs-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.inputs-grid {
-  display: grid;
-  gap: var(--spacing-md);
-}
-
-.input-card {
-  background: var(--glass-bg-light);
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
-  box-shadow: var(--shadow-card);
-  transition: all var(--transition-normal);
-  position: relative;
-  overflow: hidden;
-}
-
-.input-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--gradient-primary);
-  opacity: 0;
-  transition: opacity var(--transition-normal);
-}
-
-.input-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--primary-color);
-}
-
-.input-card:hover::before {
-  opacity: 1;
-}
-
-/* 输入卡片头部 */
-.input-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--spacing-md);
-}
-
-.input-label-group {
   flex: 1;
 }
 
-.input-label-modern {
+.inputs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-item {
+  position: relative;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--ds-radius-lg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all var(--ds-duration-fast) ease;
+}
+
+.input-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.input-label-container {
+  margin-bottom: 0.5rem;
+}
+
+.input-label {
   display: block;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  margin-bottom: var(--spacing-xs);
+  color: rgba(0, 0, 0, 0.8);
+  margin-bottom: 0.25rem;
 }
 
 .required-indicator {
-  color: var(--danger-color);
-  margin-left: 4px;
-  font-weight: 700;
+  color: rgb(239, 68, 68);
+  margin-left: 0.25rem;
 }
 
-.input-help-text {
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
+.input-help {
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.6);
   line-height: 1.4;
 }
 
-.remove-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: var(--glass-bg-danger);
-  color: var(--danger-color);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-normal);
-  opacity: 0.7;
-}
-
-.remove-btn:hover {
-  opacity: 1;
-  background: var(--danger-color);
-  color: white;
-  transform: scale(1.1);
-}
-
-/* 输入区域 */
-.input-area {
+.input-group {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 0.5rem;
+}
+
+/* 快速选择 */
+.quick-select {
+  margin-bottom: 0.75rem;
+}
+
+.quick-select-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.quick-select-tag {
+  padding: 0.375rem 0.75rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--ds-radius-full);
+  color: rgb(59, 130, 246);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--ds-duration-fast) ease;
+  white-space: nowrap;
+}
+
+.quick-select-tag:hover {
+  background: rgb(59, 130, 246);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* 输入框样式 */
+.input-container {
+  position: relative;
 }
 
 .input-wrapper-modern {
@@ -813,58 +1080,58 @@ export default {
 
 .input-field-modern {
   width: 100%;
-  padding: var(--spacing-md);
-  padding-right: 50px;
-  border: 2px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  transition: all var(--transition-normal);
+  padding: 0.75rem;
+  padding-right: 3rem;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--ds-radius-md);
+  background: rgba(255, 255, 255, 0.8);
+  color: rgba(0, 0, 0, 0.9);
+  font-size: 0.875rem;
+  transition: all var(--ds-duration-fast) ease;
   outline: none;
 }
 
 .input-field-modern:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px var(--primary-color-alpha);
-  background: var(--bg-elevated);
+  border-color: rgb(59, 130, 246);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: white;
 }
 
 .input-field-modern.error {
-  border-color: var(--danger-color);
-  box-shadow: 0 0 0 3px var(--danger-color-alpha);
+  border-color: rgb(239, 68, 68);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
 
 .input-field-modern.success {
-  border-color: var(--success-color);
-  box-shadow: 0 0 0 3px var(--success-color-alpha);
+  border-color: rgb(34, 197, 94);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
 }
 
 .input-actions {
   position: absolute;
-  right: var(--spacing-sm);
+  right: 0.5rem;
   display: flex;
-  gap: var(--spacing-xs);
+  gap: 0.25rem;
 }
 
 .expand-btn {
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   border: none;
-  background: var(--glass-bg-primary);
-  color: var(--primary-color);
-  border-radius: var(--radius-sm);
+  background: rgba(59, 130, 246, 0.1);
+  color: rgb(59, 130, 246);
+  border-radius: var(--ds-radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-normal);
+  transition: all var(--ds-duration-fast) ease;
   opacity: 0.8;
 }
 
 .expand-btn:hover {
   opacity: 1;
-  background: var(--primary-color);
+  background: rgb(59, 130, 246);
   color: white;
   transform: scale(1.1);
 }
@@ -876,64 +1143,93 @@ export default {
 
 .textarea-wrapper-modern {
   position: relative;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--ds-radius-lg);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  transition: all var(--ds-duration-fast) ease;
+  overflow: hidden;
+}
+
+.textarea-wrapper-modern:focus-within {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 0 0 4px rgba(59, 130, 246, 0.1),
+    0 8px 25px rgba(59, 130, 246, 0.15);
+  transform: translateY(-1px);
 }
 
 .textarea-field-modern {
   width: 100%;
-  padding: var(--spacing-md);
-  padding-bottom: 40px;
-  border: 2px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  font-family: inherit;
-  line-height: 1.5;
-  resize: vertical;
-  min-height: 80px;
-  transition: all var(--transition-normal);
+  border: none;
   outline: none;
+  background: transparent;
+  padding: 1rem 1.25rem;
+  padding-bottom: 2.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.85);
+  font-weight: 500;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 4rem;
+  box-sizing: border-box;
+  transition: all var(--ds-duration-fast) ease;
+}
+
+.textarea-field-modern::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+  font-weight: 400;
 }
 
 .textarea-field-modern:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px var(--primary-color-alpha);
-  background: var(--bg-elevated);
+  /* 焦点样式由wrapper处理 */
 }
 
 .textarea-field-modern.error {
-  border-color: var(--danger-color);
-  box-shadow: 0 0 0 3px var(--danger-color-alpha);
+  color: rgb(239, 68, 68);
+}
+
+.textarea-field-modern.error ~ .textarea-expand {
+  border-left-color: rgba(239, 68, 68, 0.3);
+}
+
+.textarea-wrapper-modern:has(.error) {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(254, 242, 242, 0.8);
 }
 
 .textarea-field-modern.success {
-  border-color: var(--success-color);
-  box-shadow: 0 0 0 3px var(--success-color-alpha);
+  color: rgb(34, 197, 94);
+}
+
+.textarea-wrapper-modern:has(.success) {
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .textarea-expand {
   position: absolute;
-  bottom: var(--spacing-sm);
-  right: var(--spacing-sm);
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: var(--glass-bg-primary);
-  color: var(--primary-color);
-  border-radius: var(--radius-sm);
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.5rem;
+  border-radius: var(--ds-radius-md);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(0, 0, 0, 0.5);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-normal);
-  opacity: 0.8;
+  transition: all var(--ds-duration-fast) ease;
 }
 
 .textarea-expand:hover {
-  opacity: 1;
-  background: var(--primary-color);
-  color: white;
-  transform: scale(1.1);
+  background: rgba(59, 130, 246, 0.1);
+  color: rgb(59, 130, 246);
 }
 
 /* 状态指示器 */
@@ -941,104 +1237,87 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: var(--spacing-xs);
+  margin-top: 0.5rem;
+  min-height: 1.25rem;
 }
 
 .error-message {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  color: var(--danger-color);
-  font-size: var(--font-size-sm);
+  gap: 0.375rem;
+  color: rgb(239, 68, 68);
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
 .char-count {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.5);
   font-weight: 500;
 }
 
-/* 快速选择区域 */
-.quick-select-section {
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--border-color-light);
-}
-
-.quick-select-label {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: var(--spacing-sm);
-}
-
-.quick-select-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-.quick-select-item {
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--glass-bg-secondary);
-  border: 1px solid var(--border-color-light);
-  border-radius: var(--radius-full);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+/* 删除按钮 */
+.remove-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(239, 68, 68);
+  border-radius: var(--ds-radius-sm);
   cursor: pointer;
-  transition: all var(--transition-normal);
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--ds-duration-fast) ease;
+  opacity: 0.7;
 }
 
-.quick-select-item:hover {
-  background: var(--primary-color);
+.remove-btn:hover {
+  opacity: 1;
+  background: rgb(239, 68, 68);
   color: white;
-  border-color: var(--primary-color);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  transform: scale(1.1);
 }
 
 /* 增强功能区域 */
 .enhanced-section {
-  background: var(--glass-bg-light);
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-card);
+  padding: 1rem;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--ds-radius-lg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .enhanced-controls {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  gap: 0.75rem;
   align-items: center;
 }
 
 .batch-controls {
   display: flex;
-  gap: var(--spacing-md);
-  flex-wrap: wrap;
-  justify-content: center;
+  gap: 0.5rem;
 }
 
-/* 超时区域 */
+/* 超时提示 */
 .timeout-section {
-  margin-bottom: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--ds-radius-lg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .timeout-indicator {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(251, 191, 36, 0.1) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  border-radius: var(--ds-radius-lg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .timeout-icon {
@@ -1047,7 +1326,6 @@ export default {
 }
 
 .timeout-text {
-  flex: 1;
   font-size: 0.875rem;
   font-weight: 500;
   color: rgba(0, 0, 0, 0.8);
@@ -1055,17 +1333,16 @@ export default {
 
 .timeout-progress {
   flex: 1;
-  height: 4px;
+  height: 0.25rem;
   background: rgba(245, 158, 11, 0.2);
-  border-radius: 2px;
+  border-radius: var(--ds-radius-full);
   overflow: hidden;
 }
 
 .timeout-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, rgb(245, 158, 11), rgb(251, 191, 36));
-  border-radius: 2px;
-  transition: width var(--ds-duration-normal) ease;
+  background: rgb(245, 158, 11);
+  transition: width 1s linear;
 }
 
 /* 现代化底部 */
@@ -1150,158 +1427,103 @@ export default {
   transform: translateY(0);
 }
 
+.btn-modern.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 /* 大文本编辑器 */
 .text-editor {
-  height: 100%;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  overflow: hidden;
 }
 
 .text-editor-textarea {
   flex: 1;
   width: 100%;
-  border: 2px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-lg);
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: var(--font-size-md);
+  height: 300px; /* 设置固定高度，避免溢出 */
+  max-height: 400px; /* 设置最大高度限制 */
+  padding: 1.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--ds-radius-lg);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  font-family: inherit;
+  font-size: 0.875rem;
   line-height: 1.6;
+  color: rgba(0, 0, 0, 0.85);
   resize: none;
   outline: none;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  transition: all var(--transition-normal);
+  overflow-y: auto; /* 添加滚动条 */
+  box-sizing: border-box; /* 确保padding包含在尺寸内 */
+  transition: all var(--ds-duration-fast) ease;
 }
 
 .text-editor-textarea:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px var(--primary-color-alpha);
-  background: var(--bg-elevated);
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 0 0 4px rgba(59, 130, 246, 0.1),
+    0 8px 25px rgba(59, 130, 246, 0.15);
 }
 
-/* 动画 */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+.text-editor-textarea::placeholder {
+  color: rgba(0, 0, 0, 0.4);
 }
 
 /* 响应式设计 */
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .multi-input-action-modern {
-    gap: var(--spacing-md);
+    gap: 1rem;
   }
   
-  .message-content {
-    flex-direction: column;
-    text-align: center;
-  }
-  
-  .input-card {
-    padding: var(--spacing-md);
-  }
-  
-  .input-card-header {
-    flex-direction: column;
-    gap: var(--spacing-sm);
-  }
-  
-  .remove-btn {
-    align-self: flex-end;
+  .input-item {
+    padding: 0.75rem;
   }
   
   .enhanced-controls {
-    gap: var(--spacing-sm);
+    flex-direction: column;
+    align-items: stretch;
   }
   
   .batch-controls {
     flex-direction: column;
-    width: 100%;
-  }
-  
-  .batch-controls .btn-modern {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .quick-select-grid {
-    gap: var(--spacing-xs);
-  }
-  
-  .quick-select-item {
-    font-size: var(--font-size-xs);
-    padding: var(--spacing-xs) var(--spacing-sm);
-  }
-  
-  .timeout-indicator {
-    flex-direction: column;
-    text-align: center;
-    gap: var(--spacing-sm);
   }
   
   .modern-footer {
     flex-direction: column-reverse;
-    gap: var(--spacing-sm);
   }
   
-  .modern-footer .btn-modern {
-    width: 100%;
+  .btn-modern {
     justify-content: center;
   }
 }
 
-/* 深色模式适配 */
-@media (prefers-color-scheme: dark) {
-  .input-card::before {
-    background: var(--gradient-primary-dark);
-  }
-  
-  .message-icon {
-    background: var(--gradient-primary-dark);
-  }
-  
-  .timeout-icon {
-    background: var(--warning-color-dark);
-  }
-  
-  .timeout-text {
-    color: var(--warning-color-dark);
-  }
-}
-
-/* 高对比度模式 */
-@media (prefers-contrast: high) {
-  .input-card {
-    border-width: 2px;
-  }
-  
-  .input-field-modern,
-  .textarea-field-modern {
-    border-width: 3px;
-  }
-  
-  .btn-modern {
-    border-width: 2px;
-  }
-}
-
-/* 减少动画模式 */
+/* 减少动画效果（用户偏好） */
 @media (prefers-reduced-motion: reduce) {
-  .input-card,
-  .btn-modern,
-  .quick-select-item,
-  .expand-btn,
-  .textarea-expand,
-  .remove-btn {
-    transition: none;
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
   
-  .timeout-icon {
-    animation: none;
+  .btn-modern:hover {
+    transform: none;
   }
   
-  .btn-modern::before {
-    display: none;
+  .expand-btn:hover,
+  .textarea-expand:hover,
+  .remove-btn:hover {
+    transform: none;
+  }
+  
+  .quick-select-tag:hover {
+    transform: none;
   }
 }
 </style>

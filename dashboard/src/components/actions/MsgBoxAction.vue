@@ -5,7 +5,12 @@
     :width="config.width || 480"
     :height="config.height"
     :canceled-on-touch-outside="!config.keep"
+    :module="module"
+    :extend="extend"
+    :api-url="apiUrl"
     @close="handleClose"
+    @toast="(message, type) => emit('toast', message, type)"
+    @reset="() => emit('reset')"
   >
     <div class="msgbox-action-modern">
       <!-- 图标区域 -->
@@ -221,9 +226,22 @@ export default {
     visible: {
       type: Boolean,
       default: true
+    },
+    // T4接口调用相关属性
+    module: {
+      type: String,
+      default: ''
+    },
+    extend: {
+      type: Object,
+      default: () => ({})
+    },
+    apiUrl: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['submit', 'cancel', 'close', 'action'],
+  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset'],
   setup(props, { emit }) {
     const timeLeft = ref(0)
     const timer = ref(null)

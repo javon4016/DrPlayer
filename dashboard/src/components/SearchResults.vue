@@ -463,7 +463,7 @@ const handleSpecialAction = (actionType, actionData) => {
   console.log('处理专项动作:', actionType, actionData);
   
   switch (actionType) {
-    case 'self-search':
+    case '__self_search__':
       // 处理源内搜索
       console.log('执行源内搜索:', actionData);
       break;

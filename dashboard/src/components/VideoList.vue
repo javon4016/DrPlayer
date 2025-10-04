@@ -8,16 +8,36 @@
       :activeKey="activeKey"
       :filters="props.classList?.filters || {}"
       :selectedFilters="selectedFilters"
+      :specialCategoryState="props.specialCategoryState"
       @tab-change="handleTabChange"
       @open-category-modal="openCategoryModal"
       @toggle-filter="handleToggleFilter"
       @reset-filters="handleResetFilters"
+      @close-special-category="() => emit('close-special-category')"
     />
 
     <!-- 内容区域 -->
     <div class="content-area">
+      <!-- 特殊分类内容 -->
+      <div v-if="specialCategoryState.isActive" class="tab-content">
+        <VideoGrid
+          :videos="listData[specialCategoryState.categoryData?.type_id] || []"
+          :loading="loadingMore[specialCategoryState.categoryData?.type_id] || false"
+          :hasMore="pageData[specialCategoryState.categoryData?.type_id]?.hasNext || false"
+          :statsText="`${specialCategoryState.categoryData?.type_name || '特殊分类'}：共 ${listData[specialCategoryState.categoryData?.type_id]?.length || 0} 条`"
+          :sourceRoute="props.sourceRoute"
+          :module="props.module"
+          :extend="props.extend"
+          :api-url="props.apiUrl"
+          @load-more="loadMoreData(specialCategoryState.categoryData?.type_id)"
+          @scroll-bottom="loadMoreData(specialCategoryState.categoryData?.type_id)"
+          @refresh-list="handleRefreshList"
+          @special-action="(actionType, actionData) => emit('special-action', actionType, actionData)"
+        />
+      </div>
+      
       <!-- 推荐分类内容 -->
-      <div v-if="activeKey === 'recommendTuijian404'" class="tab-content">
+      <div v-else-if="activeKey === 'recommendTuijian404'" class="tab-content">
         <VideoGrid
           :videos="listData[activeKey] || []"
           :loading="loadingMore[activeKey] || false"
@@ -28,6 +48,7 @@
           :extend="props.extend"
           :api-url="props.apiUrl"
           @refresh-list="handleRefreshList"
+          @special-action="(actionType, actionData) => emit('special-action', actionType, actionData)"
         />
       </div>
 
@@ -46,6 +67,7 @@
           @load-more="loadMoreData(activeKey)"
           @scroll-bottom="loadMoreData(activeKey)"
           @refresh-list="handleRefreshList"
+          @special-action="(actionType, actionData) => emit('special-action', actionType, actionData)"
         />
       </div>
     </div>
@@ -103,10 +125,20 @@ const props = defineProps({
   apiUrl: {
     type: String,
     default: ''
+  },
+  // 特殊分类状态
+  specialCategoryState: {
+    type: Object,
+    default: () => ({
+      isActive: false,
+      categoryData: null,
+      originalClassList: null,
+      originalRecommendVideos: null
+    })
   }
 });
 
-const emit = defineEmits(['activeKeyChange']);
+const emit = defineEmits(['activeKeyChange', 'special-action', 'close-special-category']);
 
 // 使用翻页统计store
 const paginationStore = usePaginationStore();
@@ -471,6 +503,29 @@ defineExpose({
       // 重新加载数据
       getListData(activeKey.value);
     }
+  },
+  setSpecialCategoryData: (categoryId, videos, pagination) => {
+    console.log('设置特殊分类数据:', { categoryId, videosCount: videos?.length, pagination });
+    
+    // 直接设置特殊分类的数据
+    listData[categoryId] = videos || [];
+    pageData[categoryId] = {
+      page: pagination?.page || 1,
+      hasNext: pagination?.hasNext || false,
+      total: pagination?.total || 0
+    };
+    loadingMore[categoryId] = false;
+    
+    // 更新全局翻页统计信息
+    setTimeout(() => {
+      paginationStore.updateStats(getStatsText(categoryId));
+    }, 100);
+    
+    console.log('特殊分类数据设置完成:', {
+      categoryId,
+      videosCount: listData[categoryId]?.length || 0,
+      pageInfo: pageData[categoryId]
+    });
   }
 });
 

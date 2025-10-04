@@ -3,12 +3,17 @@
     :visible="visible"
     :title="config.title"
     :width="config.width || '90%'"
-    :height="config.height || '80%'"
+    :height="config.height || 'auto'"
     :canceled-on-touch-outside="!config.keep"
     :show-close="false"
+    :module="module"
+    :extend="extend"
+    :api-url="apiUrl"
     @close="handleClose"
+    @toast="(message, type) => emit('toast', message, type)"
+    @reset="() => emit('reset')"
   >
-    <div class="webview-action-modern">
+    <div class="webview-action">
       <!-- 现代化工具栏 -->
       <div v-if="showToolbar" class="webview-toolbar-modern glass-effect">
         <!-- 导航按钮组 -->
@@ -226,9 +231,22 @@ export default {
     visible: {
       type: Boolean,
       default: true
+    },
+    // T4接口调用相关属性
+    module: {
+      type: String,
+      default: ''
+    },
+    extend: {
+      type: Object,
+      default: () => ({})
+    },
+    apiUrl: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['submit', 'cancel', 'close', 'action'],
+  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset'],
   setup(props, { emit }) {
     const webviewFrame = ref(null)
     const currentUrl = ref('')
@@ -514,15 +532,12 @@ export default {
 
 <style scoped>
 /* 主容器 */
-.webview-action-modern {
+.webview-action {
   padding: 0;
-  height: 100%;
-  min-height: 500px;
-  max-height: calc(100vh - 100px);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  border-radius: 16px;
+  height: 100%;
+  min-height: 60vh;
   overflow: hidden;
 }
 
@@ -530,57 +545,47 @@ export default {
 .webview-toolbar-modern {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  gap: 12px;
+  gap: 0.75rem;
   min-height: 60px;
+  flex-shrink: 0;
 }
 
 .toolbar-nav-group {
   display: flex;
-  gap: 6px;
+  gap: 0.375rem;
   background: rgba(255, 255, 255, 0.1);
-  padding: 4px;
-  border-radius: 12px;
+  padding: 0.25rem;
+  border-radius: var(--ds-radius-lg);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .toolbar-btn-modern {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 0.5rem;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ds-radius-md);
   background: transparent;
-  color: var(--action-color-text);
+  color: rgba(0, 0, 0, 0.7);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--ds-duration-fast) ease;
   position: relative;
   overflow: hidden;
 }
 
-.toolbar-btn-modern::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.toolbar-btn-modern:hover::before {
-  opacity: 1;
-}
-
 .toolbar-btn-modern:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(0, 0, 0, 0.85);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .toolbar-btn-modern:active {
@@ -593,8 +598,9 @@ export default {
   transform: none !important;
 }
 
-.toolbar-btn-modern.disabled::before {
-  opacity: 0 !important;
+.toolbar-btn-modern.disabled:hover {
+  background: transparent;
+  box-shadow: none;
 }
 
 .btn-icon {
@@ -614,23 +620,24 @@ export default {
   align-items: center;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 8px 12px;
-  gap: 8px;
+  border-radius: var(--ds-radius-lg);
+  padding: 0.5rem 0.75rem;
+  gap: 0.5rem;
   backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
+  -webkit-backdrop-filter: blur(10px);
+  transition: all var(--ds-duration-fast) ease;
 }
 
 .address-input-container:focus-within {
-  border-color: var(--action-color-primary);
-  box-shadow: 0 0 0 3px rgba(var(--action-color-primary-rgb), 0.1);
+  border-color: rgb(59, 130, 246);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   background: rgba(255, 255, 255, 0.15);
 }
 
 .address-icon {
   width: 16px;
   height: 16px;
-  color: var(--action-color-text-secondary);
+  color: rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
 }
 
@@ -638,34 +645,36 @@ export default {
   flex: 1;
   border: none;
   background: transparent;
-  color: var(--action-color-text);
-  font-size: 14px;
+  color: rgba(0, 0, 0, 0.8);
+  font-size: 0.875rem;
   outline: none;
-  padding: 4px 0;
+  padding: 0.25rem 0;
 }
 
 .address-input-modern::placeholder {
-  color: var(--action-color-text-secondary);
+  color: rgba(0, 0, 0, 0.5);
 }
 
 .address-go-btn {
-  padding: 6px !important;
-  background: var(--action-color-primary) !important;
+  padding: 0.375rem !important;
+  background: rgb(59, 130, 246) !important;
   color: white !important;
-  border-radius: 8px !important;
+  border-radius: var(--ds-radius-md) !important;
 }
 
 .address-go-btn:hover {
-  background: var(--action-color-primary-dark) !important;
+  background: rgb(37, 99, 235) !important;
 }
 
 .toolbar-actions-modern {
   display: flex;
-  gap: 6px;
+  gap: 0.375rem;
   background: rgba(255, 255, 255, 0.1);
-  padding: 4px;
-  border-radius: 12px;
+  padding: 0.25rem;
+  border-radius: var(--ds-radius-lg);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* 现代化进度条 */
@@ -674,12 +683,13 @@ export default {
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
   position: relative;
+  flex-shrink: 0;
 }
 
 .progress-bar-modern {
   height: 100%;
-  background: linear-gradient(90deg, var(--action-color-primary), var(--action-color-primary-light));
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(90deg, rgb(59, 130, 246), rgb(147, 51, 234));
+  transition: width var(--ds-duration-normal) cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 
@@ -704,11 +714,12 @@ export default {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: var(--action-color-bg);
-  border-radius: 0 0 16px 16px;
+  background: white;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   min-height: 400px;
-  height: calc(100vh - 300px);
-  max-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
 }
 
 .webview-container-modern.fullscreen {
@@ -727,7 +738,8 @@ export default {
   height: 100%;
   border: none;
   background: white;
-  border-radius: 0 0 16px 16px;
+  border-radius: var(--ds-radius-md);
+  flex: 1;
 }
 
 /* 现代化加载状态 */

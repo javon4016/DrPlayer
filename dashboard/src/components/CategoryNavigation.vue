@@ -2,11 +2,19 @@
   <div class="category-nav-container">
     <div class="category-nav-wrapper" ref="navWrapperRef">
       <!-- 分类tabs -->
+      <!-- 特殊分类显示 -->
+      <div v-if="specialCategoryState.isActive" class="special-category-header">
+        <div class="special-category-title">
+          <span class="category-name">{{ specialCategoryState.categoryData?.type_name || '特殊分类' }}</span>
+          <span class="category-type">（源内搜索）</span>
+        </div>
+      </div>
+      
+      <!-- 正常分类tabs -->
       <a-tabs 
-         v-model:active-key="activeKey" 
-         class="category-tabs"
+         v-else
+         v-model:active-key="activeKey"
          type="line"
-         size="large"
          position="top"
          :editable="false"
          @change="handleTabChange"
@@ -36,8 +44,14 @@
         </a-tab-pane>
       </a-tabs>
       
+      <!-- 特殊分类关闭按钮 -->
+      <div v-if="specialCategoryState.isActive" class="special-category-close" @click="handleCloseSpecialCategory">
+        <icon-close />
+        <span>返回</span>
+      </div>
+      
       <!-- 分类管理按钮 -->
-      <div class="category-manage" @click="openCategoryModal">
+      <div v-else class="category-manage" @click="openCategoryModal">
         <icon-apps />
       </div>
     </div>
@@ -56,7 +70,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import { IconApps, IconFilter } from '@arco-design/web-vue/es/icon';
+import { IconApps, IconFilter, IconClose } from '@arco-design/web-vue/es/icon';
 import FilterSection from './FilterSection.vue';
 
 const props = defineProps({
@@ -83,10 +97,20 @@ const props = defineProps({
   selectedFilters: {
     type: Object,
     default: () => ({})
+  },
+  // 特殊分类状态
+  specialCategoryState: {
+    type: Object,
+    default: () => ({
+      isActive: false,
+      categoryData: null,
+      originalClassList: null,
+      originalRecommendVideos: null
+    })
   }
 });
 
-const emit = defineEmits(['tab-change', 'open-category-modal', 'toggle-filter', 'reset-filters']);
+const emit = defineEmits(['tab-change', 'open-category-modal', 'toggle-filter', 'reset-filters', 'close-special-category']);
 
 // 计算默认的activeKey
 const getDefaultActiveKey = () => {
@@ -159,6 +183,12 @@ const handleResetFilters = () => {
 
 const openCategoryModal = () => {
   emit('open-category-modal');
+};
+
+// 处理关闭特殊分类
+const handleCloseSpecialCategory = () => {
+  console.log('关闭特殊分类');
+  emit('close-special-category');
 };
 
 onMounted(() => {
@@ -341,6 +371,54 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: all 0.3s ease;
   margin-left: 12px;
+}
+
+.special-category-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(245, 63, 63, 0.1);
+  color: #f53f3f;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-left: 12px;
+  font-size: 14px;
+}
+
+.special-category-close:hover {
+  background: rgba(245, 63, 63, 0.2);
+  transform: translateY(-1px);
+}
+
+.special-category-header {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  background: rgba(22, 93, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(22, 93, 255, 0.1);
+}
+
+.special-category-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.special-category-title .category-name {
+  color: #165dff;
+}
+
+.special-category-title .category-type {
+  color: #86909c;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .category-manage:hover {

@@ -399,7 +399,7 @@ class ActionStateManager {
         // 支持 option 和 options 两种字段名称
         const optionList = config.option || config.options
         if (!optionList || !Array.isArray(optionList) || optionList.length === 0) {
-          throw new Error('MenuAction/SelectAction必须包含选项列表')
+          throw new Error('MenuAction必须包含选项列表')
         }
         break
         

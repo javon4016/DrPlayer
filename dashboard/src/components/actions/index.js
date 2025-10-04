@@ -6,7 +6,7 @@ import ActionDialog from './ActionDialog.vue'
 import InputAction from './InputAction.vue'
 import MultiInputAction from './MultiInputAction.vue'
 import MenuAction from './MenuAction.vue'
-import SelectAction from './SelectAction.vue'
+
 import MsgBoxAction from './MsgBoxAction.vue'
 import WebViewAction from './WebViewAction.vue'
 import HelpAction from './HelpAction.vue'
@@ -39,7 +39,6 @@ const components = {
   InputAction,
   MultiInputAction,
   MenuAction,
-  SelectAction,
   MsgBoxAction,
   WebViewAction,
   HelpAction
@@ -79,7 +78,6 @@ export {
   InputAction,
   MultiInputAction,
   MenuAction,
-  SelectAction,
   MsgBoxAction,
   WebViewAction,
   HelpAction
@@ -215,7 +213,7 @@ export const createActionConfig = types.createActionConfig
 export const createInputActionConfig = types.createInputActionConfig
 export const createMultiInputActionConfig = types.createMultiInputActionConfig
 export const createMenuActionConfig = types.createMenuActionConfig
-export const createSelectActionConfig = types.createSelectActionConfig
+
 export const createMsgBoxActionConfig = types.createMsgBoxActionConfig
 export const createWebViewActionConfig = types.createWebViewActionConfig
 export const createHelpActionConfig = types.createHelpActionConfig

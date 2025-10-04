@@ -5,7 +5,12 @@
     :width="config.width || 420"
     :height="config.height"
     :canceled-on-touch-outside="!config.keep"
+    :module="module"
+    :extend="extend"
+    :api-url="apiUrl"
     @close="handleCancel"
+    @toast="(message, type) => emit('toast', message, type)"
+    @reset="() => emit('reset')"
   >
     <div class="input-action-modern">
       <!-- 消息文本 -->
@@ -288,7 +293,7 @@ export default {
       default: ''
     }
   },
-  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset'],
+  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset', 'special-action'],
   setup(props, { emit }) {
     const router = useRouter()
     const inputRef = ref(null)
@@ -614,8 +619,28 @@ export default {
         console.log('执行源内搜索:', searchParams)
         showToast('正在执行源内搜索...', 'info')
         
-        // 这里可以根据具体需求实现搜索逻辑
-        // 比如跳转到搜索页面或者触发搜索事件
+        // 触发special-action事件，传递给父组件处理
+        console.log('📝 [InputAction DEBUG] 即将触发 special-action 事件');
+        console.log('📝 [InputAction DEBUG] 事件参数:', {
+          actionType: '__self_search__',
+          eventData: {
+            tid: searchParams.tid,
+            name: searchParams.name,
+            type_id: searchParams.tid,
+            type_name: searchParams.name,
+            actionData: searchParams
+          }
+        });
+        
+        emit('special-action', '__self_search__', {
+          tid: searchParams.tid,
+          name: searchParams.name,
+          type_id: searchParams.tid,
+          type_name: searchParams.name,
+          actionData: searchParams
+        })
+        
+        console.log('📝 [InputAction DEBUG] special-action 事件已触发');
         
       } catch (error) {
         console.error('源内搜索失败:', error)
@@ -903,7 +928,6 @@ export default {
       valueObject[actionId] = value
 
       const actionData = {
-        ac: 'list',
         action,
         value: JSON.stringify(valueObject)
       }

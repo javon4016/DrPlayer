@@ -9,17 +9,17 @@
       <div class="address-history-content">
         <div class="history-header">
           <span class="history-title">历史配置</span>
-          <span class="history-count">{{ histories.length }}/10</span>
+          <span class="history-count">{{ filteredHistories.length }}/10</span>
         </div>
         
-        <div v-if="histories.length === 0" class="empty-state">
+        <div v-if="filteredHistories.length === 0" class="empty-state">
           <icon-history class="empty-icon" />
-          <span class="empty-text">暂无历史配置</span>
+          <span class="empty-text">{{ histories.length === 0 ? '暂无历史配置' : '无其他历史配置' }}</span>
         </div>
         
         <div v-else class="history-list">
           <div 
-            v-for="(item, index) in histories" 
+            v-for="(item, index) in filteredHistories" 
             :key="index"
             class="history-item"
             @click="selectHistory(item)"
@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { 
   IconHistory, 
@@ -91,6 +91,23 @@ const histories = ref([])
 
 // 获取存储键名
 const storageKey = computed(() => `address-history-${props.configKey}`)
+
+
+
+// 过滤后的历史记录（隐藏与当前输入框相同的地址）
+const filteredHistories = computed(() => {
+  if (!props.currentValue || !props.currentValue.trim()) {
+    return histories.value
+  }
+  
+  const currentUrl = props.currentValue.trim().toLowerCase()
+  const filtered = histories.value.filter(item => {
+    const historyUrl = (item.url || '').trim().toLowerCase()
+    return historyUrl !== currentUrl
+  })
+  
+  return filtered
+})
 
 // 加载历史记录
 const loadHistories = () => {
@@ -123,17 +140,16 @@ const addHistory = (url) => {
   // 检查是否已存在
   const existingIndex = histories.value.findIndex(item => item.url === trimmedUrl)
   if (existingIndex !== -1) {
-    // 如果已存在，移到最前面并更新时间
-    const existing = histories.value.splice(existingIndex, 1)[0]
-    existing.timestamp = Date.now()
-    histories.value.unshift(existing)
-  } else {
-    // 添加新记录
-    histories.value.unshift({
-      url: trimmedUrl,
-      timestamp: Date.now()
-    })
+    // 如果已存在，不做任何操作，避免重复添加
+    console.log('地址已存在于历史记录中，跳过添加:', trimmedUrl)
+    return
   }
+  
+  // 只在不存在时添加新记录
+  histories.value.unshift({
+    url: trimmedUrl,
+    timestamp: Date.now()
+  })
   
   // 保持最多10条记录
   if (histories.value.length > 10) {
@@ -141,6 +157,7 @@ const addHistory = (url) => {
   }
   
   saveHistories()
+  console.log('已添加新地址到历史记录:', trimmedUrl)
 }
 
 // 选择历史记录
@@ -152,9 +169,20 @@ const selectHistory = (item) => {
 
 // 删除单个历史记录
 const deleteHistory = (index) => {
-  histories.value.splice(index, 1)
-  saveHistories()
-  Message.success('已删除历史记录')
+  // 从过滤后的列表中获取要删除的项
+  const itemToDelete = filteredHistories.value[index]
+  if (!itemToDelete) return
+  
+  // 在原始列表中找到对应的索引并删除
+  const originalIndex = histories.value.findIndex(item => 
+    item.url === itemToDelete.url && item.timestamp === itemToDelete.timestamp
+  )
+  
+  if (originalIndex !== -1) {
+    histories.value.splice(originalIndex, 1)
+    saveHistories()
+    Message.success('已删除历史记录')
+  }
 }
 
 // 清空所有历史记录
@@ -184,12 +212,7 @@ const formatTime = (timestamp) => {
   }
 }
 
-// 监听当前值变化，自动保存到历史记录
-watch(() => props.currentValue, (newValue, oldValue) => {
-  if (oldValue && oldValue.trim() && newValue !== oldValue) {
-    addHistory(oldValue)
-  }
-}, { flush: 'post' })
+// 注释：移除自动保存逻辑，改为只在点击保存按钮时手动调用 addHistory
 
 // 暴露添加历史记录的方法
 defineExpose({

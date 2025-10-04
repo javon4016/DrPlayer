@@ -158,17 +158,7 @@ export const createMenuOption = (config) => ({
   ...config
 })
 
-/**
- * 多选Action配置
- */
-export const createSelectActionConfig = (config) => ({
-  ...createActionConfig(config),
-  type: ActionType.SELECT,
-  title: '',
-  width: 300,
-  column: 1,
-  option: []
-})
+
 
 /**
  * 多选选项配置

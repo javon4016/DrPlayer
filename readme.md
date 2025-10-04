@@ -9,7 +9,7 @@
 
 **一款功能强大、智能化的现代视频播放器，支持多格式播放、智能跳过、直播功能等特色功能**
 
-[🚀 在线演示](https://drplayer.playdreamer.cn/) | [📖 文档](https://hipy.playdreamer.cn/) | [🐛 问题反馈](https://github.com/your-repo/issues)
+[🚀 在线演示](https://drplayer.playdreamer.cn/) | [📖 文档](https://hipy.playdreamer.cn/) | [🐛 问题反馈](https://github.com/hjdhnx/DrPlayer/issues)
 
 </div>
 
@@ -57,7 +57,7 @@
 - **Shaka Player** - DASH 流媒体播放支持
 
 ### 开发工具
-- **TypeScript** - 类型安全的 JavaScript
+- **JavaScript** - 现代化的 JavaScript 开发
 - **ESLint** - 代码质量检查
 - **Prettier** - 代码格式化工具
 
@@ -193,7 +193,7 @@ export const CSP_BYPASS_CONFIG = {
 
 - 项目主页：[https://drplayer.playdreamer.cn/](https://drplayer.playdreamer.cn/)
 - 文档站点：[https://hipy.playdreamer.cn/](https://hipy.playdreamer.cn/)
-- 问题反馈：[GitHub Issues](https://github.com/your-repo/issues)
+- 问题反馈：[GitHub Issues](https://github.com/hjdhnx/DrPlayer/issues)
 
 ---
 

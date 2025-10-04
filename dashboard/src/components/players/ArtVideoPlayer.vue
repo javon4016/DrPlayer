@@ -13,6 +13,7 @@
       @player-change="handlePlayerTypeChange"
       @open-skip-settings="openSkipSettingsDialog"
       @toggle-debug="toggleDebugDialog"
+      @proxy-change="handleProxyChange"
       @close="closePlayer"
     />
     <div class="art-player-wrapper" v-show="props.visible">
@@ -60,6 +61,7 @@
       :headers="headers"
       :player-type="'artplayer'"
       :detected-format="detectedFormat"
+      :proxy-url="proxyVideoUrl"
       @close="closeDebugDialog"
     />
   </div>
@@ -81,6 +83,7 @@ import SkipSettingsDialog from './SkipSettingsDialog.vue'
 import DebugInfoDialog from './DebugInfoDialog.vue'
 import { useSkipSettings } from '@/composables/useSkipSettings'
 import { applyCSPBypass, setVideoReferrerPolicy, REFERRER_POLICIES, getCSPConfig } from '@/utils/csp'
+import { processVideoUrl, isProxyPlayEnabled } from '@/utils/proxyPlayer'
 
 // Props - 已添加 HLS 支持、动态高度自适应和自动下一集功能
 const props = defineProps({
@@ -150,6 +153,14 @@ const detectedFormat = ref('')
 // 计算属性：是否显示调试按钮
 const showDebugButton = computed(() => {
   return !!props.videoUrl
+})
+
+// 计算属性：代理后的视频链接
+const proxyVideoUrl = computed(() => {
+  if (!props.videoUrl) return ''
+  
+  const headers = props.headers || {}
+  return processVideoUrl(props.videoUrl, headers)
 })
 
 // 选集弹窗相关数据已移除，现在使用ArtPlayer的layer功能
@@ -279,11 +290,24 @@ const initArtPlayer = async (url) => {
   
   // 如果播放器实例已存在，使用 switchUrl 方法切换视频源
   if (artPlayerInstance.value) {
-    console.log('使用 switchUrl 方法切换视频源:', url)
+    // 准备自定义请求头
+    const cspConfig = getCSPConfig()
+    const headers = {
+      ...(props.headers || {}),
+      ...(cspConfig.autoBypass ? {} : {})
+    }
+    
+    // 处理代理播放地址
+    const finalUrl = processVideoUrl(url, headers)
+    if (finalUrl !== url) {
+      console.log('🔄 [代理播放] switchUrl使用代理地址')
+    }
+    
+    console.log('使用 switchUrl 方法切换视频源:', finalUrl)
     
     try {
       // 使用 switchUrl 方法切换视频源，这样可以保持全屏状态和其他用户设置
-      await artPlayerInstance.value.switchUrl(url)
+      await artPlayerInstance.value.switchUrl(finalUrl)
       console.log('视频源切换成功')
       
       // 重置片头片尾跳过状态
@@ -308,15 +332,28 @@ const initArtPlayer = async (url) => {
   }
   
   try {
+    // 准备自定义请求头
+    const cspConfig = getCSPConfig()
+    const headers = {
+      ...(props.headers || {}),
+      ...(cspConfig.autoBypass ? {} : {})
+    }
+    
+    // 处理代理播放地址
+    const finalUrl = processVideoUrl(url, headers)
+    if (finalUrl !== url) {
+      console.log('🔄 [代理播放] 使用代理地址播放视频')
+    }
+    
     // 检测视频格式
-    const videoFormat = detectVideoFormat(url)
+    const videoFormat = detectVideoFormat(finalUrl)
     detectedFormat.value = videoFormat
     console.log('检测到视频格式:', videoFormat)
     
     // 创建 ArtPlayer 实例
     const art = new Artplayer({
       container: artPlayerContainer.value,
-      url: url,
+      url: finalUrl,
       poster: props.poster,
       volume: 0.7,
       isLive: false,
@@ -586,6 +623,41 @@ const closePlayer = () => {
 // 处理播放器类型变更
 const handlePlayerTypeChange = (newType) => {
   emit('player-change', newType)
+}
+
+// 处理代理播放地址变更
+const handleProxyChange = (proxyUrl) => {
+  console.log('代理播放地址变更:', proxyUrl)
+  
+  try {
+    // 获取当前的addressSettings
+    const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+    
+    if (proxyUrl === 'disabled') {
+      // 关闭代理播放，但保留设置界面中配置的代理地址
+      savedAddresses.proxyPlayEnabled = false
+      // 注意：不清除 proxyPlay 地址，保留用户在设置界面的配置
+    } else {
+      // 启用代理播放并设置地址
+      savedAddresses.proxyPlayEnabled = true
+      savedAddresses.proxyPlay = proxyUrl
+    }
+    
+    // 保存到localStorage
+    localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
+    
+    // 触发自定义事件，通知其他组件设置已变化
+    window.dispatchEvent(new CustomEvent('addressSettingsChanged'))
+    
+    // 重新加载视频以应用新的代理设置
+    if (props.videoUrl) {
+      nextTick(() => {
+        initArtPlayer(props.videoUrl)
+      })
+    }
+  } catch (error) {
+    console.error('保存代理播放设置失败:', error)
+  }
 }
 
 // 打开片头片尾设置弹窗

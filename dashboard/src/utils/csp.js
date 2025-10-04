@@ -94,39 +94,29 @@ export function fetchWithNoReferrer(url, options = {}) {
   })
 }
 
-/**
- * 检查URL是否可能需要特殊的referrer策略
- * @param {string} url - 视频URL
- * @returns {boolean} 是否需要特殊处理
- */
-export function needsSpecialReferrerPolicy(url) {
-  if (!url) return false
-  
-  // 常见的需要no-referrer的域名模式
-  const specialDomains = [
-    'qq.com',
-    'iqiyi.com',
-    'youku.com',
-    'bilibili.com',
-    'douyin.com',
-    'tiktok.com',
-    'youtube.com',
-    'vimeo.com'
-  ]
-  
-  return specialDomains.some(domain => url.includes(domain))
-}
+
 
 /**
  * 智能设置referrer策略
- * 根据URL自动判断是否需要设置no-referrer
+ * 根据CSP绕过配置来决定referrer策略
  * @param {string} videoUrl - 视频URL
  * @param {HTMLVideoElement} videoElement - 视频元素（可选）
  */
 export function smartSetReferrerPolicy(videoUrl, videoElement = null) {
-  const policy = needsSpecialReferrerPolicy(videoUrl) 
-    ? REFERRER_POLICIES.NO_REFERRER 
-    : REFERRER_POLICIES.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
+  // 获取CSP配置
+  const config = getCSPConfig()
+  
+  let policy
+  if (config.autoBypass) {
+    // 如果启用了CSP绕过，使用配置中的referrer策略
+    policy = config.referrerPolicy
+    console.log(`根据CSP配置设置referrer策略: ${policy} (URL: ${videoUrl})`)
+  } else {
+    // 如果未启用CSP绕过，保持当前策略或使用默认策略
+    const currentPolicy = getCurrentReferrerPolicy()
+    policy = currentPolicy || REFERRER_POLICIES.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
+    console.log(`CSP绕过未启用，保持当前策略: ${policy} (URL: ${videoUrl})`)
+  }
   
   // 设置全局策略
   setGlobalReferrerPolicy(policy)
@@ -136,7 +126,6 @@ export function smartSetReferrerPolicy(videoUrl, videoElement = null) {
     setVideoReferrerPolicy(videoElement, policy)
   }
   
-  console.log(`智能设置referrer策略: ${policy} (URL: ${videoUrl})`)
   return policy
 }
 
@@ -151,9 +140,6 @@ export function resetReferrerPolicy() {
  * CSP绕过配置对象
  */
 export const CSP_BYPASS_CONFIG = {
-  // 是否启用CSP绕过功能
-  enabled: true,
-  
   // 默认referrer策略
   referrerPolicy: REFERRER_POLICIES.NO_REFERRER,
   

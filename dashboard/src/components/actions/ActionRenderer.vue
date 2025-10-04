@@ -15,6 +15,7 @@
       @action="handleAction"
       @toast="handleToast"
       @reset="handleReset"
+      @special-action="handleSpecialActionFromChild"
     />
 
     <!-- 错误提示 -->
@@ -70,7 +71,7 @@ import { showToast } from '@/stores/toast.js'
 const InputAction = defineAsyncComponent(() => import('./InputAction.vue'))
 const MultiInputAction = defineAsyncComponent(() => import('./MultiInputAction.vue'))
 const MenuAction = defineAsyncComponent(() => import('./MenuAction.vue'))
-const SelectAction = defineAsyncComponent(() => import('./SelectAction.vue'))
+
 const MsgBoxAction = defineAsyncComponent(() => import('./MsgBoxAction.vue'))
 const WebViewAction = defineAsyncComponent(() => import('./WebViewAction.vue'))
 const HelpAction = defineAsyncComponent(() => import('./HelpAction.vue'))
@@ -82,7 +83,6 @@ export default {
     InputAction,
     MultiInputAction,
     MenuAction,
-    SelectAction,
     MsgBoxAction,
     WebViewAction,
     HelpAction
@@ -132,8 +132,8 @@ export default {
       [ActionType.EDIT]: 'InputAction', // edit类型使用InputAction，通过multiLine区分
       [ActionType.MULTI_INPUT]: 'MultiInputAction',
       [ActionType.MULTI_INPUT_X]: 'MultiInputAction',
-      [ActionType.MENU]: 'MenuAction',
-      [ActionType.SELECT]: 'SelectAction',
+      [ActionType.MENU]: 'MenuAction', // 单选菜单
+      [ActionType.SELECT]: 'MenuAction', // 多选菜单，使用MenuAction组件
       [ActionType.MSGBOX]: 'MsgBoxAction',
       [ActionType.WEBVIEW]: 'WebViewAction',
       [ActionType.HELP]: 'HelpAction'
@@ -220,9 +220,35 @@ export default {
 
       switch (actionId) {
         case '__self_search__':
-          // 源内搜索
-          showToast('执行源内搜索', 'info')
-          emit('special-action', 'self-search', actionData)
+          // 源内搜索 - 处理T4返回的数据格式
+          console.log('🚀 [ActionRenderer DEBUG] 处理__self_search__专项动作');
+          console.log('🚀 [ActionRenderer DEBUG] actionData:', JSON.stringify(actionData, null, 2));
+          
+          // 验证必要的参数
+          if (!actionData.tid) {
+            console.error('🚀 [ActionRenderer ERROR] 源内搜索参数不完整：缺少tid');
+            showToast('源内搜索参数不完整：缺少tid', 'error')
+            handleClose()
+            break
+          }
+          
+          // 构造特殊分类数据
+          const specialCategory = {
+            tid: actionData.tid,
+            type_id: actionData.tid,
+            name: actionData.name,
+            type_name: actionData.name || `搜索: ${actionData.tid}`,
+            isSpecialCategory: true,
+            actionData: actionData
+          }
+          
+          console.log('🚀 [ActionRenderer DEBUG] 构造的 specialCategory:', JSON.stringify(specialCategory, null, 2));
+          console.log('🚀 [ActionRenderer DEBUG] 即将触发 special-action 事件');
+          
+          showToast(actionData.msg || '执行源内搜索', 'info')
+          emit('special-action', '__self_search__', specialCategory)
+          
+          console.log('🚀 [ActionRenderer DEBUG] special-action 事件已触发，关闭组件');
           handleClose()
           break
 
@@ -452,6 +478,20 @@ export default {
       error.value = null
     }
 
+    // 处理子组件的special-action事件
+    const handleSpecialActionFromChild = (actionType, actionData) => {
+      console.log('🔗 [ActionRenderer DEBUG] 接收到子组件的 special-action 事件');
+      console.log('🔗 [ActionRenderer DEBUG] actionType:', actionType);
+      console.log('🔗 [ActionRenderer DEBUG] actionData:', JSON.stringify(actionData, null, 2));
+      
+      // 将事件向上传递给父组件
+      console.log('🔗 [ActionRenderer DEBUG] 向父组件传递 special-action 事件');
+      emit('special-action', actionType, actionData);
+      
+      // 关闭当前组件
+      handleClose();
+    }
+
 
 
     // 监听actionData变化
@@ -512,6 +552,7 @@ export default {
       handleAction,
       handleToast,
       handleReset,
+      handleSpecialActionFromChild,
       clearError,
       show,
       hide,

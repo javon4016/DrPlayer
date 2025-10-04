@@ -35,6 +35,54 @@
           </div>
         </div>
 
+        <!-- 代理后链接信息 -->
+        <div v-if="proxyUrl && proxyUrl !== videoUrl" class="info-section">
+          <div class="section-header">
+            <h4>🔄 代理后链接</h4>
+            <div class="section-actions">
+              <button 
+                class="copy-btn" 
+                @click="copyToClipboard(proxyUrl, '代理后链接')"
+                :disabled="!proxyUrl"
+              >
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                复制
+              </button>
+              <button 
+                class="external-player-btn vlc-btn" 
+                @click="openWithVLC(proxyUrl)"
+                :disabled="!proxyUrl"
+                title="使用VLC播放器打开"
+              >
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <polygon points="5,3 19,12 5,21" fill="currentColor"/>
+                </svg>
+                VLC
+              </button>
+              <button 
+                class="external-player-btn mpv-btn" 
+                @click="openWithMPV(proxyUrl)"
+                :disabled="!proxyUrl"
+                title="使用MPV播放器打开"
+              >
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                  <polygon points="10,8 16,12 10,16" fill="currentColor"/>
+                </svg>
+                MPV
+              </button>
+            </div>
+          </div>
+          <div class="info-content">
+            <div class="url-display proxy-url">
+              {{ proxyUrl }}
+            </div>
+          </div>
+        </div>
+
         <!-- 请求头信息 -->
         <div class="info-section">
           <div class="section-header">
@@ -125,6 +173,10 @@ const props = defineProps({
   detectedFormat: {
     type: String,
     default: ''
+  },
+  proxyUrl: {
+    type: String,
+    default: ''
   }
 })
 
@@ -169,6 +221,11 @@ const copyAllInfo = async () => {
     '📹 视频直链:',
     props.videoUrl || '暂无',
     '',
+    ...(props.proxyUrl && props.proxyUrl !== props.videoUrl ? [
+      '🔄 代理后链接:',
+      props.proxyUrl,
+      ''
+    ] : []),
     '📋 请求头信息:',
     headersText.value || '暂无',
     '',
@@ -182,6 +239,66 @@ const copyAllInfo = async () => {
   ].join('\n')
 
   await copyToClipboard(allInfo, '所有调试信息')
+}
+
+// 使用VLC播放器打开视频
+const openWithVLC = (url) => {
+  if (!url) {
+    Message.warning('视频链接为空，无法调起VLC播放器')
+    return
+  }
+
+  try {
+    // 使用vlc://协议，VLC会自动处理协议前缀
+    const vlcUrl = `vlc://${url}`
+    
+    // 创建隐藏的iframe来触发协议
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    iframe.src = vlcUrl
+    document.body.appendChild(iframe)
+    
+    // 短暂延迟后移除iframe
+    setTimeout(() => {
+      document.body.removeChild(iframe)
+    }, 1000)
+    
+    Message.success('正在尝试调起VLC播放器...')
+    console.log('调起VLC播放器:', vlcUrl)
+  } catch (error) {
+    console.error('调起VLC播放器失败:', error)
+    Message.error('调起VLC播放器失败，请确保已安装VLC播放器')
+  }
+}
+
+// 使用MPV播放器打开视频
+const openWithMPV = (url) => {
+  if (!url) {
+    Message.warning('视频链接为空，无法调起MPV播放器')
+    return
+  }
+
+  try {
+    // 使用mpv://协议，MPV会自动处理协议前缀
+    const mpvUrl = `mpv://${url}`
+    
+    // 创建隐藏的iframe来触发协议
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    iframe.src = mpvUrl
+    document.body.appendChild(iframe)
+    
+    // 短暂延迟后移除iframe
+    setTimeout(() => {
+      document.body.removeChild(iframe)
+    }, 1000)
+    
+    Message.success('正在尝试调起MPV播放器...')
+    console.log('调起MPV播放器:', mpvUrl)
+  } catch (error) {
+    console.error('调起MPV播放器失败:', error)
+    Message.error('调起MPV播放器失败，请确保已安装MPV播放器')
+  }
 }
 </script>
 
@@ -269,6 +386,12 @@ const copyAllInfo = async () => {
   border-bottom: 1px solid #e9ecef;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .section-header h4 {
   margin: 0;
   font-size: 14px;
@@ -318,6 +441,56 @@ const copyAllInfo = async () => {
   word-break: break-all;
   line-height: 1.4;
   color: #495057;
+}
+
+.proxy-url {
+  background: #e8f5e8;
+  border-color: #4caf50;
+  color: #2e7d32;
+}
+
+.external-player-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.vlc-btn {
+  background: #ff6b35;
+  color: white;
+}
+
+.vlc-btn:hover:not(:disabled) {
+  background: #e55a2b;
+  transform: translateY(-1px);
+}
+
+.mpv-btn {
+  background: #8e24aa;
+  color: white;
+}
+
+.mpv-btn:hover:not(:disabled) {
+  background: #7b1fa2;
+  transform: translateY(-1px);
+}
+
+.external-player-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.external-player-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .headers-display {
@@ -424,8 +597,15 @@ const copyAllInfo = async () => {
     gap: 8px;
   }
   
-  .copy-btn {
+  .section-actions {
     align-self: flex-end;
+    flex-wrap: wrap;
+  }
+  
+  .copy-btn,
+  .external-player-btn {
+    font-size: 11px;
+    padding: 3px 6px;
   }
   
   .url-display,

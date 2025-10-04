@@ -37,6 +37,7 @@
                 </a-input>
                 <div class="address-config-actions">
                   <AddressHistory 
+                    ref="vodConfigHistory"
                     config-key="vod-config"
                     :current-value="addressSettings.vodConfig"
                     @select="(value) => addressSettings.vodConfig = value"
@@ -106,6 +107,7 @@
                 </a-input>
                 <div class="address-config-actions">
                   <AddressHistory 
+                    ref="liveConfigHistory"
                     config-key="live-config"
                     :current-value="addressSettings.liveConfig"
                     @select="(value) => addressSettings.liveConfig = value"
@@ -177,6 +179,7 @@
                 </a-input>
                 <div class="address-config-actions">
                   <AddressHistory 
+                    ref="proxyAccessHistory"
                     config-key="proxy-access"
                     :current-value="addressSettings.proxyAccess"
                     @select="(value) => addressSettings.proxyAccess = value"
@@ -224,7 +227,7 @@
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-switch v-model="addressSettings.proxyPlayEnabled" class="address-config-switch" />
+                <a-switch v-model="addressSettings.proxyPlayEnabled" class="address-config-switch" @change="handleProxyPlayEnabledChange" />
                 <a-input 
                   v-model="addressSettings.proxyPlay" 
                   placeholder="请输入代理播放接口地址"
@@ -238,10 +241,22 @@
                 </a-input>
                 <div class="address-config-actions">
                   <AddressHistory 
+                    ref="proxyPlayHistory"
                     config-key="proxy-play"
                     :current-value="addressSettings.proxyPlay"
                     @select="(value) => addressSettings.proxyPlay = value"
                   />
+                  <a-button 
+                    type="outline" 
+                    @click="resetProxyPlay"
+                    :loading="addressSaving.proxyPlayReset"
+                    size="medium"
+                  >
+                    <template #icon>
+                      <icon-refresh />
+                    </template>
+                    重置
+                  </a-button>
                   <a-button 
                     type="primary" 
                     @click="saveAddress('proxyPlay')"
@@ -299,6 +314,7 @@
                 </a-input>
                 <div class="address-config-actions">
                   <AddressHistory 
+                    ref="proxySniffHistory"
                     config-key="proxy-sniff"
                     :current-value="addressSettings.proxySniff"
                     @select="(value) => addressSettings.proxySniff = value"
@@ -778,7 +794,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { 
   IconLink, 
@@ -814,6 +830,8 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import AddressHistory from '@/components/AddressHistory.vue'
 import PlayerSelector from '@/components/PlayerSelector.vue'
+import configService from '@/api/services/config'
+import siteService from '@/api/services/site'
 import { 
   getCSPConfig, 
   saveCSPConfig, 
@@ -822,13 +840,20 @@ import {
   setGlobalReferrerPolicy 
 } from '@/utils/csp'
 
+// AddressHistory 组件的 ref 引用
+const vodConfigHistory = ref(null)
+const liveConfigHistory = ref(null)
+const proxyAccessHistory = ref(null)
+const proxyPlayHistory = ref(null)
+const proxySniffHistory = ref(null)
+
 // 地址设置相关
 const addressSettings = reactive({
   vodConfig: '',
   liveConfig: '',
   proxyAccess: '',
   proxyAccessEnabled: false,
-  proxyPlay: '',
+  proxyPlay: 'http://localhost:57572/proxy?form=base64&url=${url}&header=${headers}&type=${type}#嗷呜',
   proxyPlayEnabled: false,
   proxySniff: 'http://localhost:57573/sniffer',
   proxySniffEnabled: false,
@@ -841,6 +866,7 @@ const addressSaving = reactive({
   liveConfigReset: false,
   proxyAccess: false,
   proxyPlay: false,
+  proxyPlayReset: false,
   proxySniff: false,
   proxySniffReset: false,
   snifferTimeout: false
@@ -919,11 +945,31 @@ const saveAddress = async (configType) => {
     
     localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
     
+    // 如果是代理播放地址相关配置，触发自定义事件通知播放器组件
+    if (configType === 'proxyPlay' || configType === 'proxyPlayEnabled') {
+      // 触发自定义事件，通知播放器组件地址设置已更改
+      window.dispatchEvent(new CustomEvent('addressSettingsChanged', {
+        detail: {
+          type: configType,
+          value: addressValue,
+          enabled: configType === 'proxyPlay' ? addressSettings.proxyPlayEnabled : addressValue
+        }
+      }))
+    }
+    
     // 如果是点播配置，尝试使用配置服务设置地址并自动设置直播配置地址
     if (configType === 'vodConfig') {
       try {
-        const configService = (await import('@/api/services/config')).default
         await configService.setConfigUrl(addressValue)
+        
+        // 清除缓存并刷新点播数据，确保下次换源时列表是最新的
+        try {
+          await siteService.loadSitesFromConfig(true) // 强制刷新配置数据
+          console.log('点播配置保存后已刷新缓存数据')
+        } catch (refreshError) {
+          console.error('刷新点播数据失败:', refreshError)
+          // 即使刷新失败也不影响保存成功的提示
+        }
         
         // 检查是否自动设置了直播配置地址
         const liveConfigUrl = configService.getLiveConfigUrl()
@@ -935,9 +981,9 @@ const saveAddress = async (configType) => {
           savedAddresses.liveConfig = liveConfigUrl
           localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
           
-          Message.success('点播配置保存成功，已自动设置直播配置地址')
+          Message.success('点播配置保存成功，已自动设置直播配置地址并刷新数据')
         } else {
-          Message.success('点播配置保存成功')
+          Message.success('点播配置保存成功，已刷新点播数据')
         }
       } catch (error) {
         console.error('设置配置服务失败:', error)
@@ -946,7 +992,6 @@ const saveAddress = async (configType) => {
     } else if (configType === 'liveConfig') {
       // 如果是直播配置，使用配置服务设置直播配置地址
       try {
-        const configService = (await import('@/api/services/config')).default
         await configService.setLiveConfigUrl(addressValue)
         Message.success('直播配置地址保存成功')
       } catch (error) {
@@ -963,9 +1008,17 @@ const saveAddress = async (configType) => {
     }
     
     // 添加到历史记录
-    const historyComponent = document.querySelector(`[config-key="${getConfigKey(configType)}"]`)
-    if (historyComponent && historyComponent.__vueParentComponent) {
-      historyComponent.__vueParentComponent.exposed.addHistory(addressValue)
+    const historyRefMap = {
+      'vodConfig': vodConfigHistory,
+      'liveConfig': liveConfigHistory,
+      'proxyAccess': proxyAccessHistory,
+      'proxyPlay': proxyPlayHistory,
+      'proxySniff': proxySniffHistory
+    }
+    
+    const historyRef = historyRefMap[configType]
+    if (historyRef && historyRef.value) {
+      historyRef.value.addHistory(addressValue)
     }
     
   } catch (error) {
@@ -1000,7 +1053,6 @@ const testAddress = async (configType) => {
   addressTesting[configType] = true
   try {
     // 使用配置服务验证配置地址
-    const configService = (await import('@/api/services/config')).default
     const isValid = await configService.validateConfigUrl(addressValue)
     
     if (isValid) {
@@ -1037,7 +1089,6 @@ const resetLiveConfig = async () => {
   addressSaving.liveConfigReset = true
   try {
     // 使用配置服务重置直播配置地址
-    const configService = (await import('@/api/services/config')).default
     const success = await configService.resetLiveConfigUrl()
     
     if (success) {
@@ -1074,6 +1125,50 @@ const resetLiveConfig = async () => {
     // 8秒后清除状态消息
     setTimeout(() => {
       addressStatus.liveConfig = null
+    }, 8000)
+  }
+}
+
+// 重置代理播放接口
+const resetProxyPlay = async () => {
+  addressSaving.proxyPlayReset = true
+  try {
+    // 重置为默认值
+    addressSettings.proxyPlay = 'http://localhost:57572/proxy?form=base64&url=${url}&header=${headers}&type=${type}#嗷呜'
+    addressSettings.proxyPlayEnabled = false
+    
+    // 保存到本地存储
+    const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+    savedAddresses.proxyPlay = addressSettings.proxyPlay
+    savedAddresses.proxyPlayEnabled = addressSettings.proxyPlayEnabled
+    localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
+    
+    // 触发自定义事件，通知播放器组件代理播放设置已重置
+    window.dispatchEvent(new CustomEvent('addressSettingsChanged', {
+      detail: {
+        type: 'proxyPlayReset',
+        value: addressSettings.proxyPlay,
+        enabled: addressSettings.proxyPlayEnabled
+      }
+    }))
+    
+    addressStatus.proxyPlay = {
+      type: 'success',
+      message: '代理播放接口已重置为默认地址'
+    }
+    Message.success('代理播放接口重置成功')
+  } catch (error) {
+    console.error('重置代理播放接口失败:', error)
+    addressStatus.proxyPlay = {
+      type: 'error',
+      message: '重置失败：' + (error.message || '未知错误')
+    }
+    Message.error('重置失败：' + (error.message || '未知错误'))
+  } finally {
+    addressSaving.proxyPlayReset = false
+    // 8秒后清除状态消息
+    setTimeout(() => {
+      addressStatus.proxyPlay = null
     }, 8000)
   }
 }
@@ -1148,17 +1243,26 @@ const saveSnifferTimeout = async () => {
   }
 }
 
-// 获取配置键名
-const getConfigKey = (configType) => {
-  const keyMap = {
-    vodConfig: 'vod-config',
-    liveConfig: 'live-config',
-    proxyAccess: 'proxy-access',
-    proxyPlay: 'proxy-play',
-    proxySniff: 'proxy-sniff'
-  }
-  return keyMap[configType] || configType
+// 处理代理播放开关变化
+const handleProxyPlayEnabledChange = (enabled) => {
+  // 保存开关状态到本地存储
+  const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+  savedAddresses.proxyPlayEnabled = enabled
+  localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
+  
+  // 触发自定义事件，通知播放器组件代理播放开关状态已更改
+  window.dispatchEvent(new CustomEvent('addressSettingsChanged', {
+    detail: {
+      type: 'proxyPlayEnabled',
+      value: enabled,
+      enabled: enabled
+    }
+  }))
+  
+  console.log('代理播放开关状态已更改:', enabled)
 }
+
+// 注释：已删除 getConfigKey 函数，改为直接使用 ref 引用
 
 // 获取当前播放器名称
 const getCurrentPlayerName = () => {
@@ -1228,7 +1332,7 @@ const resetAllSettings = () => {
     liveConfig: '',
     proxyAccess: '',
     proxyAccessEnabled: false,
-    proxyPlay: '',
+    proxyPlay: 'http://localhost:57572/proxy?form=base64&url=${url}&header=${headers}&type=${type}#嗷呜',
     proxyPlayEnabled: false,
     proxySniff: 'http://localhost:57573/sniffer',
     proxySniffEnabled: false
@@ -1326,7 +1430,6 @@ const loadConfig = async () => {
     }
     
     // 兼容旧的配置地址设置
-    const configService = (await import('@/api/services/config')).default
     const savedUrl = configService.getConfigUrl()
     if (savedUrl && !addressSettings.vodConfig) {
       addressSettings.vodConfig = savedUrl
@@ -1353,7 +1456,7 @@ const loadConfig = async () => {
   // 加载CSP设置
   try {
     const cspConfig = getCSPConfig()
-    settings.cspBypass = cspConfig.enabled
+    settings.cspBypass = cspConfig.autoBypass
     settings.referrerPolicy = cspConfig.referrerPolicy
   } catch (error) {
     console.error('Failed to load CSP config:', error)
@@ -1367,7 +1470,7 @@ const saveSettings = () => {
   // 保存CSP设置
   try {
     saveCSPConfig({
-      enabled: settings.cspBypass,
+      autoBypass: settings.cspBypass,
       referrerPolicy: settings.referrerPolicy
     })
     
@@ -1382,7 +1485,9 @@ const saveSettings = () => {
 watch(settings, saveSettings, { deep: true })
 
 // 初始化
-loadConfig()
+onMounted(async () => {
+  await loadConfig()
+})
 </script>
 
 <style scoped>

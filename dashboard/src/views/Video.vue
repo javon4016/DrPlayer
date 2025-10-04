@@ -50,7 +50,10 @@
         :module="form.now_site?.key || nowSite?.key"
         :extend="form.now_site"
         :api-url="form.now_site?.api"
+        :specialCategoryState="specialCategoryState"
         @activeKeyChange="handleActiveKeyChange"
+        @special-action="handleSpecialAction"
+        @close-special-category="closeSpecialCategory"
       />
     </a-layout-content>
   </div>
@@ -68,7 +71,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount } from "vue";
+import { ref, reactive, onMounted, onBeforeUnmount, nextTick } from "vue";
 import SourceDialog from "../components/SourceDialog.vue";
 import Breadcrumb from "../components/Breadcrumb.vue";
 import VideoList from "../components/VideoList.vue";
@@ -122,6 +125,14 @@ const searchState = reactive({
   totalPages: 1,
   hasMore: false,
   scrollPosition: 0
+});
+
+// 特殊分类状态
+const specialCategoryState = reactive({
+  isActive: false,
+  categoryData: null,
+  originalClassList: null,
+  originalRecommendVideos: null
 });
 
 const timer = ref(null);
@@ -405,6 +416,31 @@ const handleVideoClick = (video) => {
         console.log('从分类列表点击视频，保存分类状态');
       }
     }
+    
+    router.push({
+      name: 'VideoDetail',
+      params: { id: video.vod_id },
+      query: {
+        name: video.vod_name,
+        pic: video.vod_pic,
+        year: video.vod_year,
+        area: video.vod_area,
+        type: video.vod_type,
+        remarks: video.vod_remarks,
+        content: video.vod_content,
+        actor: video.vod_actor,
+        director: video.vod_director,
+        // 传递来源页面信息
+        sourceRouteName: route.name,
+        sourceRouteParams: JSON.stringify(route.params),
+        sourceRouteQuery: JSON.stringify({ ...route.query, activeKey: currentActiveKey.value }),
+        fromSearch: fromSearch, // 标识是否来自搜索
+        // 添加来源图片信息，用于详情页图片备用
+        sourcePic: video.vod_pic
+      }
+    });
+  }
+};
 
 // 处理刷新列表事件
 const handleRefreshList = () => {
@@ -423,30 +459,143 @@ const handleRefreshList = () => {
     }
   }
 };
-    
-    router.push({
-         name: 'VideoDetail',
-         params: { id: video.vod_id },
-         query: {
-           name: video.vod_name,
-           pic: video.vod_pic,
-           year: video.vod_year,
-           area: video.vod_area,
-           type: video.vod_type,
-           remarks: video.vod_remarks,
-           content: video.vod_content,
-           actor: video.vod_actor,
-           director: video.vod_director,
-           // 传递来源页面信息
-           sourceRouteName: route.name,
-           sourceRouteParams: JSON.stringify(route.params),
-           sourceRouteQuery: JSON.stringify({ ...route.query, activeKey: currentActiveKey.value }),
-           fromSearch: fromSearch, // 标识是否来自搜索
-           // 添加来源图片信息，用于详情页图片备用
-           sourcePic: video.vod_pic
-         }
-       });
+
+// 处理特殊动作事件
+const handleSpecialAction = async (actionType, actionData) => {
+  console.log('🎯 [DEBUG] handleSpecialAction 被调用');
+  console.log('🎯 [DEBUG] actionType:', actionType);
+  console.log('🎯 [DEBUG] actionData:', JSON.stringify(actionData, null, 2));
+  
+  switch (actionType) {
+    case '__self_search__':
+      console.log('🎯 [DEBUG] 匹配到 __self_search__ 动作，调用 handleSelfSearchAction');
+      await handleSelfSearchAction(actionData);
+      break;
+    default:
+      console.warn('🎯 [WARN] 未知的特殊动作类型:', actionType);
+      break;
   }
+};
+
+// 处理源内搜索动作
+const handleSelfSearchAction = async (categoryData) => {
+  try {
+    console.log('🔍 [DEBUG] handleSelfSearchAction 被调用');
+    console.log('🔍 [DEBUG] 接收到的 categoryData:', JSON.stringify(categoryData, null, 2));
+    
+    // 保存当前状态
+    if (!specialCategoryState.isActive) {
+      console.log('🔍 [DEBUG] 保存当前状态');
+      specialCategoryState.originalClassList = form.classList;
+      specialCategoryState.originalRecommendVideos = form.recommendVideos;
+    }
+    
+    // 解析T4返回的参数
+    const tid = categoryData.tid || categoryData.type_id || categoryData.actionData?.tid;
+    const typeName = categoryData.name || categoryData.type_name || `搜索: ${tid}`;
+    
+    console.log('🔍 [DEBUG] 解析的参数:', { 
+      tid, 
+      typeName,
+      'categoryData.tid': categoryData.tid,
+      'categoryData.type_id': categoryData.type_id,
+      'categoryData.actionData?.tid': categoryData.actionData?.tid,
+      'categoryData.name': categoryData.name,
+      'categoryData.type_name': categoryData.type_name
+    });
+    
+    if (!tid) {
+      console.error('🔍 [ERROR] 源内搜索参数不完整：缺少tid');
+      Message.error('源内搜索参数不完整：缺少tid');
+      return;
+    }
+    
+    // 使用tid调用T4分类接口获取视频数据
+    const categoryResult = await videoService.getCategoryVideos(
+      form.now_site?.key || nowSite?.key,
+      {
+        typeId: tid,
+        page: 1,
+        filters: {},
+        apiUrl: form.now_site?.api,
+        extend: form.now_site?.ext
+      }
+    );
+    
+    console.log('T4分类接口返回数据:', categoryResult);
+    
+    // 构造特殊分类数据结构
+    const specialClassList = {
+      class: [{
+        type_id: tid,
+        type_name: typeName
+      }],
+      filters: {}
+    };
+    
+    // 设置特殊分类状态
+    specialCategoryState.isActive = true;
+    specialCategoryState.categoryData = {
+      type_id: tid,
+      type_name: typeName,
+      originalData: categoryData,
+      videos: categoryResult.videos || [],
+      pagination: categoryResult.pagination || {}
+    };
+    
+    // 更新分类列表和推荐视频
+    form.classList = specialClassList;
+    form.recommendVideos = []; // 隐藏推荐视频
+    
+    // 切换到特殊分类
+    currentActiveKey.value = tid;
+    
+    console.log('特殊分类设置完成:', {
+      tid,
+      categoryName: typeName,
+      isActive: specialCategoryState.isActive,
+      videosCount: categoryResult.videos?.length || 0,
+      classList: form.classList
+    });
+    
+    // 等待下一个tick，确保VideoList组件已经接收到新的props
+    await nextTick();
+    
+    // 直接设置VideoList组件的数据，而不是触发刷新
+    if (videoListRef.value && categoryResult.videos) {
+      console.log('直接设置VideoList组件的特殊分类数据');
+      // 通过VideoList的暴露方法直接设置数据
+      videoListRef.value.setSpecialCategoryData(tid, categoryResult.videos, categoryResult.pagination);
+    }
+    
+  } catch (error) {
+    console.error('处理源内搜索失败:', error);
+    Message.error(`源内搜索失败: ${error.message}`);
+  }
+};
+
+// 关闭特殊分类，返回正常显示
+const closeSpecialCategory = () => {
+  if (!specialCategoryState.isActive) {
+    return;
+  }
+  
+  console.log('关闭特殊分类，恢复正常显示');
+  
+  // 恢复原始状态
+  form.classList = specialCategoryState.originalClassList;
+  form.recommendVideos = specialCategoryState.originalRecommendVideos;
+  
+  // 重置特殊分类状态
+  specialCategoryState.isActive = false;
+  specialCategoryState.categoryData = null;
+  specialCategoryState.originalClassList = null;
+  specialCategoryState.originalRecommendVideos = null;
+  
+  // 切换回推荐分类
+  currentActiveKey.value = 'recommendTuijian404';
+  
+  console.log('特殊分类已关闭，恢复到推荐分类');
 };
 
 
@@ -597,7 +746,8 @@ onMounted(async () => {
           hasMore: savedState?.hasMore || true,
           scrollPosition: savedState?.scrollPosition || 0
         });
-    }}, 100);
+      }
+    }, 100);
   }
 });
 

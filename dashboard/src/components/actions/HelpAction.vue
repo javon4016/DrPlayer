@@ -5,7 +5,12 @@
     :width="config.width || 700"
     :height="config.height"
     :canceled-on-touch-outside="!config.keep"
+    :module="module"
+    :extend="extend"
+    :api-url="apiUrl"
     @close="handleClose"
+    @toast="(message, type) => emit('toast', message, type)"
+    @reset="() => emit('reset')"
   >
     <div class="help-action-modern">
       <!-- 帮助内容 -->
@@ -378,9 +383,22 @@ export default {
     visible: {
       type: Boolean,
       default: true
+    },
+    // T4接口调用相关属性
+    module: {
+      type: String,
+      default: ''
+    },
+    extend: {
+      type: Object,
+      default: () => ({})
+    },
+    apiUrl: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['close', 'link-click'],
+  emits: ['close', 'link-click', 'toast', 'reset'],
   setup(props, { emit }) {
     const imageError = ref(false)
     const qrError = ref(false)
