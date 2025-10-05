@@ -69,6 +69,34 @@
           </a-select>
         </div>
 
+        <!-- 画质选择器 -->
+        <div 
+          v-if="qualities && qualities.length > 1" 
+          class="compact-btn selector-btn"
+        >
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
+            <line x1="8" y1="21" x2="16" y2="21" stroke="currentColor" stroke-width="2"/>
+            <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="2"/>
+            <text x="12" y="12" text-anchor="middle" fill="currentColor" font-size="8">HD</text>
+          </svg>
+          <a-select
+            :model-value="currentQuality"
+            @change="$emit('quality-change', $event)"
+            class="compact-select"
+            size="small"
+          >
+            <a-option 
+              v-for="quality in qualities" 
+              :key="quality.name" 
+              :value="quality.name"
+              :title="`切换到${quality.name}画质`"
+            >
+              画质:{{ quality.name }}
+            </a-option>
+          </a-select>
+        </div>
+
         <!-- 播放器切换选择器 -->
         <div class="compact-btn selector-btn">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -155,6 +183,15 @@ const props = defineProps({
   showDebugButton: {
     type: Boolean,
     default: false
+  },
+  // 画质相关属性
+  qualities: {
+    type: Array,
+    default: () => []
+  },
+  currentQuality: {
+    type: String,
+    default: '默认'
   }
 })
 
@@ -166,7 +203,8 @@ const emit = defineEmits([
   'open-skip-settings',
   'toggle-debug',
   'close',
-  'proxy-change'
+  'proxy-change',
+  'quality-change'
 ])
 
 // 代理播放地址相关状态

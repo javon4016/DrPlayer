@@ -31,7 +31,7 @@
         :scrollPosition="searchState.scrollPosition"
         :sourceRoute="{ name: route.name, params: route.params, query: route.query }"
         :module="form.now_site?.key || nowSite?.key"
-        :extend="form.now_site"
+        :extend="form.now_site?.ext"
         :api-url="form.now_site?.api"
         @load-more="onSearchLoadMore"
         @exit-search="exitSearch"
@@ -45,15 +45,30 @@
         ref="videoListRef"
         :classList="form.classList" 
         :recommendVideos="form.recommendVideos"
-        :sourceRoute="{ name: route.name, params: route.params, query: { ...route.query, activeKey: currentActiveKey } }"
+        :sourceRoute="{ 
+          name: route.name, 
+          params: route.params, 
+          query: { 
+            ...route.query, 
+            activeKey: currentActiveKey,
+            // 添加folder状态信息
+            folderState: folderNavigationState.isActive ? JSON.stringify({
+              isActive: folderNavigationState.isActive,
+              breadcrumbs: folderNavigationState.breadcrumbs,
+              currentBreadcrumb: folderNavigationState.currentBreadcrumb
+            }) : undefined
+          } 
+        }"
         :returnToActiveKey="route.query._returnToActiveKey"
         :module="form.now_site?.key || nowSite?.key"
-        :extend="form.now_site"
+        :extend="form.now_site?.ext"
         :api-url="form.now_site?.api"
         :specialCategoryState="specialCategoryState"
+        :folderNavigationState="folderNavigationState"
         @activeKeyChange="handleActiveKeyChange"
         @special-action="handleSpecialAction"
         @close-special-category="closeSpecialCategory"
+        @folder-navigate="handleFolderNavigate"
       />
     </a-layout-content>
   </div>
@@ -77,6 +92,7 @@ import Breadcrumb from "../components/Breadcrumb.vue";
 import VideoList from "../components/VideoList.vue";
 import SearchResults from "../components/SearchResults.vue";
 import { videoService, siteService } from "@/api/services";
+import { getCategoryData } from '@/api/modules/module';
 import { useSiteStore } from "@/stores/siteStore";
 import { usePaginationStore } from "@/stores/paginationStore";
 import { usePageStateStore } from "@/stores/pageStateStore";
@@ -133,6 +149,22 @@ const specialCategoryState = reactive({
   categoryData: null,
   originalClassList: null,
   originalRecommendVideos: null
+});
+
+// Folder导航状态
+const folderNavigationState = reactive({
+  isActive: false,
+  breadcrumbs: [],
+  currentData: [],
+  currentBreadcrumb: null,
+  loading: false
+});
+
+// 保存进入folder模式前的状态
+const previousState = reactive({
+  activeKey: null,
+  scrollPosition: 0,
+  savedAt: null
 });
 
 const timer = ref(null);
@@ -598,6 +630,56 @@ const closeSpecialCategory = () => {
   console.log('特殊分类已关闭，恢复到推荐分类');
 };
 
+// 处理folder导航事件
+const handleFolderNavigate = (navigationData) => {
+  console.log('🗂️ [DEBUG] Video.vue handleFolderNavigate 被调用');
+  console.log('🗂️ [DEBUG] navigationData:', JSON.stringify(navigationData, null, 2));
+  
+  // 如果是进入folder模式，保存当前状态
+  if (navigationData.isActive && !folderNavigationState.isActive) {
+    console.log('🗂️ [DEBUG] 进入folder模式，保存当前状态');
+    previousState.activeKey = currentActiveKey.value;
+    previousState.scrollPosition = window.scrollY || 0;
+    previousState.savedAt = Date.now();
+    console.log('🗂️ [DEBUG] 已保存状态:', previousState);
+  }
+  
+  // 如果是退出folder模式，恢复之前的状态
+  if (!navigationData.isActive && folderNavigationState.isActive) {
+    console.log('🗂️ [DEBUG] 退出folder模式，恢复之前的状态');
+    console.log('🗂️ [DEBUG] 恢复状态:', previousState);
+    
+    // 恢复之前的activeKey
+    if (previousState.activeKey) {
+      currentActiveKey.value = previousState.activeKey;
+      console.log('🗂️ [DEBUG] 恢复activeKey:', previousState.activeKey);
+    }
+    
+    // 恢复滚动位置
+    nextTick(() => {
+      if (previousState.scrollPosition > 0) {
+        window.scrollTo(0, previousState.scrollPosition);
+        console.log('🗂️ [DEBUG] 恢复滚动位置:', previousState.scrollPosition);
+      }
+    });
+    
+    // 清空保存的状态
+    previousState.activeKey = null;
+    previousState.scrollPosition = 0;
+    previousState.savedAt = null;
+  }
+  
+  // 直接更新folder导航状态
+  Object.assign(folderNavigationState, navigationData);
+  
+  console.log('🗂️ [DEBUG] folder导航状态已更新:', {
+    isActive: folderNavigationState.isActive,
+    breadcrumbsCount: folderNavigationState.breadcrumbs.length,
+    currentDataCount: folderNavigationState.currentData.length,
+    currentBreadcrumb: folderNavigationState.currentBreadcrumb
+  });
+};
+
 
 
 const handleOpenForm = () => {
@@ -720,9 +802,55 @@ onMounted(async () => {
     shouldRestoreState = true;
     console.log('从详情页返回，恢复到分类:', returnToActiveKey);
     
+    // 检查是否需要恢复folder状态
+    if (route.query.folderState) {
+      try {
+        const folderState = JSON.parse(route.query.folderState);
+        console.log('🗂️ [DEBUG] 从详情页返回，恢复folder状态:', folderState);
+        
+        // 恢复folder导航状态
+        Object.assign(folderNavigationState, {
+          isActive: folderState.isActive,
+          breadcrumbs: folderState.breadcrumbs || [],
+          currentBreadcrumb: folderState.currentBreadcrumb,
+          currentData: [], // 数据需要重新获取
+          loading: false
+        });
+        
+        // 如果有当前面包屑，重新获取folder数据
+        if (folderState.currentBreadcrumb && folderState.currentBreadcrumb.vod_id) {
+          console.log('🗂️ [DEBUG] 重新获取folder数据:', folderState.currentBreadcrumb.vod_id);
+          
+          // 设置加载状态
+          folderNavigationState.loading = true;
+          
+          // 调用T4分类接口获取folder内容
+          try {
+            const response = await getCategoryData(form.now_site?.key || nowSite?.key, {
+              t: folderState.currentBreadcrumb.vod_id,
+              apiUrl: form.now_site?.api,
+              extend: form.now_site?.ext
+            });
+            
+            if (response && response.list) {
+              folderNavigationState.currentData = response.list;
+              console.log('🗂️ [DEBUG] folder数据获取成功:', response.list.length);
+            }
+          } catch (error) {
+            console.error('🗂️ [ERROR] 获取folder数据失败:', error);
+          } finally {
+            folderNavigationState.loading = false;
+          }
+        }
+      } catch (error) {
+        console.error('🗂️ [ERROR] 解析folder状态失败:', error);
+      }
+    }
+    
     // 清除URL中的返回参数
     const newQuery = { ...route.query };
     delete newQuery._returnToActiveKey;
+    delete newQuery.folderState; // 同时清除folder状态参数
     router.replace({ query: newQuery });
   } else if (savedState && savedState.activeKey && !isStateExpired) {
     // 如果有保存的状态且未过期，恢复状态

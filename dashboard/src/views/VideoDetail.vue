@@ -59,6 +59,9 @@
         :episodes="currentRouteEpisodes"
         :current-episode-index="currentEpisodeIndex"
         :headers="parsedHeaders"
+        :qualities="parsedQualities"
+        :has-multiple-qualities="hasMultipleQualities"
+        :initial-quality="initialQuality"
         @close="handlePlayerClose"
         @player-change="handlePlayerTypeChange"
         @next-episode="handleNextEpisode"
@@ -76,10 +79,14 @@
         :current-episode-index="currentEpisodeIndex"
         :auto-next="true"
         :headers="parsedHeaders"
+        :qualities="parsedQualities"
+        :has-multiple-qualities="hasMultipleQualities"
+        :initial-quality="initialQuality"
         @close="handlePlayerClose"
         @player-change="handlePlayerTypeChange"
         @next-episode="handleNextEpisode"
         @episode-selected="handleEpisodeSelected"
+        @quality-change="handleQualityChange"
       />
 
       <!-- 小说阅读器组件 -->
@@ -332,6 +339,10 @@ const showVideoPlayer = ref(false)
 const parsedVideoUrl = ref('')
 // 解析后的请求头（用于T4接口解析结果）
 const parsedHeaders = ref({})
+// 多画质相关数据
+const parsedQualities = ref([])
+const hasMultipleQualities = ref(false)
+const initialQuality = ref('')
 
 // 小说阅读器相关
 const showBookReader = ref(false)
@@ -969,6 +980,19 @@ const handleSettingsChange = (settings) => {
   // 这里可以添加设置保存逻辑，如果需要的话
 }
 
+// 处理画质切换事件
+const handleQualityChange = (qualityData) => {
+  console.log('画质切换事件:', qualityData)
+  
+  if (qualityData && qualityData.url) {
+    // 更新当前播放URL
+    parsedVideoUrl.value = qualityData.url
+    console.log('画质切换完成，新URL:', qualityData.url)
+  } else {
+    console.warn('画质切换数据无效:', qualityData)
+  }
+}
+
 const selectEpisode = async (index) => {
   currentEpisode.value = index
   
@@ -1059,10 +1083,20 @@ const selectEpisode = async (index) => {
          // 普通视频内容
          console.log('启动内置播放器播放直链视频:', parseResult.url)
          console.log('T4解析结果headers:', parseResult.headers)
+         console.log('T4解析结果画质信息:', parseResult.qualities, parseResult.hasMultipleQualities)
          
          parsedVideoUrl.value = parseResult.url
          // 提取并存储headers，如果没有headers则使用空对象
          parsedHeaders.value = parseResult.headers || {}
+         // 提取并存储画质信息
+         parsedQualities.value = parseResult.qualities || []
+         hasMultipleQualities.value = parseResult.hasMultipleQualities || false
+         // 设置初始画质：统一使用name字段
+         if (parseResult.qualities && parseResult.qualities.length > 0) {
+           initialQuality.value = parseResult.qualities[0].name || ''
+         } else {
+           initialQuality.value = ''
+         }
          
          parsedNovelContent.value = null
          parsedComicContent.value = null
@@ -1077,9 +1111,12 @@ const selectEpisode = async (index) => {
        
        // 检查嗅探功能是否启用
        if (!isSnifferEnabled()) {
-         // 清空解析URL、headers和小说内容，不启动播放器
+         // 清空解析URL、headers、画质数据和小说内容，不启动播放器
          parsedVideoUrl.value = ''
          parsedHeaders.value = {}
+         parsedQualities.value = []
+         hasMultipleQualities.value = false
+         initialQuality.value = ''
          parsedNovelContent.value = null
          showBookReader.value = false
          
@@ -1101,9 +1138,12 @@ const selectEpisode = async (index) => {
      } else if (parseResult.playType === 'parse') {
        // jx:1 - 需要解析
        console.log('需要解析播放:', parseResult)
-       // 清空解析URL、headers和小说内容，不启动播放器
+       // 清空解析URL、headers、画质数据和小说内容，不启动播放器
        parsedVideoUrl.value = ''
        parsedHeaders.value = {}
+       parsedQualities.value = []
+       hasMultipleQualities.value = false
+       initialQuality.value = ''
        parsedNovelContent.value = null
        showBookReader.value = false
        
@@ -1119,6 +1159,9 @@ const selectEpisode = async (index) => {
        console.log('使用原始播放方式:', episodeUrl)
        parsedVideoUrl.value = ''
        parsedHeaders.value = {}
+       parsedQualities.value = []
+       hasMultipleQualities.value = false
+       initialQuality.value = ''
        parsedNovelContent.value = null
        showBookReader.value = false
        showVideoPlayer.value = true
@@ -1132,6 +1175,9 @@ const selectEpisode = async (index) => {
      console.log('回退到原始播放方式:', episodeUrl)
      parsedVideoUrl.value = ''
      parsedHeaders.value = {}
+     parsedQualities.value = []
+     hasMultipleQualities.value = false
+     initialQuality.value = ''
      parsedNovelContent.value = null
      showBookReader.value = false
      showVideoPlayer.value = true

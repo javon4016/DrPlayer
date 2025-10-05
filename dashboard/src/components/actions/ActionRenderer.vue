@@ -110,7 +110,7 @@ export default {
     },
     // 扩展参数，用于T4接口调用
     extend: {
-      type: Object,
+      type: [Object, String],
       default: () => ({})
     },
     // API URL，用于直接调用站点API

@@ -9,12 +9,15 @@
       :countdown-enabled="showCountdown"
       :skip-enabled="skipEnabled"
       :show-debug-button="showDebugButton"
+      :qualities="availableQualities"
+      :current-quality="currentQuality"
       @toggle-auto-next="toggleAutoNext"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
       @open-skip-settings="openSkipSettingsDialog"
       @toggle-debug="toggleDebugDialog"
       @proxy-change="handleProxyChange"
+      @quality-change="handleQualityChange"
       @close="closePlayer"
     />
     <div class="video-player-container">
@@ -84,7 +87,7 @@
       <!-- 调试信息弹窗组件 -->
       <DebugInfoDialog
         :visible="showDebugDialog"
-        :video-url="videoUrl"
+        :video-url="currentPlayingUrl || videoUrl"
         :headers="headers"
         :player-type="'default'"
         :detected-format="detectedFormat"
@@ -143,11 +146,24 @@ const props = defineProps({
   headers: {
     type: Object,
     default: () => ({})
+  },
+  // 画质相关属性
+  qualities: {
+    type: Array,
+    default: () => []
+  },
+  hasMultipleQualities: {
+    type: Boolean,
+    default: false
+  },
+  initialQuality: {
+    type: String,
+    default: '默认'
   }
 })
 
 // Emits
-const emit = defineEmits(['close', 'error', 'player-change', 'next-episode'])
+const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'quality-change'])
 
 // 响应式数据
 const videoPlayer = ref(null)
@@ -164,6 +180,115 @@ const currentSpeed = ref(1) // 当前播放倍速
 const showDebugDialog = ref(false)
 const detectedFormat = ref('')
 
+// 画质相关
+const currentQuality = ref('默认')
+const availableQualities = ref([])
+const currentPlayingUrl = ref('')
+
+// 初始化画质数据
+const initQualityData = () => {
+  if (props.qualities && props.qualities.length > 0) {
+    availableQualities.value = [...props.qualities]
+    currentQuality.value = props.initialQuality || props.qualities[0]?.name || '默认'
+    
+    // 设置当前播放URL
+    const currentQualityData = availableQualities.value.find(q => q.name === currentQuality.value)
+    currentPlayingUrl.value = currentQualityData?.url || props.videoUrl
+    
+    console.log('初始化画质数据:', {
+      qualities: availableQualities.value,
+      currentQuality: currentQuality.value,
+      currentPlayingUrl: currentPlayingUrl.value
+    })
+  } else {
+    availableQualities.value = []
+    currentQuality.value = '默认'
+    currentPlayingUrl.value = props.videoUrl
+  }
+}
+
+// 画质切换处理
+const handleQualityChange = (qualityName) => {
+  console.log('切换画质:', qualityName)
+  
+  const targetQuality = availableQualities.value.find(q => q.name === qualityName)
+  if (!targetQuality) {
+    console.error('未找到指定画质:', qualityName)
+    Message.error('画质切换失败：未找到指定画质')
+    return
+  }
+  
+  // 记录当前播放时间
+  const currentTime = videoPlayer.value?.currentTime || 0
+  const wasPlaying = videoPlayer.value && !videoPlayer.value.paused
+  
+  console.log('切换画质前状态:', {
+    currentTime,
+    wasPlaying,
+    from: currentQuality.value,
+    to: qualityName,
+    url: targetQuality.url
+  })
+  
+  // 更新当前画质和播放URL
+  currentQuality.value = qualityName
+  currentPlayingUrl.value = targetQuality.url
+  
+  // 通知父组件画质已切换
+  emit('quality-change', {
+    quality: qualityName,
+    url: targetQuality.url,
+    currentTime,
+    wasPlaying
+  })
+  
+  // 切换视频源
+  switchVideoSource(targetQuality.url, currentTime, wasPlaying)
+}
+
+// 切换视频源
+const switchVideoSource = (newUrl, seekTime = 0, autoPlay = false) => {
+  if (!videoPlayer.value || !newUrl) return
+  
+  console.log('切换视频源:', {
+    newUrl,
+    seekTime,
+    autoPlay
+  })
+  
+  try {
+    // 使用MediaPlayerManager切换视频
+    if (mediaPlayerManager.value) {
+      mediaPlayerManager.value.switchVideo(newUrl)
+    } else {
+      // 原生播放器直接切换
+      videoPlayer.value.src = newUrl
+    }
+    
+    // 等待视频加载后跳转到指定时间
+    const handleLoadedData = () => {
+      if (seekTime > 0) {
+        videoPlayer.value.currentTime = seekTime
+      }
+      
+      if (autoPlay) {
+        videoPlayer.value.play().catch(err => {
+          console.warn('画质切换后自动播放失败:', err)
+        })
+      }
+      
+      videoPlayer.value.removeEventListener('loadeddata', handleLoadedData)
+      Message.success(`已切换到${currentQuality.value}画质`)
+    }
+    
+    videoPlayer.value.addEventListener('loadeddata', handleLoadedData)
+    
+  } catch (error) {
+    console.error('切换视频源失败:', error)
+    Message.error('画质切换失败，请重试')
+  }
+}
+
 // 计算属性：是否显示调试按钮
 const showDebugButton = computed(() => {
   return !!props.videoUrl
@@ -171,10 +296,12 @@ const showDebugButton = computed(() => {
 
 // 计算属性：代理后的视频链接
 const proxyVideoUrl = computed(() => {
-  if (!props.videoUrl) return ''
+  // 使用当前实际播放的URL，如果没有则使用props.videoUrl
+  const actualUrl = currentPlayingUrl.value || props.videoUrl
+  if (!actualUrl) return ''
   
   const headers = props.headers || {}
-  return processVideoUrl(props.videoUrl, headers)
+  return processVideoUrl(actualUrl, headers)
 })
 
 // 检查是否有下一集
@@ -620,9 +747,24 @@ watch(() => props.visible, (newVisible) => {
   }
 })
 
+// 监听画质数据变化
+watch(() => props.qualities, (newQualities) => {
+  console.log('画质数据变化:', newQualities)
+  initQualityData()
+}, { immediate: true, deep: true })
+
+// 监听初始画质变化
+watch(() => props.initialQuality, (newQuality) => {
+  if (newQuality && newQuality !== currentQuality.value) {
+    console.log('初始画质变化:', newQuality)
+    currentQuality.value = newQuality
+  }
+}, { immediate: true })
+
 // 组件挂载时初始化
 onMounted(() => {
   initSkipSettings()
+  initQualityData()
 })
 
 // 组件卸载时清理资源

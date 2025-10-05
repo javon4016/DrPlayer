@@ -105,7 +105,7 @@ const props = defineProps({
     default: ''
   },
   extend: {
-    type: Object,
+    type: [Object, String],
     default: () => ({})
   },
   apiUrl: {
@@ -114,7 +114,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['load-more', 'scroll-bottom', 'refresh-list', 'special-action']);
+const emit = defineEmits(['load-more', 'scroll-bottom', 'refresh-list', 'special-action', 'folder-navigate']);
 
 const router = useRouter();
 const visitedStore = useVisitedStore();
@@ -131,6 +131,18 @@ const currentActionData = ref(null);
 // 视频点击处理
 const handleVideoClick = async (video) => {
   if (video && video.vod_id) {
+    // 检查是否为folder类型
+    if (video.vod_tag && video.vod_tag.includes('folder')) {
+      console.log('VideoGrid检测到folder类型:', video);
+      // 触发folder导航事件，传递当前点击的视频信息
+      emit('folder-navigate', {
+        vod_id: video.vod_id,
+        vod_name: video.vod_name,
+        vod_tag: video.vod_tag
+      });
+      return;
+    }
+    
     // 检查是否为action类型
     if (video.vod_tag === 'action') {
       try {

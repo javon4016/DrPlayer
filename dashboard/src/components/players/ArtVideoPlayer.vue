@@ -8,12 +8,15 @@
       :countdown-enabled="countdownEnabled"
       :skip-enabled="skipEnabled"
       :show-debug-button="showDebugButton"
+      :qualities="convertQualitiesToHeaderFormat"
+      :current-quality="getCurrentQualityLabel"
       @toggle-auto-next="toggleAutoNext"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
       @open-skip-settings="openSkipSettingsDialog"
       @toggle-debug="toggleDebugDialog"
       @proxy-change="handleProxyChange"
+      @quality-change="handleHeaderQualityChange"
       @close="closePlayer"
     />
     <div class="art-player-wrapper" v-show="props.visible">
@@ -57,7 +60,7 @@
     <!-- 调试信息弹窗组件 -->
     <DebugInfoDialog
       :visible="showDebugDialog"
-      :video-url="videoUrl"
+      :video-url="currentPlayingUrl || videoUrl"
       :headers="headers"
       :player-type="'artplayer'"
       :detected-format="detectedFormat"
@@ -124,11 +127,24 @@ const props = defineProps({
   headers: {
     type: Object,
     default: () => ({})
+  },
+  // 画质相关属性
+  qualities: {
+    type: Array,
+    default: () => []
+  },
+  hasMultipleQualities: {
+    type: Boolean,
+    default: false
+  },
+  initialQuality: {
+    type: String,
+    default: '默认'
   }
 })
 
 // Emits
-const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'episode-selected'])
+const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'episode-selected', 'quality-change'])
 
 // 响应式数据
 const artPlayerContainer = ref(null)
@@ -150,6 +166,11 @@ const countdownEnabled = ref(false) // 倒计时开关，默认关闭
 const showDebugDialog = ref(false)
 const detectedFormat = ref('')
 
+// 画质相关
+const currentQuality = ref('默认')
+const availableQualities = ref([])
+const currentPlayingUrl = ref('')
+
 // 计算属性：是否显示调试按钮
 const showDebugButton = computed(() => {
   return !!props.videoUrl
@@ -157,10 +178,32 @@ const showDebugButton = computed(() => {
 
 // 计算属性：代理后的视频链接
 const proxyVideoUrl = computed(() => {
-  if (!props.videoUrl) return ''
+  // 使用当前实际播放的URL，如果没有则使用props.videoUrl
+  const actualUrl = currentPlayingUrl.value || props.videoUrl
+  if (!actualUrl) return ''
   
   const headers = props.headers || {}
-  return processVideoUrl(props.videoUrl, headers)
+  return processVideoUrl(actualUrl, headers)
+})
+
+// 计算属性：获取当前画质的标签
+const getCurrentQualityLabel = computed(() => {
+  if (!currentQuality.value || availableQualities.value.length === 0) {
+    return '默认'
+  }
+  
+  // 按照T4格式处理：使用name字段
+  const currentQualityData = availableQualities.value.find(q => q.name === currentQuality.value)
+  return currentQualityData?.name || currentQuality.value || '默认'
+})
+
+// 计算属性：转换画质数据格式以适配PlayerHeader组件
+const convertQualitiesToHeaderFormat = computed(() => {
+  return availableQualities.value.map(q => ({
+    name: q.name || '未知',
+    value: q.name,
+    url: q.url
+  }))
 })
 
 // 选集弹窗相关数据已移除，现在使用ArtPlayer的layer功能
@@ -430,6 +473,14 @@ const initArtPlayer = async (url) => {
         },
         {
           position: 'right',
+          html: availableQualities.value.length > 1 ? `画质: ${getCurrentQualityLabel.value}` : '',
+          style: availableQualities.value.length > 1 ? {} : { display: 'none' },
+          click: function () {
+            toggleQualityLayer()
+          },
+        },
+        {
+          position: 'right',
           html: props.episodes.length > 1 ? '选集' : '',
           tooltip: props.episodes.length > 1 ? '选择集数' : '',
           style: props.episodes.length > 1 ? {} : { display: 'none' },
@@ -486,6 +537,29 @@ const initArtPlayer = async (url) => {
             // 点击背景关闭layer
             if (event.target.classList.contains('episode-layer-background')) {
               hideEpisodeLayer()
+            }
+          }
+        },
+        {
+          name: 'qualityLayer',
+          html: '',
+          style: {
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            background: 'rgba(0, 0, 0, 0.8)',
+            display: 'none',
+            zIndex: '100',
+            padding: '0',
+            boxSizing: 'border-box',
+            overflow: 'hidden'
+          },
+          click: function(event) {
+            // 点击背景关闭layer
+            if (event.target.classList.contains('quality-layer-background')) {
+              hideQualityLayer()
             }
           }
         }
@@ -594,6 +668,124 @@ const initArtPlayer = async (url) => {
     Message.error('播放器初始化失败')
     emit('error', '播放器初始化失败')
   }
+}
+
+// 初始化画质数据
+const initQualityData = () => {
+  if (props.qualities && props.qualities.length > 0) {
+    availableQualities.value = [...props.qualities]
+    currentQuality.value = props.initialQuality || props.qualities[0]?.name || '默认'
+    
+    // 设置当前播放URL
+    const currentQualityData = availableQualities.value.find(q => q.name === currentQuality.value)
+    currentPlayingUrl.value = currentQualityData?.url || props.videoUrl
+  } else {
+    availableQualities.value = []
+    currentQuality.value = '默认'
+    currentPlayingUrl.value = props.videoUrl
+  }
+  
+  console.log('画质数据初始化完成:', {
+    available: availableQualities.value,
+    current: currentQuality.value,
+    currentPlayingUrl: currentPlayingUrl.value
+  })
+}
+
+// 更新控制栏中的画质文本
+const updateQualityControlText = () => {
+  if (!artPlayerInstance.value) return
+  
+  try {
+    // 通过DOM直接更新
+    const container = artPlayerInstance.value.template.$container
+    if (container) {
+      // 查找控制栏中的画质按钮
+      const controlsRight = container.querySelector('.art-controls-right')
+      if (controlsRight) {
+        const buttons = controlsRight.querySelectorAll('.art-control')
+        // 遍历所有按钮，找到包含"画质"文本的按钮
+        for (let i = 0; i < buttons.length; i++) {
+          const button = buttons[i]
+          if (button.innerHTML.includes('画质')) {
+            const newText = `画质: ${getCurrentQualityLabel.value}`
+            button.innerHTML = newText
+            console.log('更新控制栏画质文本:', newText)
+            return
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('更新控制栏画质文本失败:', error)
+  }
+}
+
+// 处理画质切换
+const handleQualityChange = (qualityName) => {
+  const quality = availableQualities.value.find(q => q.name === qualityName)
+  if (!quality) {
+    console.warn('未找到指定画质:', qualityName)
+    return
+  }
+  
+  console.log('切换画质:', qualityName, quality)
+  
+  // 保存当前播放状态
+  let currentTime = 0
+  let isPaused = true
+  
+  if (artPlayerInstance.value) {
+    currentTime = artPlayerInstance.value.currentTime || 0
+    isPaused = artPlayerInstance.value.paused
+  }
+  
+  // 更新当前画质和播放URL
+  currentQuality.value = qualityName
+  currentPlayingUrl.value = quality.url
+  
+  // 更新控制栏中的画质文本
+  updateQualityControlText()
+  
+  // 触发画质切换事件，让父组件更新videoUrl
+  // 父组件更新videoUrl后会触发watch监听器重新初始化播放器
+  emit('quality-change', quality)
+}
+
+
+
+// 处理来自PlayerHeader的画质切换事件
+const handleHeaderQualityChange = (qualityName) => {
+  // 根据name找到对应的画质
+  const quality = availableQualities.value.find(q => q.name === qualityName)
+  
+  if (quality) {
+    handleQualityChange(quality.name)
+  }
+}
+
+// 切换视频源（用于画质切换）
+const switchVideoSource = (newUrl) => {
+  if (!artPlayerInstance.value || !newUrl) return
+  
+  console.log('切换视频源:', newUrl)
+  
+  // 保存当前播放状态
+  const currentTime = artPlayerInstance.value.currentTime || 0
+  const isPaused = artPlayerInstance.value.paused
+  
+  // 切换URL
+  artPlayerInstance.value.switchUrl(newUrl)
+  
+  // 恢复播放位置和状态
+  setTimeout(() => {
+    if (artPlayerInstance.value) {
+      artPlayerInstance.value.currentTime = currentTime
+      if (!isPaused) {
+        artPlayerInstance.value.play()
+      }
+    }
+  }, 100)
 }
 
 // 关闭播放器
@@ -1037,6 +1229,156 @@ const selectEpisodeFromLayer = (episodeIndex) => {
   }
 }
 
+// 创建画质选择layer的HTML
+const createQualityLayerHTML = () => {
+  const qualityItems = availableQualities.value.map((quality, index) => {
+    const isActive = quality.name === currentQuality.value
+    return `
+      <div class="quality-layer-item ${isActive ? 'active' : ''}" data-quality-index="${index}">
+        <span class="quality-name">${quality.name || '未知'}</span>
+        ${isActive ? '<span class="quality-current">当前</span>' : ''}
+      </div>
+    `
+  }).join('')
+
+  return `
+    <div class="quality-layer-background">
+      <div class="quality-layer-content">
+        <div class="quality-layer-header">
+          <h3>选择画质</h3>
+          <button class="quality-layer-close">×</button>
+        </div>
+        <div class="quality-layer-list">
+          ${qualityItems}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// 显示画质选择layer
+const showQualityLayer = () => {
+  if (!artPlayerInstance.value) return
+  
+  try {
+    // 更新layer内容和样式
+    artPlayerInstance.value.layers.update({
+      name: 'qualityLayer',
+      html: createQualityLayerHTML(),
+      style: {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        background: 'rgba(0, 0, 0, 0.8)',
+        display: 'flex',
+        zIndex: '100',
+        padding: '0',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }
+    })
+    
+    // 添加事件监听器
+    nextTick(() => {
+      const qualityLayer = artPlayerInstance.value.layers.qualityLayer
+      if (qualityLayer) {
+        // 使用事件委托处理点击事件
+        qualityLayer.addEventListener('click', handleQualityLayerClick)
+      }
+    })
+    
+    console.log('显示画质选择layer')
+  } catch (error) {
+    console.error('显示画质选择layer失败:', error)
+  }
+}
+
+// 处理画质layer的点击事件
+const handleQualityLayerClick = (event) => {
+  const target = event.target.closest('.quality-layer-item')
+  const closeBtn = event.target.closest('.quality-layer-close')
+  const background = event.target.closest('.quality-layer-background')
+  
+  if (closeBtn || (background && event.target === background)) {
+    // 点击关闭按钮或背景，隐藏layer
+    hideQualityLayer()
+  } else if (target) {
+    // 点击画质项
+    const qualityIndex = parseInt(target.dataset.qualityIndex)
+    if (!isNaN(qualityIndex)) {
+      selectQualityFromLayer(qualityIndex)
+      hideQualityLayer()
+    }
+  }
+}
+
+// 隐藏画质选择layer
+const hideQualityLayer = () => {
+  if (!artPlayerInstance.value) return
+  
+  try {
+    // 移除事件监听器
+    const qualityLayer = artPlayerInstance.value.layers.qualityLayer
+    if (qualityLayer) {
+      qualityLayer.removeEventListener('click', handleQualityLayerClick)
+    }
+    
+    // 隐藏layer
+    artPlayerInstance.value.layers.update({
+      name: 'qualityLayer',
+      html: '',
+      style: {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        background: 'rgba(0, 0, 0, 0.8)',
+        display: 'none',
+        zIndex: '100',
+        padding: '0',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
+      }
+    })
+    console.log('隐藏画质选择layer')
+  } catch (error) {
+    console.error('隐藏画质选择layer失败:', error)
+  }
+}
+
+// 切换画质layer显示状态
+const toggleQualityLayer = () => {
+  if (!artPlayerInstance.value) return
+  
+  try {
+    const qualityLayer = artPlayerInstance.value.layers.qualityLayer
+    if (qualityLayer && qualityLayer.style.display !== 'none') {
+      hideQualityLayer()
+    } else {
+      showQualityLayer()
+    }
+  } catch (error) {
+    console.error('切换画质layer失败:', error)
+    // 如果出错，尝试直接显示
+    showQualityLayer()
+  }
+}
+
+// 从layer中选择画质
+const selectQualityFromLayer = (qualityIndex) => {
+  console.log('从layer选择画质:', qualityIndex)
+  
+  const quality = availableQualities.value[qualityIndex]
+  if (quality) {
+    handleQualityChange(quality.name)
+  }
+}
+
 // 原有的选集弹窗函数已移除，现在使用ArtPlayer的layer功能
 
 // 监听视频URL变化
@@ -1066,6 +1408,18 @@ watch(() => props.visible, async (newVisible) => {
   }
 })
 
+// 监听画质数据变化
+watch(() => props.qualities, () => {
+  initQualityData()
+}, { immediate: true, deep: true })
+
+// 监听初始画质变化
+watch(() => props.initialQuality, (newQuality) => {
+  if (newQuality && newQuality !== currentQuality.value) {
+    currentQuality.value = newQuality
+  }
+})
+
 // 窗口大小变化处理
 const handleResize = () => {
   if (artPlayerContainer.value && artPlayerInstance.value) {
@@ -1086,6 +1440,8 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   // 初始化片头片尾设置
   initSkipSettings()
+  // 初始化画质数据
+  initQualityData()
 })
 
 // 组件卸载时清理资源
@@ -1200,6 +1556,38 @@ onUnmounted(() => {
 
 :deep(.art-control:hover) {
   color: #23ade5;
+}
+
+/* ArtPlayer selector 弹层位置调整 */
+:deep(.art-selector) {
+  bottom: 45px !important; /* 向上调整弹层位置，避免被遮挡 */
+  margin-bottom: 5px !important;
+}
+
+:deep(.art-control-selector .art-selector) {
+  bottom: 45px !important;
+  margin-bottom: 5px !important;
+}
+
+/* ArtPlayer selector 选项样式 */
+:deep(.art-selector .art-selector-item) {
+  color: #fff !important;
+  background: rgba(0, 0, 0, 0.8) !important;
+}
+
+:deep(.art-selector .art-selector-item:hover) {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+:deep(.art-selector .art-selector-item.art-current) {
+  color: #23ade5 !important;
+  background: rgba(35, 173, 229, 0.1) !important;
+}
+
+:deep(.art-selector .art-selector-item.art-current:hover) {
+  color: #23ade5 !important;
+  background: rgba(35, 173, 229, 0.2) !important;
 }
 
 /* 紧凑按钮组样式 */
@@ -1676,6 +2064,235 @@ onUnmounted(() => {
   }
   
   :deep(.episode-layer-list) {
+    max-height: 55vh;
+    padding: 12px 16px 16px;
+  }
+}
+
+/* 画质选择layer样式 */
+:deep(.quality-layer-background) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+:deep(.quality-layer-content) {
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 
+    0 32px 64px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  max-width: 400px;
+  max-height: 60vh;
+  width: 95%;
+  overflow: hidden;
+  animation: qualityLayerShow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@keyframes qualityLayerShow {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(-40px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+:deep(.quality-layer-header) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+:deep(.quality-layer-header h3) {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+:deep(.quality-layer-close) {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 18px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 300;
+}
+
+:deep(.quality-layer-close:hover) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+:deep(.quality-layer-close:active) {
+  transform: scale(0.95);
+}
+
+:deep(.quality-layer-list) {
+  padding: 16px 20px 20px;
+  max-height: 45vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 自定义滚动条 */
+:deep(.quality-layer-list::-webkit-scrollbar) {
+  width: 6px;
+}
+
+:deep(.quality-layer-list::-webkit-scrollbar-track) {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+:deep(.quality-layer-list::-webkit-scrollbar-thumb) {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  transition: background 0.3s ease;
+}
+
+:deep(.quality-layer-list::-webkit-scrollbar-thumb:hover) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+:deep(.quality-layer-item) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  min-height: 48px;
+  position: relative;
+  overflow: hidden;
+}
+
+:deep(.quality-layer-item::before) {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+:deep(.quality-layer-item:hover) {
+  border-color: rgba(64, 150, 255, 0.4);
+  background: rgba(64, 150, 255, 0.08);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 
+    0 8px 32px rgba(64, 150, 255, 0.15),
+    0 0 0 1px rgba(64, 150, 255, 0.2);
+}
+
+:deep(.quality-layer-item:hover::before) {
+  opacity: 1;
+}
+
+:deep(.quality-layer-item.active) {
+  border-color: rgba(64, 150, 255, 0.6);
+  background: linear-gradient(135deg, rgba(64, 150, 255, 0.2) 0%, rgba(100, 180, 255, 0.15) 100%);
+  color: #ffffff;
+  box-shadow: 
+    0 8px 32px rgba(64, 150, 255, 0.25),
+    0 0 0 1px rgba(64, 150, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: scale(1.02);
+}
+
+:deep(.quality-layer-item.active::before) {
+  opacity: 1;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
+}
+
+:deep(.quality-layer-item.active:hover) {
+  background: linear-gradient(135deg, rgba(64, 150, 255, 0.25) 0%, rgba(100, 180, 255, 0.2) 100%);
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 
+    0 12px 40px rgba(64, 150, 255, 0.3),
+    0 0 0 1px rgba(64, 150, 255, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+:deep(.quality-name) {
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+:deep(.quality-layer-item.active .quality-name) {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+:deep(.quality-current) {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(64, 150, 255, 0.9);
+  background: rgba(64, 150, 255, 0.15);
+  border: 1px solid rgba(64, 150, 255, 0.3);
+  border-radius: 12px;
+  padding: 2px 8px;
+  line-height: 1.2;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  :deep(.quality-layer-content) {
+    max-width: 320px;
+    max-height: 75vh;
+  }
+  
+  :deep(.quality-layer-header) {
+    padding: 14px 16px 10px;
+  }
+  
+  :deep(.quality-layer-header h3) {
+    font-size: 18px;
+  }
+  
+  :deep(.quality-layer-list) {
     max-height: 55vh;
     padding: 12px 16px 16px;
   }

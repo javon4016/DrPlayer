@@ -238,7 +238,7 @@ export default {
       default: ''
     },
     extend: {
-      type: Object,
+      type: [Object, String],
       default: () => ({})
     },
     apiUrl: {

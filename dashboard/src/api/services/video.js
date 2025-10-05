@@ -15,6 +15,7 @@ import {
 } from '../modules/module'
 import { parseVideo } from '../modules/parse'
 import { encodeFilters, validateModule, validateVideoId } from '../utils'
+import { processExtendParam } from '@/utils/apiUtils'
 import {
   createVideoInfo,
   createSearchParams,
@@ -22,6 +23,8 @@ import {
   VIDEO_TYPES,
   SORT_TYPES
 } from '../types'
+
+
 
 /**
  * 视频服务类
@@ -112,8 +115,9 @@ class VideoService {
       }
 
       // 添加extend参数
-      if (extend) {
-        requestParams.extend = extend
+      const processedExtend = processExtendParam(extend)
+      if (processedExtend) {
+        requestParams.extend = processedExtend
       }
 
       // 添加apiUrl参数
@@ -175,8 +179,9 @@ class VideoService {
       if (apiUrl) {
         params.apiUrl = apiUrl
       }
-      if (extend) {
-        params.extend = extend
+      const processedExtend = processExtendParam(extend)
+      if (processedExtend) {
+        params.extend = processedExtend
       }
       const response = await getVideoDetail(module, params)
 
@@ -227,8 +232,9 @@ class VideoService {
       }
 
       // 添加extend参数
-      if (extend) {
-        requestParams.extend = extend
+      const processedExtend = processExtendParam(extend)
+      if (processedExtend) {
+        requestParams.extend = processedExtend
       }
 
       // 添加apiUrl参数
@@ -276,8 +282,9 @@ class VideoService {
       if (apiUrl) {
         params.apiUrl = apiUrl
       }
-      if (extend) {
-        params.extend = extend
+      const processedExtend = processExtendParam(extend)
+      if (processedExtend) {
+        params.extend = processedExtend
       }
       const response = await getPlayData(module, params)
 
@@ -348,7 +355,7 @@ class VideoService {
     try {
       console.log('VideoService: 开始解析选集播放地址', { module, params })
       
-      const parseParams = { play, extend }
+      const parseParams = { play, extend: processExtendParam(extend) }
       
       // 添加flag参数（线路名称）
       if (flag) {
@@ -392,7 +399,7 @@ class VideoService {
       const actionData = {
         action: actionName.trim(),
         value: options.value || '',
-        extend: options.extend,
+        extend: processExtendParam(options.extend),
         apiUrl: options.apiUrl
       }
 
@@ -424,7 +431,8 @@ class VideoService {
       // 清除相关缓存
       this.clearModuleCache(module)
 
-      const response = await refreshModule(module, extend, apiUrl)
+      const processedExtend = processExtendParam(extend)
+      const response = await refreshModule(module, processedExtend, apiUrl)
 
       return {
         success: true,

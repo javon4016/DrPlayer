@@ -5,6 +5,7 @@
 
 import { get, post } from '../request'
 import { API_PATHS, MODULE_ACTIONS, PAGINATION } from '../config'
+import { processExtendParam } from '@/utils/apiUtils'
 import axios from 'axios'
 
 /**
@@ -44,29 +45,7 @@ const parseHeaders = (headers) => {
   return {}
 }
 
-/**
- * 处理extend参数，确保对象类型转换为JSON字符串
- * @param {string|object} extend - 扩展参数
- * @returns {string|undefined} 处理后的extend参数
- */
-const processExtendParam = (extend) => {
-  if (!extend) {
-    return undefined
-  }
-  
-  // 如果extend是对象类型，转换为JSON字符串
-  if (typeof extend === 'object' && extend !== null) {
-    try {
-      return JSON.stringify(extend)
-    } catch (error) {
-      console.warn('extend参数JSON序列化失败:', error)
-      return undefined
-    }
-  }
-  
-  // 如果已经是字符串，直接返回
-  return extend
-}
+
 
 /**
  * 构建模块接口URL
@@ -284,17 +263,63 @@ export const parsePlayUrl = async (module, params) => {
       if (playData.parse === 0) {
         // 直链播放
         result.playType = 'direct'
-        result.url = playData.url || playData.play_url || ''
+        
+        // 处理URL字段 - 支持数组格式的多画质
+        const urlData = playData.url || playData.play_url || ''
+        if (Array.isArray(urlData)) {
+          // URL是数组格式，包含多画质信息
+          console.log('检测到多画质URL数组:', urlData)
+          
+          // 解析画质数组：奇数索引是画质名称，偶数索引是对应链接
+          const qualities = []
+          for (let i = 0; i < urlData.length; i += 2) {
+            if (i + 1 < urlData.length) {
+              const qualityName = urlData[i]?.toString().trim()
+              const qualityUrl = urlData[i + 1]?.toString().trim()
+              if (qualityName && qualityUrl) {
+                qualities.push({
+                  name: qualityName,
+                  url: qualityUrl
+                })
+              }
+            }
+          }
+          
+          console.log('解析出的画质列表:', qualities)
+          
+          // 设置多画质数据
+          result.qualities = qualities
+          result.hasMultipleQualities = qualities.length > 1
+          
+          // 默认使用第一个画质
+          if (qualities.length > 0) {
+            result.url = qualities[0].url
+            result.currentQuality = qualities[0].name
+            result.message = `多画质播放 (当前: ${qualities[0].name})`
+          } else {
+            result.url = ''
+            result.message = '多画质数据解析失败'
+          }
+        } else {
+          // URL是字符串格式，单一画质
+          result.url = urlData
+          result.qualities = []
+          result.hasMultipleQualities = false
+          result.currentQuality = '默认'
+          result.message = '直链播放'
+        }
+        
         result.headers = parseHeaders(playData.headers || playData.header)
         result.needParse = false
         result.needSniff = false
-        result.message = '直链播放'
       } else if (playData.parse === 1) {
         // 需要嗅探
         result.playType = 'sniff'
         result.url = playData.url || playData.play_url || ''
         result.headers = parseHeaders(playData.headers || playData.header)
         result.needSniff = true
+        result.qualities = []
+        result.hasMultipleQualities = false
         result.message = '需要嗅探才能播放，尽情期待'
       } else if (playData.jx === 1) {
         // 需要解析
@@ -302,17 +327,23 @@ export const parsePlayUrl = async (module, params) => {
         result.url = playData.url || playData.play_url || ''
         result.headers = parseHeaders(playData.headers || playData.header)
         result.needParse = true
+        result.qualities = []
+        result.hasMultipleQualities = false
         result.message = '需要解析才能播放，尽情期待'
       } else {
         // 默认处理为直链
         result.url = playData.url || playData.play_url || playData
         result.headers = parseHeaders(playData.headers || playData.header)
+        result.qualities = []
+        result.hasMultipleQualities = false
         result.message = '直链播放'
       }
     } else if (typeof playData === 'string') {
       // 如果返回的是字符串，直接作为播放地址
       result.url = playData
       result.headers = {}
+      result.qualities = []
+      result.hasMultipleQualities = false
       result.message = '直链播放'
     }
     

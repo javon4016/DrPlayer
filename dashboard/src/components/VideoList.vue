@@ -16,10 +16,39 @@
       @close-special-category="() => emit('close-special-category')"
     />
 
+    <!-- Folder导航面包屑 -->
+    <FolderBreadcrumb
+      v-if="folderNavigationState.isActive"
+      :breadcrumbs="folderNavigationState.breadcrumbs"
+      @navigate="handleFolderNavigate"
+      @go-back="handleFolderGoBack"
+      @go-home="handleFolderGoHome"
+      @exit-folder="handleExitFolder"
+    />
+
     <!-- 内容区域 -->
     <div class="content-area">
+      <!-- Folder导航内容 -->
+      <div v-if="folderNavigationState.isActive" class="tab-content">
+        <VideoGrid
+          :videos="folderNavigationState.currentData || []"
+          :loading="folderNavigationState.loading || folderLoadingMore[folderNavigationState.currentBreadcrumb?.vod_id] || false"
+          :hasMore="folderPageData[folderNavigationState.currentBreadcrumb?.vod_id]?.hasNext || false"
+          :statsText="getStatsText()"
+          :sourceRoute="props.sourceRoute"
+          :module="props.module"
+          :extend="props.extend"
+          :api-url="props.apiUrl"
+          @load-more="loadMoreFolderData(folderNavigationState.currentBreadcrumb?.vod_id)"
+          @scroll-bottom="loadMoreFolderData(folderNavigationState.currentBreadcrumb?.vod_id)"
+          @refresh-list="handleRefreshList"
+          @special-action="(actionType, actionData) => emit('special-action', actionType, actionData)"
+          @folder-navigate="handleFolderNavigateFromGrid"
+        />
+      </div>
+      
       <!-- 特殊分类内容 -->
-      <div v-if="specialCategoryState.isActive" class="tab-content">
+      <div v-else-if="specialCategoryState.isActive" class="tab-content">
         <VideoGrid
           :videos="listData[specialCategoryState.categoryData?.type_id] || []"
           :loading="loadingMore[specialCategoryState.categoryData?.type_id] || false"
@@ -33,6 +62,7 @@
           @scroll-bottom="loadMoreData(specialCategoryState.categoryData?.type_id)"
           @refresh-list="handleRefreshList"
           @special-action="(actionType, actionData) => emit('special-action', actionType, actionData)"
+          @folder-navigate="handleFolderNavigateFromGrid"
         />
       </div>
       
@@ -68,6 +98,7 @@
           @scroll-bottom="loadMoreData(activeKey)"
           @refresh-list="handleRefreshList"
           @special-action="(actionType, actionData) => emit('special-action', actionType, actionData)"
+          @folder-navigate="handleFolderNavigateFromGrid"
         />
       </div>
     </div>
@@ -86,12 +117,16 @@
 
 <script setup>
 import { videoService, siteService } from "@/api/services";
-import { ref, reactive, onMounted, watch, computed } from "vue";
+import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
 import { usePaginationStore } from '@/stores/paginationStore';
+import { getCategoryData } from '@/api/modules/module';
+import { processExtendParam } from '@/utils/apiUtils';
+import { encodeFilters } from '@/api/utils';
 import CategoryNavigation from './CategoryNavigation.vue';
 import FilterSection from './FilterSection.vue';
 import VideoGrid from './VideoGrid.vue';
 import CategoryModal from './CategoryModal.vue';
+import FolderBreadcrumb from './FolderBreadcrumb.vue';
 
 const props = defineProps({
   classList: Object,
@@ -119,7 +154,7 @@ const props = defineProps({
     default: ''
   },
   extend: {
-    type: Object,
+    type: [Object, String],
     default: () => ({})
   },
   apiUrl: {
@@ -135,10 +170,21 @@ const props = defineProps({
       originalClassList: null,
       originalRecommendVideos: null
     })
+  },
+  // Folder导航状态
+  folderNavigationState: {
+    type: Object,
+    default: () => ({
+      isActive: false,
+      breadcrumbs: [],
+      currentData: [],
+      currentBreadcrumb: null,
+      loading: false
+    })
   }
 });
 
-const emit = defineEmits(['activeKeyChange', 'special-action', 'close-special-category']);
+const emit = defineEmits(['activeKeyChange', 'special-action', 'close-special-category', 'folder-navigate']);
 
 // 使用翻页统计store
 const paginationStore = usePaginationStore();
@@ -152,6 +198,10 @@ const filterVisible = reactive({});
 const selectedFilters = reactive({});
 const categoryModalVisible = ref(false);
 const videoGridRef = ref(null);
+
+// 目录模式翻页状态管理
+const folderPageData = reactive({});
+const folderLoadingMore = reactive({});
 
 // 计算属性
 const hasRecommendVideos = computed(() => {
@@ -199,13 +249,25 @@ const toggleFilter = (filterKey, filterValue, filterName) => {
     selectedFilters[activeKey.value][filterKey] = filterValue;
   }
   
-  // 重新获取数据
-  refreshCategoryData(activeKey.value);
+  // 如果在目录模式下，重新获取目录数据
+  if (props.folderNavigationState.isActive && props.folderNavigationState.currentBreadcrumb) {
+    handleFolderNavigate(props.folderNavigationState.currentBreadcrumb);
+  } else {
+    // 重新获取分类数据
+    refreshCategoryData(activeKey.value);
+  }
 };
 
 const resetFilters = (categoryId) => {
   delete selectedFilters[categoryId];
-  refreshCategoryData(categoryId);
+  
+  // 如果在目录模式下，重新获取目录数据
+  if (props.folderNavigationState.isActive && props.folderNavigationState.currentBreadcrumb) {
+    handleFolderNavigate(props.folderNavigationState.currentBreadcrumb);
+  } else {
+    // 重新获取分类数据
+    refreshCategoryData(categoryId);
+  }
 };
 
 const refreshCategoryData = (categoryId) => {
@@ -233,6 +295,14 @@ const getStatsText = (categoryId) => {
   if (totalCount) {
     text += ` / 共 ${totalCount} 条`;
   }
+  
+  // 如果当前处于folder模式，添加folder统计信息
+  if (props.folderNavigationState.isActive && props.folderNavigationState.currentBreadcrumb) {
+    const folderName = props.folderNavigationState.currentBreadcrumb.vod_name || '未知目录';
+    const folderItemCount = props.folderNavigationState.currentData?.length || 0;
+    text += `，当前目录：${folderName}，项目数：${folderItemCount}`;
+  }
+  
   return text;
 };
 
@@ -353,6 +423,85 @@ const loadMoreData = async (key) => {
     };
   } finally {
     loadingMore[key] = false;
+  }
+};
+
+// 目录模式加载更多数据
+const loadMoreFolderData = async (folderId) => {
+  if (folderLoadingMore[folderId] || !folderPageData[folderId]?.hasNext) {
+    return;
+  }
+  
+  folderLoadingMore[folderId] = true;
+  
+  try {
+    const nextPage = folderPageData[folderId].page + 1;
+    
+    // 调用T4分类接口获取下一页数据
+    const response = await getCategoryData(props.module, {
+      t: folderId,
+      pg: nextPage,
+      extend: processExtendParam(props.extend),
+      apiUrl: props.apiUrl
+    });
+    
+    console.log('🗂️ [DEBUG] 目录翻页接口响应:', response);
+    
+    if (response && response.list && response.list.length > 0) {
+      const newVideos = response.list;
+      
+      // 检查是否为无效数据或重复数据
+      if (isInvalidData(newVideos) || isDuplicateData(props.folderNavigationState.currentData, newVideos)) {
+        console.log("目录翻页检测到无效数据或重复数据，停止翻页");
+        folderPageData[folderId] = { 
+          ...folderPageData[folderId], 
+          hasNext: false 
+        };
+        return;
+      }
+      
+      // 合并新数据到当前目录数据
+      const updatedData = [...props.folderNavigationState.currentData, ...newVideos];
+      
+      // 更新目录状态
+      const updatedState = {
+        ...props.folderNavigationState,
+        currentData: updatedData,
+        loading: false
+      };
+      
+      // 更新翻页状态
+      folderPageData[folderId] = {
+        page: nextPage,
+        hasNext: response.page < response.pagecount || false,
+        total: response.total || 0
+      };
+      
+      emit('folder-navigate', updatedState);
+      
+      // 更新统计信息
+      await nextTick();
+      if (activeKey.value) {
+        const statsText = getStatsText(activeKey.value);
+        paginationStore.updateStats(statsText);
+        console.log('🗂️ [DEBUG] 更新目录翻页统计信息:', statsText);
+      }
+    } else {
+      // 没有更多数据
+      folderPageData[folderId] = { 
+        ...folderPageData[folderId], 
+        hasNext: false 
+      };
+      console.log('🗂️ [DEBUG] 目录没有更多数据');
+    }
+  } catch (error) {
+    console.error("目录加载更多数据失败:", error);
+    folderPageData[folderId] = { 
+      ...folderPageData[folderId], 
+      hasNext: false 
+    };
+  } finally {
+    folderLoadingMore[folderId] = false;
   }
 };
 
@@ -528,6 +677,249 @@ defineExpose({
     });
   }
 });
+
+// Folder导航相关方法
+const handleFolderNavigateFromGrid = async (video) => {
+  console.log('🗂️ [DEBUG] VideoList收到folder导航请求:', video);
+  
+  try {
+    // 设置加载状态
+    const loadingState = {
+      isActive: true,
+      breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+      currentData: [],
+      currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
+      loading: true
+    };
+    
+    emit('folder-navigate', loadingState);
+    console.log('props.extend:',props.extend)
+    console.log('processExtendParam(props.extend):',processExtendParam(props.extend))
+    
+    // 获取当前分类的筛选条件
+    const filters = selectedFilters[activeKey.value] || {};
+    console.log('🗂️ [DEBUG] 目录模式应用筛选条件:', filters);
+    
+    // 调用T4分类接口，包含筛选条件
+    const requestParams = {
+      t: video.vod_id, // 使用vod_id作为type_id
+      pg: 1,
+      extend: processExtendParam(props.extend),
+      apiUrl: props.apiUrl
+    };
+    
+    // 如果有筛选条件，添加ext参数
+    if (Object.keys(filters).length > 0) {
+      // requestParams.ext = encodeFilters(filters);
+      console.log('🗂️ [DEBUG] 目录模式编码后的筛选条件:', requestParams.ext);
+    }
+    
+    const response = await getCategoryData(props.module, requestParams);
+    
+    console.log('🗂️ [DEBUG] T4分类接口响应:', response);
+    
+    if (response && response.list && response.list.length > 0) {
+      // 解析返回的分类数据
+      const folderData = response.list;
+      
+      // 初始化翻页状态
+      folderPageData[video.vod_id] = {
+        page: response.page || 1,
+        hasNext: response.page < response.pagecount || false,
+        total: response.total || 0
+      };
+      folderLoadingMore[video.vod_id] = false;
+      
+      // 更新folder导航状态
+      const updatedState = {
+        isActive: true,
+        breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+        currentData: folderData,
+        currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
+        loading: false
+      };
+      
+      emit('folder-navigate', updatedState);
+      
+      // 等待状态更新后，使用getStatsText生成正确的统计信息
+      await nextTick();
+      if (activeKey.value) {
+        const statsText = getStatsText(activeKey.value);
+        paginationStore.updateStats(statsText);
+        console.log('🗂️ [DEBUG] 更新folder统计信息:', statsText);
+      }
+    } else {
+      console.warn('🗂️ [DEBUG] T4分类接口返回数据为空');
+      // 返回空数据状态
+      const emptyState = {
+        isActive: true,
+        breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+        currentData: [],
+        currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
+        loading: false
+      };
+      
+      emit('folder-navigate', emptyState);
+      
+      // 等待状态更新后，使用getStatsText生成正确的统计信息
+      await nextTick();
+      if (activeKey.value) {
+        const statsText = getStatsText(activeKey.value);
+        paginationStore.updateStats(statsText);
+        console.log('🗂️ [DEBUG] 更新folder统计信息(空):', statsText);
+      }
+    }
+  } catch (error) {
+    console.error('🗂️ [ERROR] Folder导航失败:', error);
+    
+    // 返回错误状态
+    const errorState = {
+      isActive: true,
+      breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+      currentData: [],
+      currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
+      loading: false
+    };
+    
+    emit('folder-navigate', errorState);
+    
+    // 等待状态更新后，使用getStatsText生成正确的统计信息
+    await nextTick();
+    if (activeKey.value) {
+      const statsText = getStatsText(activeKey.value);
+      paginationStore.updateStats(statsText);
+      console.log('🗂️ [DEBUG] 更新folder统计信息(错误):', statsText);
+    }
+  }
+};
+
+const handleFolderNavigate = async (breadcrumb) => {
+  console.log('🗂️ [DEBUG] 面包屑导航到:', breadcrumb);
+  
+  try {
+    // 设置加载状态
+    const currentBreadcrumbs = props.folderNavigationState.breadcrumbs;
+    const targetIndex = currentBreadcrumbs.findIndex(b => b.vod_id === breadcrumb.vod_id);
+    const newBreadcrumbs = targetIndex >= 0 ? currentBreadcrumbs.slice(0, targetIndex + 1) : currentBreadcrumbs;
+    
+    const loadingState = {
+      ...props.folderNavigationState,
+      breadcrumbs: newBreadcrumbs,
+      currentBreadcrumb: breadcrumb,
+      loading: true
+    };
+    
+    emit('folder-navigate', loadingState);
+    
+    // 获取当前分类的筛选条件
+    const filters = selectedFilters[activeKey.value] || {};
+    console.log('🗂️ [DEBUG] 面包屑导航应用筛选条件:', filters);
+    
+    // 调用T4分类接口，包含筛选条件
+    const requestParams = {
+      t: breadcrumb.vod_id,
+      pg: 1,
+      extend: processExtendParam(props.extend),
+      apiUrl: props.apiUrl
+    };
+    
+    // 如果有筛选条件，添加ext参数
+    if (Object.keys(filters).length > 0) {
+      // requestParams.ext = encodeFilters(filters);
+      console.log('🗂️ [DEBUG] 面包屑导航编码后的筛选条件:', requestParams.ext);
+    }
+    
+    const response = await getCategoryData(props.module, requestParams);
+    
+    if (response && response.list && response.list.length > 0) {
+      const folderData = response.list;
+      
+      // 更新翻页状态
+      folderPageData[breadcrumb.vod_id] = {
+        page: response.page || 1,
+        hasNext: response.page < response.pagecount || false,
+        total: response.total || 0
+      };
+      folderLoadingMore[breadcrumb.vod_id] = false;
+      
+      const updatedState = {
+        ...props.folderNavigationState,
+        breadcrumbs: newBreadcrumbs,
+        currentData: folderData,
+        currentBreadcrumb: breadcrumb,
+        loading: false
+      };
+      
+      emit('folder-navigate', updatedState);
+      
+      // 等待状态更新后，使用getStatsText生成正确的统计信息
+      await nextTick();
+      if (activeKey.value) {
+        const statsText = getStatsText(activeKey.value);
+        paginationStore.updateStats(statsText);
+        console.log('🗂️ [DEBUG] 面包屑导航更新统计信息:', statsText);
+      }
+    }
+  } catch (error) {
+    console.error('🗂️ [ERROR] 面包屑导航失败:', error);
+  }
+};
+
+const handleFolderGoBack = () => {
+  console.log('🗂️ [DEBUG] 返回上一级folder');
+  
+  const currentBreadcrumbs = props.folderNavigationState.breadcrumbs;
+  if (currentBreadcrumbs.length > 1) {
+    const newBreadcrumbs = currentBreadcrumbs.slice(0, -1);
+    const targetBreadcrumb = newBreadcrumbs[newBreadcrumbs.length - 1];
+    handleFolderNavigate(targetBreadcrumb);
+  } else {
+    // 如果只有一级，返回到正常列表模式
+    handleFolderGoHome();
+  }
+};
+
+const handleFolderGoHome = () => {
+  console.log('🗂️ [DEBUG] 返回folder根目录');
+  
+  const homeState = {
+    isActive: false,
+    breadcrumbs: [],
+    currentData: [],
+    currentBreadcrumb: null,
+    loading: false
+  };
+  
+  emit('folder-navigate', homeState);
+  
+  // 恢复正常分类的统计信息
+  if (activeKey.value && listData[activeKey.value]) {
+    const statsText = getStatsText(activeKey.value);
+    paginationStore.updateStats(statsText);
+    console.log('🗂️ [DEBUG] 退出folder模式，恢复统计信息:', statsText);
+  }
+};
+
+const handleExitFolder = () => {
+  console.log('🗂️ [DEBUG] 退出folder模式');
+  
+  const exitState = {
+    isActive: false,
+    breadcrumbs: [],
+    currentData: [],
+    currentBreadcrumb: null,
+    loading: false
+  };
+  
+  emit('folder-navigate', exitState);
+  
+  // 恢复正常分类的统计信息
+  if (activeKey.value && listData[activeKey.value]) {
+    const statsText = getStatsText(activeKey.value);
+    paginationStore.updateStats(statsText);
+    console.log('🗂️ [DEBUG] 退出folder模式，恢复统计信息:', statsText);
+  }
+};
 
 // 处理刷新列表事件
 const handleRefreshList = () => {

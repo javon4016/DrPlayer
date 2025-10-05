@@ -91,6 +91,9 @@
           <a-button @click="testWithNativeVideo" type="primary" :disabled="!testUrl">
             原生Video测试
           </a-button>
+          <a-button @click="testMultiQuality" type="primary" status="success">
+            多画质播放测试
+          </a-button>
         </div>
       </div>
 
@@ -131,7 +134,7 @@
       </div>
 
       <!-- 播放器区域 -->
-      <div v-if="showDefaultPlayer || showArtPlayer" class="test-section player-section">
+      <div v-if="showDefaultPlayer || showArtPlayer || showMultiQualityPlayer" class="test-section player-section">
         <h2>视频播放器</h2>
         
         <!-- 默认播放器 -->
@@ -151,11 +154,29 @@
         <ArtVideoPlayer
           v-if="showArtPlayer"
           :visible="showArtPlayer"
-          :video-url="testUrl"
-          :episode-name="'测试视频'"
+          :video-url="multiQualityData.url || testUrl"
+          :episode-name="'ArtPlayer多画质测试'"
           :episodes="[]"
           :player-type="'artplayer'"
+          :qualities="multiQualityData.qualities"
+          :has-multiple-qualities="true"
+          :initial-quality="multiQualityData.initialQuality"
           @close="showArtPlayer = false"
+          @error="handlePlayerError"
+          @player-change="handlePlayerTypeChange"
+        />
+
+        <!-- 多画质播放器 -->
+        <VideoPlayer
+          v-if="showMultiQualityPlayer"
+          :visible="showMultiQualityPlayer"
+          :video-url="multiQualityData.url"
+          :episode-name="'多画质测试视频'"
+          :episodes="[]"
+          :player-type="'default'"
+          :qualities="multiQualityData.qualities"
+          :initial-quality="multiQualityData.initialQuality"
+          @close="showMultiQualityPlayer = false"
           @error="handlePlayerError"
           @player-change="handlePlayerTypeChange"
         />
@@ -184,6 +205,19 @@ const yourMp4Url = 'http://qcapp.xingya.com.cn/h265/wz_mp40917zhuixu03.mp4?sign=
 const showDefaultPlayer = ref(false)
 const showArtPlayer = ref(false)
 const showNativeVideo = ref(false)
+const showMultiQualityPlayer = ref(false)
+
+// 多画质测试数据 - 使用T4格式
+const multiQualityData = ref({
+  url: '',
+  qualities: [
+    { name: '1080P', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
+    { name: '720P', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' },
+    { name: '480P', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
+    { name: '360P', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' }
+  ],
+  initialQuality: '720P'
+})
 
 // 错误信息
 const errorMessage = ref('')
@@ -377,6 +411,28 @@ const closeNativeVideo = () => {
   nativeVideoLogs.value = [] // 清空日志
   errorMessage.value = '' // 清空错误信息
   Message.success('原生Video测试已关闭')
+}
+
+// 多画质测试方法
+const testMultiQuality = () => {
+  if (showMultiQualityPlayer.value) {
+    // 如果多画质播放器已经显示，则关闭它
+    showMultiQualityPlayer.value = false
+    Message.info('关闭多画质播放器测试')
+    return
+  }
+  
+  errorMessage.value = ''
+  showDefaultPlayer.value = false
+  showArtPlayer.value = false
+  showNativeVideo.value = false
+  
+  // 设置初始URL为720P
+  const initialQuality = multiQualityData.value.qualities.find(q => q.name === multiQualityData.value.initialQuality)
+  multiQualityData.value.url = initialQuality ? initialQuality.url : multiQualityData.value.qualities[0].url
+  
+  showMultiQualityPlayer.value = true
+  Message.success('启动多画质播放器测试 - 支持1080P/720P/480P/360P画质切换')
 }
 
 // 错误处理
