@@ -1294,7 +1294,7 @@ const downloadProxyPlayer = () => {
 
 // 下载代理嗅探器
 const downloadProxySniffer = () => {
-  const url = 'https://wwvy.lanzouo.com/ijPuF37oo10f'
+  const url = 'https://wwvy.lanzouo.com/ipJdB37otz1a'
   window.open(url, '_blank')
   Message.success('正在打开代理嗅探器下载页面')
 }

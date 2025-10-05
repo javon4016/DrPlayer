@@ -12,6 +12,7 @@
     "build:apps": "vite build --mode production.apps",
     "build:binary": "node build-binary.js",
     "build:binary:win": "node build-binary.js",
+    "build:binary:optimized": "node build-binary-optimized.js",
     "preview": "vite preview",
     "start": "node production-server.cjs",
     "mock1": "json-server src/mock/data.json --host 127.0.0.1 --port 9978 --middlewares src/mock/middlewares.js",
