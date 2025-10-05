@@ -1,0 +1,27 @@
+{
+  "name": "drplayer-server",
+  "version": "1.0.0",
+  "description": "DrPlayer Production Server - Minimal build for PKG",
+  "main": "./production-server.cjs",
+  "bin": "./production-server.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node production-server.cjs",
+    "pkg:win": "pkg . --target node18-win-x64 --output dist-binary/drplayer-server-win.exe"
+  },
+  "dependencies": {
+    "fastify": "^4.29.1",
+    "@fastify/static": "^6.12.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "pkg": {
+    "assets": [
+      "./apps/**/*"
+    ],
+    "scripts": [
+      "./production-server.cjs"
+    ]
+  }
+}

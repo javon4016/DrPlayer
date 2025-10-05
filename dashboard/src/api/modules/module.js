@@ -8,6 +8,43 @@ import { API_PATHS, MODULE_ACTIONS, PAGINATION } from '../config'
 import axios from 'axios'
 
 /**
+ * 解析headers字段，支持对象和JSON字符串格式
+ * @param {Object|string} headers - headers字段
+ * @returns {Object} 解析后的headers对象
+ */
+const parseHeaders = (headers) => {
+  if (!headers) {
+    console.log('🔍 [Headers解析] 输入为空，返回空对象')
+    return {}
+  }
+  
+  console.log('🔍 [Headers解析] 输入数据:', headers, '类型:', typeof headers)
+  
+  // 如果已经是对象，直接返回
+  if (typeof headers === 'object' && headers !== null) {
+    console.log('🔍 [Headers解析] 已是对象，直接返回:', headers)
+    return headers
+  }
+  
+  // 如果是字符串，尝试解析为JSON
+  if (typeof headers === 'string') {
+    try {
+      const parsed = JSON.parse(headers)
+      // 确保解析结果是对象
+      const result = typeof parsed === 'object' && parsed !== null ? parsed : {}
+      console.log('🔍 [Headers解析] JSON字符串解析成功:', result)
+      return result
+    } catch (error) {
+      console.warn('🔍 [Headers解析] JSON字符串解析失败:', error, '原始数据:', headers)
+      return {}
+    }
+  }
+  
+  console.log('🔍 [Headers解析] 未知类型，返回空对象')
+  return {}
+}
+
+/**
  * 处理extend参数，确保对象类型转换为JSON字符串
  * @param {string|object} extend - 扩展参数
  * @returns {string|undefined} 处理后的extend参数
@@ -222,6 +259,12 @@ export const parsePlayUrl = async (module, params) => {
     const playData = await getPlayData(module, params)
     console.log('T4播放解析响应:', playData)
     
+    // 调试：显示原始headers数据
+    const rawHeaders = playData?.headers || playData?.header
+    if (rawHeaders) {
+      console.log('T4接口返回的原始headers:', rawHeaders, '类型:', typeof rawHeaders)
+    }
+    
     // 处理解析结果
     const result = {
       success: true,
@@ -229,6 +272,7 @@ export const parsePlayUrl = async (module, params) => {
       // 解析播放类型
       playType: 'direct', // 默认直链
       url: '',
+      headers: {}, // 添加headers字段
       needParse: false,
       needSniff: false,
       message: ''
@@ -241,6 +285,7 @@ export const parsePlayUrl = async (module, params) => {
         // 直链播放
         result.playType = 'direct'
         result.url = playData.url || playData.play_url || ''
+        result.headers = parseHeaders(playData.headers || playData.header)
         result.needParse = false
         result.needSniff = false
         result.message = '直链播放'
@@ -248,22 +293,26 @@ export const parsePlayUrl = async (module, params) => {
         // 需要嗅探
         result.playType = 'sniff'
         result.url = playData.url || playData.play_url || ''
+        result.headers = parseHeaders(playData.headers || playData.header)
         result.needSniff = true
         result.message = '需要嗅探才能播放，尽情期待'
       } else if (playData.jx === 1) {
         // 需要解析
         result.playType = 'parse'
         result.url = playData.url || playData.play_url || ''
+        result.headers = parseHeaders(playData.headers || playData.header)
         result.needParse = true
         result.message = '需要解析才能播放，尽情期待'
       } else {
         // 默认处理为直链
         result.url = playData.url || playData.play_url || playData
+        result.headers = parseHeaders(playData.headers || playData.header)
         result.message = '直链播放'
       }
     } else if (typeof playData === 'string') {
       // 如果返回的是字符串，直接作为播放地址
       result.url = playData
+      result.headers = {}
       result.message = '直链播放'
     }
     
@@ -275,6 +324,7 @@ export const parsePlayUrl = async (module, params) => {
       error: error.message || '播放解析失败',
       playType: 'error',
       url: '',
+      headers: {},
       needParse: false,
       needSniff: false,
       message: '播放解析失败: ' + (error.message || '未知错误')
