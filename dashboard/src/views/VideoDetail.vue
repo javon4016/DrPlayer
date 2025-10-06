@@ -50,7 +50,7 @@
     <div v-else-if="videoDetail" class="detail-content">
       <!-- 默认视频播放器组件 -->
       <VideoPlayer 
-        v-if="showVideoPlayer && actualVideoUrl && playerType === 'default'"
+        v-if="showVideoPlayer && (actualVideoUrl || needsParsing) && playerType === 'default'"
         :video-url="actualVideoUrl"
         :episode-name="currentEpisodeName"
         :poster="videoDetail?.vod_pic"
@@ -62,14 +62,17 @@
         :qualities="parsedQualities"
         :has-multiple-qualities="hasMultipleQualities"
         :initial-quality="initialQuality"
+        :needs-parsing="needsParsing"
+        :parse-data="parseData"
         @close="handlePlayerClose"
         @player-change="handlePlayerTypeChange"
+        @parser-change="handleParserChange"
         @next-episode="handleNextEpisode"
       />
 
       <!-- ArtPlayer 播放器组件 -->
       <ArtVideoPlayer 
-        v-if="showVideoPlayer && actualVideoUrl && playerType === 'artplayer'"
+        v-if="showVideoPlayer && (actualVideoUrl || needsParsing) && playerType === 'artplayer'"
         :video-url="actualVideoUrl"
         :episode-name="currentEpisodeName"
         :poster="videoDetail?.vod_pic"
@@ -82,8 +85,11 @@
         :qualities="parsedQualities"
         :has-multiple-qualities="hasMultipleQualities"
         :initial-quality="initialQuality"
+        :needs-parsing="needsParsing"
+        :parse-data="parseData"
         @close="handlePlayerClose"
         @player-change="handlePlayerTypeChange"
+        @parser-change="handleParserChange"
         @next-episode="handleNextEpisode"
         @episode-selected="handleEpisodeSelected"
         @quality-change="handleQualityChange"
@@ -277,10 +283,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import videoService from '@/api/services/video'
 import { sniffVideoWithConfig, isSnifferEnabled } from '@/api/services/sniffer'
+import ParserService from '@/api/services/parser'
 import { useSiteStore } from '@/stores/siteStore'
 import { useFavoriteStore } from '@/stores/favoriteStore'
 import { useHistoryStore } from '@/stores/historyStore'
 import { usePageStateStore } from '@/stores/pageStateStore'
+import { useParserStore } from '@/stores/parser'
 import VideoPlayer from '@/components/players/VideoPlayer.vue'
 import ArtVideoPlayer from '@/components/players/ArtVideoPlayer.vue'
 import EpisodeSelector from '@/components/players/EpisodeSelector.vue'
@@ -304,6 +312,7 @@ const siteStore = useSiteStore()
 const favoriteStore = useFavoriteStore()
 const historyStore = useHistoryStore()
 const pageStateStore = usePageStateStore()
+const parserStore = useParserStore()
 
 // 响应式数据
 const loading = ref(false)
@@ -343,6 +352,12 @@ const parsedHeaders = ref({})
 const parsedQualities = ref([])
 const hasMultipleQualities = ref(false)
 const initialQuality = ref('')
+
+// 解析器相关数据
+const needsParsing = ref(false)
+const parseData = ref(null)
+const selectedParser = ref(null)
+const availableParsers = ref([])
 
 // 小说阅读器相关
 const showBookReader = ref(false)
@@ -481,6 +496,10 @@ const currentEpisodeUrl = computed(() => {
 
 // 实际播放URL（优先使用解析后的URL）
 const actualVideoUrl = computed(() => {
+  // 如果正在等待解析，不提供任何URL给播放器
+  if (needsParsing.value && !parsedVideoUrl.value) {
+    return ''
+  }
   return parsedVideoUrl.value || currentEpisodeUrl.value
 })
 
@@ -993,6 +1012,186 @@ const handleQualityChange = (qualityData) => {
   }
 }
 
+// 处理解析器变更事件
+const handleParserChange = async (parser) => {
+  console.log('解析器变更事件:', parser)
+  
+  if (!parser || !parseData.value) {
+    console.warn('解析器或解析数据无效')
+    return
+  }
+  
+  selectedParser.value = parser
+  
+  // 保存用户的解析器选择
+  localStorage.setItem('selectedParser', JSON.stringify(parser))
+  
+  try {
+    // 提取实际的解析器配置（处理嵌套结构）
+    const actualParser = parser.parser || parser
+    
+    // 转换解析器类型字段（数字转字符串）
+    const normalizedParser = {
+      ...actualParser,
+      type: actualParser.type === 1 ? 'json' : actualParser.type === 0 ? 'sniffer' : actualParser.type
+    }
+    
+    // 为 JSON 类型解析器添加默认的 urlPath（如果没有配置）
+    if (normalizedParser.type === 'json' && !normalizedParser.urlPath) {
+      normalizedParser.urlPath = 'url' // 默认从响应的 url 字段提取视频地址
+    }
+    
+    // 嗅探解析器支持直接拼接URL，不需要预处理占位符
+    
+    // 直接执行解析，不需要测试（测试逻辑仅用于解析器配置验证）
+    console.log('🎬 [开始解析] 使用选定的解析器直接解析真实数据')
+    console.log('🎬 [解析参数]', {
+      parser: normalizedParser,
+      parseData: parseData.value
+    })
+    
+    // 执行解析
+    await executeParsingWithSelectedParser(normalizedParser, parseData.value)
+  } catch (error) {
+    console.error('解析失败:', error)
+    Message.error('解析失败，请稍后重试')
+  }
+}
+
+// 获取可用的解析器列表
+const getAvailableParsers = async () => {
+  try {
+    await parserStore.loadParsers()
+    const enabledParsers = parserStore.parsers.filter(parser => parser.enabled)
+    availableParsers.value = enabledParsers
+    console.log('获取到可用解析器:', enabledParsers)
+    return enabledParsers
+  } catch (error) {
+    console.error('获取解析器列表失败:', error)
+    availableParsers.value = []
+    return []
+  }
+}
+
+// 使用选定的解析器执行解析
+const executeParsingWithSelectedParser = async (parser, data) => {
+  if (!parser || !data) {
+    throw new Error('解析器或数据无效')
+  }
+  
+  console.log('🎬🎬🎬 [真正解析开始] 这是真正的解析，不是测试！')
+  console.log('🎬 [真正解析] 开始执行解析:', { 
+    parser: parser.name, 
+    data,
+    dataType: typeof data,
+    hasJxFlag: data && typeof data === 'object' && data.jx === 1,
+    dataUrl: data && typeof data === 'object' ? data.url : data,
+    isTestData: data && typeof data === 'object' && data.url === 'https://example.com/test.mp4'
+  })
+  
+  // 标准化解析器类型：将数字类型转换为字符串类型
+  const normalizedParser = {
+    ...parser,
+    type: parser.type === '0' ? 'sniffer' : parser.type === '1' ? 'json' : parser.type
+  }
+  
+  console.log('🔧 [类型转换] 原始类型:', parser.type, '转换后类型:', normalizedParser.type)
+  
+  // 验证解析器配置
+  const validation = ParserService.validateParserConfig(normalizedParser)
+  if (!validation.valid) {
+    const errorMessage = '解析器配置无效: ' + validation.errors.join(', ')
+    console.error(errorMessage)
+    Message.error(errorMessage)
+    throw new Error(errorMessage)
+  }
+  
+  try {
+    let result
+    
+    if (normalizedParser.type === 'json') {
+      // JSON类型解析
+      console.log('🎬 [真正解析] 调用JSON解析器，传递数据:', data)
+      result = await ParserService.parseWithJsonParser(normalizedParser, data)
+    } else if (normalizedParser.type === 'sniffer') {
+      // 嗅探类型解析 - 使用配置的代理嗅探接口
+      console.log('🎬 [真正解析] 调用代理嗅探接口，传递数据:', data)
+      
+      // 导入嗅探服务
+      const { sniffVideoWithConfig } = await import('@/api/services/sniffer.js')
+      
+      // 提取要嗅探的URL
+      let targetUrl
+      if (data && typeof data === 'object') {
+        targetUrl = data.url || data.play_url || data
+      } else {
+        targetUrl = data
+      }
+      
+      if (!targetUrl || typeof targetUrl !== 'string') {
+        throw new Error('无效的嗅探目标URL')
+      }
+      
+      // 构建完整的解析地址：解析器URL + 被解析URL
+      const fullParseUrl = normalizedParser.url + encodeURIComponent(targetUrl)
+      
+      console.log('🔍 [嗅探解析] 解析器URL:', normalizedParser.url)
+      console.log('🔍 [嗅探解析] 被解析URL:', targetUrl)
+      console.log('🔍 [嗅探解析] 完整解析地址:', fullParseUrl)
+      
+      // 调用代理嗅探接口，传入完整的解析地址
+      const sniffResult = await sniffVideoWithConfig(fullParseUrl)
+      
+      if (sniffResult.success && sniffResult.data && sniffResult.data.length > 0) {
+        // 转换嗅探结果为解析器格式
+        const videoData = sniffResult.data[0] // 取第一个结果
+        result = {
+          success: true,
+          url: videoData.url,
+          headers: {
+            'Referer': fullParseUrl,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          qualities: [],
+          message: '嗅探解析成功'
+        }
+      } else {
+        throw new Error('嗅探未找到可播放的视频链接')
+      }
+    } else {
+      throw new Error(`不支持的解析器类型: ${normalizedParser.type}`)
+    }
+    
+    if (result && result.success) {
+      // 解析成功，更新播放数据
+      parsedVideoUrl.value = result.url
+      parsedHeaders.value = result.headers || {}
+      
+      // 处理多画质数据
+      if (result.qualities && result.qualities.length > 0) {
+        parsedQualities.value = result.qualities
+        hasMultipleQualities.value = true
+        initialQuality.value = result.qualities[0].name
+      } else {
+        parsedQualities.value = []
+        hasMultipleQualities.value = false
+        initialQuality.value = ''
+      }
+      
+      // 启动播放器
+      showVideoPlayer.value = true
+      Message.success(`解析成功，开始播放: ${currentEpisodeName.value}`)
+      
+      console.log('解析完成:', result)
+    } else {
+      throw new Error(result?.message || '解析失败')
+    }
+  } catch (error) {
+    console.error('解析执行失败:', error)
+    throw error
+  }
+}
+
 const selectEpisode = async (index) => {
   currentEpisode.value = index
   
@@ -1138,22 +1337,76 @@ const selectEpisode = async (index) => {
      } else if (parseResult.playType === 'parse') {
        // jx:1 - 需要解析
        console.log('需要解析播放:', parseResult)
-       // 清空解析URL、headers、画质数据和小说内容，不启动播放器
-       parsedVideoUrl.value = ''
-       parsedHeaders.value = {}
-       parsedQualities.value = []
-       hasMultipleQualities.value = false
-       initialQuality.value = ''
-       parsedNovelContent.value = null
-       showBookReader.value = false
        
-       // 显示解析提示弹窗
-       parseDialogConfig.value = {
-         title: '播放提示',
-         message: '该视频需要解析才能播放，当前版本暂不支持此功能。',
-         type: 'parse'
+       // 设置解析状态
+       needsParsing.value = true
+       parseData.value = parseResult.data
+       
+       // 获取可用解析器
+       const parsers = await getAvailableParsers()
+       
+       if (parsers.length === 0) {
+         // 没有可用解析器，显示提示
+         parseDialogConfig.value = {
+           title: '播放提示',
+           message: '该视频需要解析才能播放，但未配置可用的解析器。请前往解析器页面配置解析器。',
+           type: 'parse'
+         }
+         showParseDialog.value = true
+         needsParsing.value = false
+         parseData.value = null
+       } else {
+         // 有可用解析器，尝试使用上次选择的解析器或第一个解析器
+         let defaultParser = null
+         
+         // 尝试从本地存储获取上次选择的解析器
+         try {
+           const savedParser = localStorage.getItem('selectedParser')
+           if (savedParser) {
+             try {
+               // 尝试解析为JSON对象（新格式）
+               const parsedSavedParser = JSON.parse(savedParser)
+               defaultParser = parsers.find(p => p.id === parsedSavedParser.id)
+             } catch (jsonError) {
+               // 如果JSON解析失败，尝试作为字符串ID处理（旧格式兼容）
+               console.warn('JSON解析失败，尝试作为解析器ID处理:', savedParser)
+               defaultParser = parsers.find(p => p.id === savedParser)
+               console.log('defaultParser:',defaultParser)
+               
+               // 如果找到了解析器，更新为新格式
+               if (defaultParser) {
+                 localStorage.setItem('selectedParser', JSON.stringify(defaultParser))
+               }
+             }
+           }
+         } catch (error) {
+           console.warn('获取保存的解析器失败:', error)
+           // 清除无效的本地存储数据
+           localStorage.removeItem('selectedParser')
+         }
+         
+         // 如果没有保存的解析器或保存的解析器不可用，使用第一个解析器
+         if (!defaultParser) {
+           defaultParser = parsers[0]
+         }
+         
+         selectedParser.value = defaultParser
+         
+         // 清空之前的播放数据
+         parsedVideoUrl.value = ''
+         parsedHeaders.value = {}
+         parsedQualities.value = []
+         hasMultipleQualities.value = false
+         initialQuality.value = ''
+         parsedNovelContent.value = null
+         showBookReader.value = false
+         showComicReader.value = false
+         
+         // 启动播放器（解析器选择器会在播放器头部显示）
+         showVideoPlayer.value = true
+         
+         Message.info(`检测到需要解析的视频，请在播放器中选择解析器`)
        }
-       showParseDialog.value = true
      } else {
        // 其他情况，回退到原始播放方式
        console.log('使用原始播放方式:', episodeUrl)
@@ -1505,8 +1758,15 @@ watch(() => siteStore.nowSite, (newSite, oldSite) => {
 
 
 // 组件挂载时的初始化（watch已经设置了immediate: true，无需重复调用）
-onMounted(() => {
+onMounted(async () => {
   console.log('VideoDetail组件已挂载')
+  
+  // 初始化解析器数据
+  try {
+    await getAvailableParsers()
+  } catch (error) {
+    console.error('初始化解析器失败:', error)
+  }
 })
 
 // 组件卸载时清理资源

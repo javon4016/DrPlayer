@@ -46,6 +46,7 @@
         @click="handleGoHome"
         :disabled="breadcrumbs.length <= 1"
         class="action-btn"
+        v-if="breadcrumbs.length > 1"
       >
         <template #icon>
           <icon-home />

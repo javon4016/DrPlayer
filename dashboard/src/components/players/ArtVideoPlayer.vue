@@ -1,5 +1,5 @@
 <template>
-  <a-card v-if="visible && videoUrl" class="video-player-section">
+  <a-card v-if="visible && (videoUrl || needsParsing)" class="video-player-section">
     <PlayerHeader
       :episode-name="episodeName"
       :player-type="playerType"
@@ -10,6 +10,9 @@
       :show-debug-button="showDebugButton"
       :qualities="convertQualitiesToHeaderFormat"
       :current-quality="getCurrentQualityLabel"
+      :show-parser-selector="needsParsing"
+      :needs-parsing="needsParsing"
+      :parse-data="parseData"
       @toggle-auto-next="toggleAutoNext"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
@@ -17,6 +20,7 @@
       @toggle-debug="toggleDebugDialog"
       @proxy-change="handleProxyChange"
       @quality-change="handleHeaderQualityChange"
+      @parser-change="handleParserChange"
       @close="closePlayer"
     />
     <div class="art-player-wrapper" v-show="props.visible">
@@ -140,11 +144,20 @@ const props = defineProps({
   initialQuality: {
     type: String,
     default: '默认'
+  },
+  // 解析相关属性
+  needsParsing: {
+    type: Boolean,
+    default: false
+  },
+  parseData: {
+    type: Object,
+    default: () => ({})
   }
 })
 
 // Emits
-const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'episode-selected', 'quality-change'])
+const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'episode-selected', 'quality-change', 'parser-change'])
 
 // 响应式数据
 const artPlayerContainer = ref(null)
@@ -815,6 +828,11 @@ const closePlayer = () => {
 // 处理播放器类型变更
 const handlePlayerTypeChange = (newType) => {
   emit('player-change', newType)
+}
+
+// 处理解析器变更
+const handleParserChange = (parser) => {
+  emit('parser-change', parser)
 }
 
 // 处理代理播放地址变更

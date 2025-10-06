@@ -6,7 +6,7 @@
     </div>
 
     <!-- 设置内容 -->
-    <div class="settings-content">
+    <div class="settings-content" ref="settingsContainer">
       <!-- 地址设置卡片 -->
       <a-card class="settings-card config-card" title="地址设置" :bordered="false">
         <template #extra>
@@ -784,7 +784,7 @@
               </div>
             </div>
             <div class="setting-value">
-              <span class="value-text">已关闭</span>
+              <span class="value-text">{{ settings.searchAggregation ? '已开启' : '已关闭' }}</span>
               <icon-right class="arrow-icon" />
             </div>
           </div>
@@ -812,6 +812,17 @@
       :current-player="settings.playerType"
       @confirm="handlePlayerSelect"
     />
+    
+    <!-- 备份还原对话框 -->
+    <BackupRestoreDialog
+      v-model:visible="backupRestoreVisible"
+    />
+    
+    <!-- 关于弹窗 -->
+    <About v-model:visible="aboutModalVisible" />
+
+    <!-- 直达底部按钮 -->
+    <ScrollToBottom :target="settingsContainer" />
   </div>
 </template>
 
@@ -853,8 +864,12 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import AddressHistory from '@/components/AddressHistory.vue'
 import PlayerSelector from '@/components/PlayerSelector.vue'
+import BackupRestoreDialog from '@/components/BackupRestoreDialog.vue'
+import About from '@/components/About.vue'
+import ScrollToBottom from '@/components/ScrollToBottom.vue'
 import configService from '@/api/services/config'
 import siteService from '@/api/services/site'
+import { factoryResetWithConfirmation } from '@/services/resetService'
 import { 
   getCSPConfig, 
   saveCSPConfig, 
@@ -927,11 +942,20 @@ const settings = reactive({
   autoLive: false,
   secureDns: false,
   cspBypass: true, // CSP绕过开关
-  referrerPolicy: 'no-referrer' // 默认referrer策略
+  referrerPolicy: 'no-referrer', // 默认referrer策略
+  searchAggregation: false // 聚搜功能开关，默认关闭
 })
 
 // 播放器选择对话框状态
 const playerSelectVisible = ref(false)
+
+// 备份还原对话框状态
+const backupRestoreVisible = ref(false)
+
+// 关于弹窗状态
+const aboutModalVisible = ref(false)
+
+const settingsContainer = ref(null)
 
 // 保存地址配置
 const saveAddress = async (configType) => {
@@ -1336,6 +1360,17 @@ const handleCSPBypassToggle = () => {
   }
 }
 
+// 处理聚搜功能开关
+const handleSearchAggregationToggle = () => {
+  settings.searchAggregation = !settings.searchAggregation
+  
+  if (settings.searchAggregation) {
+    Message.success('已开启聚搜功能')
+  } else {
+    Message.info('已关闭聚搜功能')
+  }
+}
+
 // 处理Referrer策略选择
 const handleReferrerPolicySelect = () => {
   // 使用导入的策略列表
@@ -1361,49 +1396,9 @@ const handlePlayerSelect = (playerType) => {
   Message.success(`已切换到 ${getCurrentPlayerName()}`)
 }
 
-// 重置所有设置到默认状态
-const resetAllSettings = () => {
-  // 重置地址设置
-  Object.assign(addressSettings, {
-    vodConfig: '',
-    liveConfig: '',
-    proxyAccess: '',
-    proxyAccessEnabled: false,
-    proxyPlay: 'http://localhost:57572/proxy?form=base64&url=${url}&headers=${headers}&type=${type}#嗷呜',
-    proxyPlayEnabled: false,
-    proxySniff: 'http://localhost:57573/sniffer',
-    proxySniffEnabled: false
-  })
-  
-  // 重置其他设置
-  Object.assign(settings, {
-    datasourceDisplay: true,
-    windowPreview: true,
-    playerType: 'ijk',
-    adFilter: true,
-    ijkCache: false,
-    autoLive: false,
-    secureDns: false,
-    cspBypass: true,
-    referrerPolicy: 'no-referrer'
-  })
-  
-  // 清除本地存储
-  localStorage.removeItem('addressSettings')
-  localStorage.removeItem('appSettings')
-  
-  // 重置CSP配置
-  try {
-    saveCSPConfig({
-      enabled: true,
-      referrerPolicy: 'no-referrer'
-    })
-    setGlobalReferrerPolicy('no-referrer')
-  } catch (error) {
-    console.error('Failed to reset CSP config:', error)
-  }
-  
-  Message.success('所有设置已重置为默认状态')
+// 执行出厂重置
+const resetAllSettings = async () => {
+  await factoryResetWithConfirmation()
 }
 
 // 处理设置项点击
@@ -1435,8 +1430,17 @@ const handleSettingClick = (settingKey) => {
     case 'referrer-policy':
       handleReferrerPolicySelect()
       break
+    case 'search-aggregation':
+      handleSearchAggregationToggle()
+      break
+    case 'backup':
+      backupRestoreVisible.value = true
+      break
     case 'reset':
       resetAllSettings()
+      break
+    case 'about':
+      aboutModalVisible.value = true
       break
     default:
       Message.info(`点击了设置项：${settingKey}`)
@@ -1520,6 +1524,8 @@ const saveSettings = () => {
 
 // 监听设置项变化并自动保存
 watch(settings, saveSettings, { deep: true })
+
+
 
 // 初始化
 onMounted(async () => {
@@ -2086,4 +2092,7 @@ onMounted(async () => {
     justify-content: space-between;
   }
 }
+
+
+
 </style>

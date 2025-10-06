@@ -20,7 +20,7 @@
     </div>
 
     <!-- 中间搜索框 -->
-    <div class="header-center">
+    <div class="header-center" v-if="searchAggregationEnabled">
       <a-input-search
           placeholder="搜索内容..."
           enter-button="搜索"
@@ -72,7 +72,7 @@
 </template>
 
 <script>
-import {defineComponent, ref} from 'vue';
+import {defineComponent, ref, computed} from 'vue';
 import {Message} from '@arco-design/web-vue';
 
 export default defineComponent({
@@ -80,8 +80,37 @@ export default defineComponent({
   setup() {
     const showConfirmModal = ref(false);
     
+    // 从localStorage获取聚搜功能状态
+    const getSearchAggregationStatus = () => {
+      try {
+        const appSettings = localStorage.getItem('appSettings');
+        if (appSettings) {
+          const settings = JSON.parse(appSettings);
+          return settings.searchAggregation || false;
+        }
+      } catch (error) {
+        console.error('获取聚搜状态失败:', error);
+      }
+      return false;
+    };
+    
+    // 响应式的聚搜状态
+    const searchAggregationEnabled = ref(getSearchAggregationStatus());
+    
+    // 监听localStorage变化
+    const updateSearchAggregationStatus = () => {
+      searchAggregationEnabled.value = getSearchAggregationStatus();
+    };
+    
+    // 监听storage事件
+    window.addEventListener('storage', updateSearchAggregationStatus);
+    
+    // 定期检查状态变化（用于同一页面内的状态更新）
+    const checkInterval = setInterval(updateSearchAggregationStatus, 1000);
+    
     return {
-      showConfirmModal
+      showConfirmModal,
+      searchAggregationEnabled
     };
   },
   methods: {

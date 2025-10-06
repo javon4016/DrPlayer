@@ -14,7 +14,7 @@
         @collapse="onSiderCollapse"
       >
         <div class="logo">
-          <a-popover title="提示">
+          <a-popover title="道长: 您好!">
           <a-image
               width="100%"
               :src="logoSrc"
@@ -41,7 +41,9 @@
           >
             <a-menu-item :key="item.id">
               <!--            <IconHome></IconHome>-->
-              <icon-font :type="item.icon" :size="16"/>
+              <svg style="width: 16px; height: 16px; margin-right: 8px;">
+                <use :href="`#${item.icon}`"></use>
+              </svg>
               {{ item.name }}
             </a-menu-item>
           </router-link>
@@ -80,11 +82,9 @@ import {
 } from '@arco-design/web-vue/es/icon';
 import Header from './Header.vue'; // 引入头部组件
 import Footer from './Footer.vue'; // 引入底部组件
-import { Icon } from '@arco-design/web-vue';
 import { usePaginationStore } from '@/stores/paginationStore';
 import logo from '@/assets/logo.png';
-
-const IconFont = Icon.addFromIconFontCn({src: '//at.alicdn.com/t/c/font_5032989_t69caiom2lh.js'});
+import '@/assets/icon_font/iconfont.js';
 
 export default defineComponent({
   components: {
@@ -94,7 +94,6 @@ export default defineComponent({
     IconCalendar,
     Header,
     Footer,
-    IconFont,
   },
   setup() {
     const route = useRoute();
@@ -113,7 +112,7 @@ export default defineComponent({
       {id: 9, name: '设置', icon: 'icon-shezhi', route: '/settings'}
     ]);
     const logoSrc = ref(logo);
-    const logoDesc = ref('the logo for this application');
+    const logoDesc = ref('欢迎使用DrPlayer');
 
     // 监听路由变化，更新翻页统计store的当前路由
     watch(() => route.path, (newPath) => {

@@ -6,6 +6,160 @@
   "description": "",
   "glyphs": [
     {
+      "icon_id": "5328033",
+      "name": "folder",
+      "font_class": "folder",
+      "unicode": "e690",
+      "unicode_decimal": 59024
+    },
+    {
+      "icon_id": "5328329",
+      "name": "file_blank",
+      "font_class": "file",
+      "unicode": "e692",
+      "unicode_decimal": 59026
+    },
+    {
+      "icon_id": "5330223",
+      "name": "file_zip",
+      "font_class": "file_zip",
+      "unicode": "e698",
+      "unicode_decimal": 59032
+    },
+    {
+      "icon_id": "5330370",
+      "name": "file_excel",
+      "font_class": "file_excel",
+      "unicode": "e699",
+      "unicode_decimal": 59033
+    },
+    {
+      "icon_id": "5330447",
+      "name": "file_ppt",
+      "font_class": "file_ppt",
+      "unicode": "e69a",
+      "unicode_decimal": 59034
+    },
+    {
+      "icon_id": "5330482",
+      "name": "file_word",
+      "font_class": "file_word",
+      "unicode": "e69b",
+      "unicode_decimal": 59035
+    },
+    {
+      "icon_id": "5330697",
+      "name": "file_pdf",
+      "font_class": "file_pdf",
+      "unicode": "e69c",
+      "unicode_decimal": 59036
+    },
+    {
+      "icon_id": "5331557",
+      "name": "file_music",
+      "font_class": "file_music",
+      "unicode": "e69d",
+      "unicode_decimal": 59037
+    },
+    {
+      "icon_id": "5331606",
+      "name": "file_video",
+      "font_class": "file_video",
+      "unicode": "e69e",
+      "unicode_decimal": 59038
+    },
+    {
+      "icon_id": "5332026",
+      "name": "file_img",
+      "font_class": "file_img",
+      "unicode": "e69f",
+      "unicode_decimal": 59039
+    },
+    {
+      "icon_id": "5332223",
+      "name": "file_ai",
+      "font_class": "file_ai",
+      "unicode": "e6a1",
+      "unicode_decimal": 59041
+    },
+    {
+      "icon_id": "5332227",
+      "name": "file_psd",
+      "font_class": "file_psd",
+      "unicode": "e6a2",
+      "unicode_decimal": 59042
+    },
+    {
+      "icon_id": "5332236",
+      "name": "file_bt",
+      "font_class": "file_bt",
+      "unicode": "e6a3",
+      "unicode_decimal": 59043
+    },
+    {
+      "icon_id": "5332262",
+      "name": "file_txt",
+      "font_class": "file_txt",
+      "unicode": "e6a4",
+      "unicode_decimal": 59044
+    },
+    {
+      "icon_id": "5332305",
+      "name": "file_exe",
+      "font_class": "file_exe",
+      "unicode": "e6a5",
+      "unicode_decimal": 59045
+    },
+    {
+      "icon_id": "5332367",
+      "name": "file_html",
+      "font_class": "file_html",
+      "unicode": "e6a7",
+      "unicode_decimal": 59047
+    },
+    {
+      "icon_id": "5332434",
+      "name": "file_cad",
+      "font_class": "file_cad",
+      "unicode": "e6a8",
+      "unicode_decimal": 59048
+    },
+    {
+      "icon_id": "5332517",
+      "name": "file_code",
+      "font_class": "file_code",
+      "unicode": "e6a9",
+      "unicode_decimal": 59049
+    },
+    {
+      "icon_id": "5332600",
+      "name": "file_flash",
+      "font_class": "file_flash",
+      "unicode": "e6aa",
+      "unicode_decimal": 59050
+    },
+    {
+      "icon_id": "5332645",
+      "name": "file_iso",
+      "font_class": "file_iso",
+      "unicode": "e6ab",
+      "unicode_decimal": 59051
+    },
+    {
+      "icon_id": "5332706",
+      "name": "file_cloud",
+      "font_class": "file_cloud",
+      "unicode": "e6ac",
+      "unicode_decimal": 59052
+    },
+    {
+      "icon_id": "11448884",
+      "name": "文件夹",
+      "font_class": "wenjianjia",
+      "unicode": "e80c",
+      "unicode_decimal": 59404
+    },
+    {
       "icon_id": "3819795",
       "name": "主页",
       "font_class": "zhuye",

@@ -1,5 +1,5 @@
 <template>
-  <a-card v-if="visible && videoUrl" class="video-player-section">
+  <a-card v-if="visible && (videoUrl || needsParsing)" class="video-player-section">
     <!-- 使用PlayerHeader组件 -->
     <PlayerHeader
       :episode-name="episodeName"
@@ -11,6 +11,9 @@
       :show-debug-button="showDebugButton"
       :qualities="availableQualities"
       :current-quality="currentQuality"
+      :show-parser-selector="needsParsing"
+      :needs-parsing="needsParsing"
+      :parse-data="parseData"
       @toggle-auto-next="toggleAutoNext"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
@@ -18,6 +21,7 @@
       @toggle-debug="toggleDebugDialog"
       @proxy-change="handleProxyChange"
       @quality-change="handleQualityChange"
+      @parser-change="handleParserChange"
       @close="closePlayer"
     />
     <div class="video-player-container">
@@ -159,11 +163,20 @@ const props = defineProps({
   initialQuality: {
     type: String,
     default: '默认'
+  },
+  // 解析相关属性
+  needsParsing: {
+    type: Boolean,
+    default: false
+  },
+  parseData: {
+    type: Object,
+    default: () => ({})
   }
 })
 
 // Emits
-const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'quality-change'])
+const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'quality-change', 'parser-change'])
 
 // 响应式数据
 const videoPlayer = ref(null)
@@ -668,10 +681,9 @@ const closePlayer = () => {
     videoPlayer.value.currentTime = 0
   }
   
-  // 清理HLS实例
-  if (hlsInstance.value) {
-    hlsInstance.value.destroy()
-    hlsInstance.value = null
+  // 清理播放器实例
+  if (mediaPlayerManager.value) {
+    mediaPlayerManager.value.destroy()
   }
   
   // 清理片尾跳过定时器
@@ -686,6 +698,11 @@ const closePlayer = () => {
 // 处理播放器类型变更
 const handlePlayerTypeChange = (newType) => {
   emit('player-change', newType)
+}
+
+// 处理解析器变更
+const handleParserChange = (parser) => {
+  emit('parser-change', parser)
 }
 
 // 处理代理播放地址变更

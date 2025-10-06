@@ -1,8 +1,8 @@
 @font-face {
   font-family: "iconfont"; /* Project id 5032989 */
-  src: url('iconfont.woff2?t=1759104954321') format('woff2'),
-       url('iconfont.woff?t=1759104954321') format('woff'),
-       url('iconfont.ttf?t=1759104954321') format('truetype');
+  src: url('iconfont.woff2?t=1759693018509') format('woff2'),
+       url('iconfont.woff?t=1759693018509') format('woff'),
+       url('iconfont.ttf?t=1759693018509') format('truetype');
 }
 
 .iconfont {
@@ -11,6 +11,94 @@
   font-style: normal;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-folder:before {
+  content: "\e690";
+}
+
+.icon-file:before {
+  content: "\e692";
+}
+
+.icon-file_zip:before {
+  content: "\e698";
+}
+
+.icon-file_excel:before {
+  content: "\e699";
+}
+
+.icon-file_ppt:before {
+  content: "\e69a";
+}
+
+.icon-file_word:before {
+  content: "\e69b";
+}
+
+.icon-file_pdf:before {
+  content: "\e69c";
+}
+
+.icon-file_music:before {
+  content: "\e69d";
+}
+
+.icon-file_video:before {
+  content: "\e69e";
+}
+
+.icon-file_img:before {
+  content: "\e69f";
+}
+
+.icon-file_ai:before {
+  content: "\e6a1";
+}
+
+.icon-file_psd:before {
+  content: "\e6a2";
+}
+
+.icon-file_bt:before {
+  content: "\e6a3";
+}
+
+.icon-file_txt:before {
+  content: "\e6a4";
+}
+
+.icon-file_exe:before {
+  content: "\e6a5";
+}
+
+.icon-file_html:before {
+  content: "\e6a7";
+}
+
+.icon-file_cad:before {
+  content: "\e6a8";
+}
+
+.icon-file_code:before {
+  content: "\e6a9";
+}
+
+.icon-file_flash:before {
+  content: "\e6aa";
+}
+
+.icon-file_iso:before {
+  content: "\e6ab";
+}
+
+.icon-file_cloud:before {
+  content: "\e6ac";
+}
+
+.icon-wenjianjia:before {
+  content: "\e80c";
 }
 
 .icon-zhuye:before {

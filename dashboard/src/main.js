@@ -5,6 +5,7 @@ import router from './router'  // 引入路由
 import ArcoVue from '@arco-design/web-vue'
 import ArcoVueIcon from '@arco-design/web-vue/es/icon';
 import '@arco-design/web-vue/dist/arco.css'
+import '@/assets/icon_font/iconfont.css'  // 引入iconfont样式
 import {createPinia} from 'pinia'
 import 'viewerjs/dist/viewer.css'
 import VueViewer from 'v-viewer'

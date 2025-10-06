@@ -259,8 +259,17 @@ export const parsePlayUrl = async (module, params) => {
     
     // 检查返回数据格式
     if (playData && typeof playData === 'object') {
-      // 检查parse字段
-      if (playData.parse === 0) {
+      // 检查parse和jx字段，jx:1优先级高于parse:1
+      if (playData.jx === 1) {
+        // 需要解析 - 优先级最高
+        result.playType = 'parse'
+        result.url = playData.url || playData.play_url || ''
+        result.headers = parseHeaders(playData.headers || playData.header)
+        result.needParse = true
+        result.qualities = []
+        result.hasMultipleQualities = false
+        result.message = '需要解析才能播放，尽情期待'
+      } else if (playData.parse === 0) {
         // 直链播放
         result.playType = 'direct'
         
@@ -321,15 +330,6 @@ export const parsePlayUrl = async (module, params) => {
         result.qualities = []
         result.hasMultipleQualities = false
         result.message = '需要嗅探才能播放，尽情期待'
-      } else if (playData.jx === 1) {
-        // 需要解析
-        result.playType = 'parse'
-        result.url = playData.url || playData.play_url || ''
-        result.headers = parseHeaders(playData.headers || playData.header)
-        result.needParse = true
-        result.qualities = []
-        result.hasMultipleQualities = false
-        result.message = '需要解析才能播放，尽情期待'
       } else {
         // 默认处理为直链
         result.url = playData.url || playData.play_url || playData

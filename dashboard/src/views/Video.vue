@@ -17,6 +17,14 @@
 
   <!-- 内容区域 -->
   <div class="main-container">
+    <!-- 全局loading指示器 -->
+    <div v-if="globalLoading" class="global-loading-overlay">
+      <div class="global-loading-content">
+        <a-spin :size="32" />
+        <div class="loading-text">正在切换数据源...</div>
+      </div>
+    </div>
+    
     <a-layout-content class="content">
       <!-- 搜索结果展示 -->
       <SearchResults 
@@ -52,10 +60,10 @@
             ...route.query, 
             activeKey: currentActiveKey,
             // 添加folder状态信息
-            folderState: folderNavigationState.isActive ? JSON.stringify({
-              isActive: folderNavigationState.isActive,
-              breadcrumbs: folderNavigationState.breadcrumbs,
-              currentBreadcrumb: folderNavigationState.currentBreadcrumb
+            folderState: folderNavigationState.value?.isActive ? JSON.stringify({
+              isActive: folderNavigationState.value.isActive,
+              breadcrumbs: folderNavigationState.value.breadcrumbs,
+              currentBreadcrumb: folderNavigationState.value.currentBreadcrumb
             }) : undefined
           } 
         }"
@@ -86,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount, nextTick } from "vue";
+import { ref, reactive, shallowRef, onMounted, onBeforeUnmount, nextTick } from "vue";
 import SourceDialog from "../components/SourceDialog.vue";
 import Breadcrumb from "../components/Breadcrumb.vue";
 import VideoList from "../components/VideoList.vue";
@@ -151,14 +159,20 @@ const specialCategoryState = reactive({
   originalRecommendVideos: null
 });
 
-// Folder导航状态
-const folderNavigationState = reactive({
+// Folder导航状态 - 使用shallowRef避免深度响应式更新
+const folderNavigationState = shallowRef({
   isActive: false,
   breadcrumbs: [],
   currentData: [],
   currentBreadcrumb: null,
   loading: false
 });
+
+// 验证初始化
+console.log('🗂️ [DEBUG] folderNavigationState 初始化:', folderNavigationState.value);
+
+// 全局loading状态（用于换源等操作）
+const globalLoading = ref(false);
 
 // 保存进入folder模式前的状态
 const previousState = reactive({
@@ -277,6 +291,24 @@ const handleConfirmChange = (site) => {
   setCurrentSite(site);
   form.now_site_title = site.name;
   form.visible = false;
+  
+  // 1. 如果当前在目录模式，自动退出目录模式
+  if (folderNavigationState.value?.isActive) {
+    console.log('🔄 [换源] 检测到目录模式，自动退出目录模式');
+    folderNavigationState.value = {
+      isActive: false,
+      breadcrumbs: [],
+      currentData: [],
+      currentBreadcrumb: null,
+      loading: false
+    };
+    
+    // 清空保存的状态
+    previousState.activeKey = null;
+    previousState.scrollPosition = 0;
+    previousState.savedAt = null;
+  }
+  
   getClassList(site); //获取分类列表
 };
 //获取分类列表
@@ -287,6 +319,9 @@ const getClassList = async (site) => {
   }
 
   console.log(site, "确认换源");
+  
+  // 2. 显示loading状态
+  globalLoading.value = true;
 
   // 先清除之前的数据，防止数据残留
   form.classList = {
@@ -320,6 +355,9 @@ const getClassList = async (site) => {
       filters: {}
     };
     form.recommendVideos = [];
+  } finally {
+    // 3. 隐藏loading状态
+    globalLoading.value = false;
   }
 };
 const onSearch = async (value) => {
@@ -630,54 +668,107 @@ const closeSpecialCategory = () => {
   console.log('特殊分类已关闭，恢复到推荐分类');
 };
 
+// 防止递归更新的标志
+let isUpdatingFolderState = false;
+let updateTimeout = null;
+
 // 处理folder导航事件
-const handleFolderNavigate = (navigationData) => {
-  console.log('🗂️ [DEBUG] Video.vue handleFolderNavigate 被调用');
-  console.log('🗂️ [DEBUG] navigationData:', JSON.stringify(navigationData, null, 2));
+const handleFolderNavigate = async (navigationData) => {
+  console.log('🗂️ [DEBUG] handleFolderNavigate 被调用:', navigationData);
   
-  // 如果是进入folder模式，保存当前状态
-  if (navigationData.isActive && !folderNavigationState.isActive) {
-    console.log('🗂️ [DEBUG] 进入folder模式，保存当前状态');
-    previousState.activeKey = currentActiveKey.value;
-    previousState.scrollPosition = window.scrollY || 0;
-    previousState.savedAt = Date.now();
-    console.log('🗂️ [DEBUG] 已保存状态:', previousState);
+  // 参数验证
+  if (!navigationData || typeof navigationData !== 'object') {
+    console.error('🗂️ [ERROR] navigationData 无效:', navigationData);
+    return;
   }
   
-  // 如果是退出folder模式，恢复之前的状态
-  if (!navigationData.isActive && folderNavigationState.isActive) {
-    console.log('🗂️ [DEBUG] 退出folder模式，恢复之前的状态');
-    console.log('🗂️ [DEBUG] 恢复状态:', previousState);
-    
-    // 恢复之前的activeKey
-    if (previousState.activeKey) {
-      currentActiveKey.value = previousState.activeKey;
-      console.log('🗂️ [DEBUG] 恢复activeKey:', previousState.activeKey);
+  // 防止重复更新
+  if (isUpdatingFolderState) {
+    console.log('🗂️ [DEBUG] 正在更新中，跳过此次调用');
+    return;
+  }
+  
+  // 清除之前的超时
+  if (updateTimeout) {
+    clearTimeout(updateTimeout);
+    updateTimeout = null;
+  }
+  
+  isUpdatingFolderState = true;
+  
+  try {
+    // 保存当前状态（进入folder模式时）
+    if (navigationData.isActive && !folderNavigationState.value?.isActive) {
+      console.log('🗂️ [DEBUG] 进入folder模式，保存当前状态');
+      previousState.activeKey = currentActiveKey.value;
+      previousState.scrollPosition = window.scrollY || 0;
+      previousState.savedAt = Date.now();
     }
     
-    // 恢复滚动位置
-    nextTick(() => {
-      if (previousState.scrollPosition > 0) {
-        window.scrollTo(0, previousState.scrollPosition);
-        console.log('🗂️ [DEBUG] 恢复滚动位置:', previousState.scrollPosition);
+    // 恢复之前的状态（退出folder模式时）
+    if (!navigationData.isActive && folderNavigationState.value?.isActive) {
+      console.log('🗂️ [DEBUG] 退出folder模式，恢复之前的状态');
+      if (previousState.activeKey) {
+        currentActiveKey.value = previousState.activeKey;
       }
+      
+      // 恢复滚动位置
+      if (previousState.scrollPosition) {
+        nextTick(() => {
+          window.scrollTo(0, previousState.scrollPosition);
+        });
+      }
+      
+      // 清除保存的状态
+      previousState.activeKey = null;
+      previousState.scrollPosition = 0;
+      previousState.savedAt = null;
+    }
+    
+    // 使用 nextTick 确保在下一个 tick 中更新，避免响应式循环
+    await nextTick();
+    
+    // 深度克隆数据，完全断开响应式连接
+    const deepClone = (obj) => {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (obj instanceof Date) return new Date(obj.getTime());
+      if (obj instanceof Array) return obj.map(item => deepClone(item));
+      if (typeof obj === 'object') {
+        const cloned = {};
+        Object.keys(obj).forEach(key => {
+          cloned[key] = deepClone(obj[key]);
+        });
+        return cloned;
+      }
+      return obj;
+    };
+    
+    // 创建完全独立的新状态对象
+    const newState = {
+      isActive: Boolean(navigationData.isActive),
+      breadcrumbs: deepClone(navigationData.breadcrumbs || []),
+      currentData: deepClone(navigationData.currentData || []),
+      currentBreadcrumb: deepClone(navigationData.currentBreadcrumb || null),
+      loading: Boolean(navigationData.loading || false)
+    };
+    
+    // 使用 shallowRef 的 .value 完全替换对象，避免响应式循环
+    folderNavigationState.value = newState;
+    
+    console.log('🗂️ [DEBUG] folder导航状态已更新:', {
+      isActive: folderNavigationState.value?.isActive,
+      breadcrumbsCount: folderNavigationState.value?.breadcrumbs?.length || 0,
+      currentDataCount: folderNavigationState.value?.currentData?.length || 0,
+      currentBreadcrumb: folderNavigationState.value?.currentBreadcrumb
     });
     
-    // 清空保存的状态
-    previousState.activeKey = null;
-    previousState.scrollPosition = 0;
-    previousState.savedAt = null;
+  } catch (error) {
+    console.error('🗂️ [ERROR] 更新folder状态时出错:', error);
+  } finally {
+    // 重置更新标志
+    isUpdatingFolderState = false;
+    updateTimeout = null;
   }
-  
-  // 直接更新folder导航状态
-  Object.assign(folderNavigationState, navigationData);
-  
-  console.log('🗂️ [DEBUG] folder导航状态已更新:', {
-    isActive: folderNavigationState.isActive,
-    breadcrumbsCount: folderNavigationState.breadcrumbs.length,
-    currentDataCount: folderNavigationState.currentData.length,
-    currentBreadcrumb: folderNavigationState.currentBreadcrumb
-  });
 };
 
 
@@ -809,20 +900,23 @@ onMounted(async () => {
         console.log('🗂️ [DEBUG] 从详情页返回，恢复folder状态:', folderState);
         
         // 恢复folder导航状态
-        Object.assign(folderNavigationState, {
+        folderNavigationState.value = {
           isActive: folderState.isActive,
           breadcrumbs: folderState.breadcrumbs || [],
           currentBreadcrumb: folderState.currentBreadcrumb,
           currentData: [], // 数据需要重新获取
           loading: false
-        });
+        };
         
         // 如果有当前面包屑，重新获取folder数据
         if (folderState.currentBreadcrumb && folderState.currentBreadcrumb.vod_id) {
           console.log('🗂️ [DEBUG] 重新获取folder数据:', folderState.currentBreadcrumb.vod_id);
           
           // 设置加载状态
-          folderNavigationState.loading = true;
+          folderNavigationState.value = {
+            ...folderNavigationState.value,
+            loading: true
+          };
           
           // 调用T4分类接口获取folder内容
           try {
@@ -833,13 +927,19 @@ onMounted(async () => {
             });
             
             if (response && response.list) {
-              folderNavigationState.currentData = response.list;
+              folderNavigationState.value = {
+                ...folderNavigationState.value,
+                currentData: response.list,
+                loading: false
+              };
               console.log('🗂️ [DEBUG] folder数据获取成功:', response.list.length);
             }
           } catch (error) {
             console.error('🗂️ [ERROR] 获取folder数据失败:', error);
-          } finally {
-            folderNavigationState.loading = false;
+            folderNavigationState.value = {
+              ...folderNavigationState.value,
+              loading: false
+            };
           }
         }
       } catch (error) {
@@ -942,5 +1042,39 @@ onBeforeUnmount(() => {
 
 .current-time span {
   font-weight: 500;
+}
+
+/* 全局loading样式 */
+.global-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(2px);
+}
+
+.global-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px;
+  background: var(--color-bg-1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border-2);
+}
+
+.loading-text {
+  font-size: 16px;
+  color: var(--color-text-1);
+  font-weight: 500;
+  text-align: center;
 }
 </style>

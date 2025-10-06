@@ -18,8 +18,8 @@
 
     <!-- Folder导航面包屑 -->
     <FolderBreadcrumb
-      v-if="folderNavigationState.isActive"
-      :breadcrumbs="folderNavigationState.breadcrumbs"
+      v-if="folderIsActive"
+      :breadcrumbs="folderBreadcrumbs"
       @navigate="handleFolderNavigate"
       @go-back="handleFolderGoBack"
       @go-home="handleFolderGoHome"
@@ -29,18 +29,18 @@
     <!-- 内容区域 -->
     <div class="content-area">
       <!-- Folder导航内容 -->
-      <div v-if="folderNavigationState.isActive" class="tab-content">
+      <div v-if="folderIsActive" class="tab-content">
         <VideoGrid
-          :videos="folderNavigationState.currentData || []"
-          :loading="folderNavigationState.loading || folderLoadingMore[folderNavigationState.currentBreadcrumb?.vod_id] || false"
-          :hasMore="folderPageData[folderNavigationState.currentBreadcrumb?.vod_id]?.hasNext || false"
-          :statsText="getStatsText()"
+          :videos="folderCurrentData"
+          :loading="folderLoading"
+          :hasMore="folderHasMore"
+          :statsText="folderStatsText"
           :sourceRoute="props.sourceRoute"
           :module="props.module"
           :extend="props.extend"
           :api-url="props.apiUrl"
-          @load-more="loadMoreFolderData(folderNavigationState.currentBreadcrumb?.vod_id)"
-          @scroll-bottom="loadMoreFolderData(folderNavigationState.currentBreadcrumb?.vod_id)"
+          @load-more="loadMoreFolderData(folderCurrentBreadcrumb?.vod_id)"
+          @scroll-bottom="loadMoreFolderData(folderCurrentBreadcrumb?.vod_id)"
           @refresh-list="handleRefreshList"
           @special-action="(actionType, actionData) => emit('special-action', actionType, actionData)"
           @folder-navigate="handleFolderNavigateFromGrid"
@@ -117,7 +117,7 @@
 
 <script setup>
 import { videoService, siteService } from "@/api/services";
-import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
+import { ref, reactive, onMounted, watch, computed, nextTick, onBeforeUnmount } from "vue";
 import { usePaginationStore } from '@/stores/paginationStore';
 import { getCategoryData } from '@/api/modules/module';
 import { processExtendParam } from '@/utils/apiUtils';
@@ -189,6 +189,27 @@ const emit = defineEmits(['activeKeyChange', 'special-action', 'close-special-ca
 // 使用翻页统计store
 const paginationStore = usePaginationStore();
 
+// 添加防抖函数和状态管理
+let updateStatsTimer = null;
+const isUpdatingStats = ref(false);
+
+// 防抖更新统计信息函数
+const debouncedUpdateStats = (statsText, delay = 50) => {
+  if (updateStatsTimer) {
+    clearTimeout(updateStatsTimer);
+  }
+  
+  updateStatsTimer = setTimeout(() => {
+    if (!isUpdatingStats.value) {
+      isUpdatingStats.value = true;
+      nextTick(() => {
+        paginationStore.updateStats(statsText);
+        isUpdatingStats.value = false;
+      });
+    }
+  }, delay);
+};
+
 // 响应式数据
 const activeKey = ref("");
 const listData = reactive({});
@@ -203,9 +224,55 @@ const videoGridRef = ref(null);
 const folderPageData = reactive({});
 const folderLoadingMore = reactive({});
 
+// 防抖机制：防止快速连续的导航操作
+let navigationDebounceTimer = null;
+const NAVIGATION_DEBOUNCE_DELAY = 300; // 300ms防抖延迟
+
+const debounceNavigation = (callback) => {
+  if (navigationDebounceTimer) {
+    clearTimeout(navigationDebounceTimer);
+  }
+  navigationDebounceTimer = setTimeout(callback, NAVIGATION_DEBOUNCE_DELAY);
+};
+
 // 计算属性
 const hasRecommendVideos = computed(() => {
   return props.recommendVideos && props.recommendVideos.length > 0;
+});
+
+// Folder导航相关计算属性，避免模板中直接访问响应式props
+const folderIsActive = computed(() => {
+  return props.folderNavigationState?.isActive || false;
+});
+
+const folderBreadcrumbs = computed(() => {
+  return props.folderNavigationState?.breadcrumbs || [];
+});
+
+const folderCurrentData = computed(() => {
+  return props.folderNavigationState?.currentData || [];
+});
+
+const folderCurrentBreadcrumb = computed(() => {
+  return props.folderNavigationState?.currentBreadcrumb || null;
+});
+
+const folderLoading = computed(() => {
+  const currentBreadcrumbId = folderCurrentBreadcrumb.value?.vod_id;
+  return props.folderNavigationState?.loading || folderLoadingMore[currentBreadcrumbId] || false;
+});
+
+const folderHasMore = computed(() => {
+  const currentBreadcrumbId = folderCurrentBreadcrumb.value?.vod_id;
+  return folderPageData[currentBreadcrumbId]?.hasNext || false;
+});
+
+const folderStatsText = computed(() => {
+  return getStatsText({
+    isActive: folderIsActive.value,
+    currentBreadcrumb: folderCurrentBreadcrumb.value,
+    currentData: folderCurrentData.value
+  });
 });
 
 // 计算默认的activeKey
@@ -250,8 +317,8 @@ const toggleFilter = (filterKey, filterValue, filterName) => {
   }
   
   // 如果在目录模式下，重新获取目录数据
-  if (props.folderNavigationState.isActive && props.folderNavigationState.currentBreadcrumb) {
-    handleFolderNavigate(props.folderNavigationState.currentBreadcrumb);
+  if (folderIsActive.value && folderCurrentBreadcrumb.value) {
+    handleFolderNavigate(folderCurrentBreadcrumb.value);
   } else {
     // 重新获取分类数据
     refreshCategoryData(activeKey.value);
@@ -262,8 +329,8 @@ const resetFilters = (categoryId) => {
   delete selectedFilters[categoryId];
   
   // 如果在目录模式下，重新获取目录数据
-  if (props.folderNavigationState.isActive && props.folderNavigationState.currentBreadcrumb) {
-    handleFolderNavigate(props.folderNavigationState.currentBreadcrumb);
+  if (folderIsActive.value && folderCurrentBreadcrumb.value) {
+    handleFolderNavigate(folderCurrentBreadcrumb.value);
   } else {
     // 重新获取分类数据
     refreshCategoryData(categoryId);
@@ -285,7 +352,7 @@ const refreshCategoryData = (categoryId) => {
 };
 
 // 获取统计文本
-const getStatsText = (categoryId) => {
+const getStatsText = (categoryId, folderInfo = null) => {
   const categoryName = props.classList?.class?.find(item => item.type_id === categoryId)?.type_name || '';
   const currentPage = pageData[categoryId]?.page || 1;
   const loadedCount = listData[categoryId]?.length || 0;
@@ -296,10 +363,10 @@ const getStatsText = (categoryId) => {
     text += ` / 共 ${totalCount} 条`;
   }
   
-  // 如果当前处于folder模式，添加folder统计信息
-  if (props.folderNavigationState.isActive && props.folderNavigationState.currentBreadcrumb) {
-    const folderName = props.folderNavigationState.currentBreadcrumb.vod_name || '未知目录';
-    const folderItemCount = props.folderNavigationState.currentData?.length || 0;
+  // 如果传入了folder信息，添加folder统计信息
+  if (folderInfo && folderInfo.isActive && folderInfo.currentBreadcrumb) {
+    const folderName = folderInfo.currentBreadcrumb.vod_name || '未知目录';
+    const folderItemCount = folderInfo.currentData?.length || 0;
     text += `，当前目录：${folderName}，项目数：${folderItemCount}`;
   }
   
@@ -339,7 +406,12 @@ const getListData = async (key, forceReload = false) => {
       
       // 更新全局翻页统计信息
       if (key === activeKey.value) {
-        paginationStore.updateStats(getStatsText(key));
+        const folderInfo = folderIsActive.value ? {
+          isActive: folderIsActive.value,
+          currentBreadcrumb: folderCurrentBreadcrumb.value,
+          currentData: folderCurrentData.value
+        } : null;
+        paginationStore.updateStats(getStatsText(key, folderInfo));
       }
     } catch (error) {
       console.error("获取视频列表失败:", error);
@@ -413,7 +485,12 @@ const loadMoreData = async (key) => {
     
     // 更新全局翻页统计信息
     if (key === activeKey.value) {
-      paginationStore.updateStats(getStatsText(key));
+      const folderInfo = folderIsActive.value ? {
+        isActive: folderIsActive.value,
+        currentBreadcrumb: folderCurrentBreadcrumb.value,
+        currentData: folderCurrentData.value
+      } : null;
+      debouncedUpdateStats(getStatsText(key, folderInfo));
     }
   } catch (error) {
     console.error("加载更多数据失败:", error);
@@ -451,7 +528,7 @@ const loadMoreFolderData = async (folderId) => {
       const newVideos = response.list;
       
       // 检查是否为无效数据或重复数据
-      if (isInvalidData(newVideos) || isDuplicateData(props.folderNavigationState.currentData, newVideos)) {
+      if (isInvalidData(newVideos) || isDuplicateData(folderCurrentData.value, newVideos)) {
         console.log("目录翻页检测到无效数据或重复数据，停止翻页");
         folderPageData[folderId] = { 
           ...folderPageData[folderId], 
@@ -461,13 +538,16 @@ const loadMoreFolderData = async (folderId) => {
       }
       
       // 合并新数据到当前目录数据
-      const updatedData = [...props.folderNavigationState.currentData, ...newVideos];
+      const updatedData = [...folderCurrentData.value, ...newVideos];
       
       // 更新目录状态
       const updatedState = {
-        ...props.folderNavigationState,
+        isActive: folderIsActive.value,
+        breadcrumbs: folderBreadcrumbs.value,
+        currentBreadcrumb: folderCurrentBreadcrumb.value,
         currentData: updatedData,
-        loading: false
+        loading: false,
+        hasMore: true
       };
       
       // 更新翻页状态
@@ -530,9 +610,12 @@ const selectCategory = (categoryId) => {
   getListData(categoryId);
   emit('activeKeyChange', categoryId);
   // 更新全局翻页统计信息
-  setTimeout(() => {
-    paginationStore.updateStats(getStatsText(categoryId));
-  }, 100);
+  const folderInfo = folderIsActive.value ? {
+    isActive: folderIsActive.value,
+    currentBreadcrumb: folderCurrentBreadcrumb.value,
+    currentData: folderCurrentData.value
+  } : null;
+  debouncedUpdateStats(getStatsText(categoryId, folderInfo), 100);
 };
 
 // 监听器
@@ -587,6 +670,12 @@ onMounted(() => {
   emit('activeKeyChange', activeKey.value);
 });
 
+onBeforeUnmount(() => {
+  if (updateStatsTimer) {
+    clearTimeout(updateStatsTimer);
+  }
+});
+
 // 暴露方法给父组件
 defineExpose({
   getCurrentState: () => ({
@@ -630,9 +719,12 @@ defineExpose({
       emit('activeKeyChange', state.activeKey);
       
       // 更新全局翻页统计信息
-      setTimeout(() => {
-        paginationStore.updateStats(getStatsText(state.activeKey));
-      }, 100);
+      const folderInfo = folderIsActive.value ? {
+        isActive: folderIsActive.value,
+        currentBreadcrumb: folderCurrentBreadcrumb.value,
+        currentData: folderCurrentData.value
+      } : null;
+      debouncedUpdateStats(getStatsText(state.activeKey, folderInfo), 100);
       
       // 恢复滚动位置
       if (state.scrollPosition && videoGridRef.value) {
@@ -666,9 +758,12 @@ defineExpose({
     loadingMore[categoryId] = false;
     
     // 更新全局翻页统计信息
-    setTimeout(() => {
-      paginationStore.updateStats(getStatsText(categoryId));
-    }, 100);
+    const folderInfo = folderIsActive.value ? {
+      isActive: folderIsActive.value,
+      currentBreadcrumb: folderCurrentBreadcrumb.value,
+      currentData: folderCurrentData.value
+    } : null;
+    debouncedUpdateStats(getStatsText(categoryId, folderInfo), 100);
     
     console.log('特殊分类数据设置完成:', {
       categoryId,
@@ -682,11 +777,38 @@ defineExpose({
 const handleFolderNavigateFromGrid = async (video) => {
   console.log('🗂️ [DEBUG] VideoList收到folder导航请求:', video);
   
+  // 使用防抖机制防止快速连续点击
+  debounceNavigation(async () => {
+    await performFolderNavigation(video);
+  });
+};
+
+const performFolderNavigation = async (video) => {
+  
+  // 声明newBreadcrumbs变量，确保在catch块中也能访问
+  let newBreadcrumbs = [];
+  
   try {
+    // 获取当前面包屑，如果已经在目录模式下，则在现有面包屑基础上添加新层级
+    const currentBreadcrumbs = folderIsActive.value 
+      ? folderBreadcrumbs.value 
+      : [];
+    
+    // 检查是否已经存在相同的目录，避免重复添加
+    const existingIndex = currentBreadcrumbs.findIndex(b => b.vod_id === video.vod_id);
+    
+    if (existingIndex >= 0) {
+      // 如果目录已存在，截取到该目录位置
+      newBreadcrumbs = currentBreadcrumbs.slice(0, existingIndex + 1);
+    } else {
+      // 添加新目录到面包屑末尾
+      newBreadcrumbs = [...currentBreadcrumbs, { vod_id: video.vod_id, vod_name: video.vod_name }];
+    }
+    
     // 设置加载状态
     const loadingState = {
       isActive: true,
-      breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+      breadcrumbs: newBreadcrumbs,
       currentData: [],
       currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
       loading: true
@@ -733,7 +855,7 @@ const handleFolderNavigateFromGrid = async (video) => {
       // 更新folder导航状态
       const updatedState = {
         isActive: true,
-        breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+        breadcrumbs: newBreadcrumbs,
         currentData: folderData,
         currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
         loading: false
@@ -741,11 +863,15 @@ const handleFolderNavigateFromGrid = async (video) => {
       
       emit('folder-navigate', updatedState);
       
-      // 等待状态更新后，使用getStatsText生成正确的统计信息
-      await nextTick();
+      // 使用防抖更新统计信息
       if (activeKey.value) {
-        const statsText = getStatsText(activeKey.value);
-        paginationStore.updateStats(statsText);
+        const folderInfo = {
+          isActive: true,
+          currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
+          currentData: folderData
+        };
+        const statsText = getStatsText(activeKey.value, folderInfo);
+        debouncedUpdateStats(statsText);
         console.log('🗂️ [DEBUG] 更新folder统计信息:', statsText);
       }
     } else {
@@ -753,7 +879,7 @@ const handleFolderNavigateFromGrid = async (video) => {
       // 返回空数据状态
       const emptyState = {
         isActive: true,
-        breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+        breadcrumbs: newBreadcrumbs,
         currentData: [],
         currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
         loading: false
@@ -761,11 +887,15 @@ const handleFolderNavigateFromGrid = async (video) => {
       
       emit('folder-navigate', emptyState);
       
-      // 等待状态更新后，使用getStatsText生成正确的统计信息
-      await nextTick();
+      // 使用防抖更新统计信息
       if (activeKey.value) {
-        const statsText = getStatsText(activeKey.value);
-        paginationStore.updateStats(statsText);
+        const folderInfo = {
+          isActive: true,
+          currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
+          currentData: []
+        };
+        const statsText = getStatsText(activeKey.value, folderInfo);
+        debouncedUpdateStats(statsText);
         console.log('🗂️ [DEBUG] 更新folder统计信息(空):', statsText);
       }
     }
@@ -775,7 +905,7 @@ const handleFolderNavigateFromGrid = async (video) => {
     // 返回错误状态
     const errorState = {
       isActive: true,
-      breadcrumbs: [{ vod_id: video.vod_id, vod_name: video.vod_name }],
+      breadcrumbs: newBreadcrumbs,
       currentData: [],
       currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
       loading: false
@@ -783,11 +913,15 @@ const handleFolderNavigateFromGrid = async (video) => {
     
     emit('folder-navigate', errorState);
     
-    // 等待状态更新后，使用getStatsText生成正确的统计信息
-    await nextTick();
+    // 使用防抖更新统计信息
     if (activeKey.value) {
-      const statsText = getStatsText(activeKey.value);
-      paginationStore.updateStats(statsText);
+      const folderInfo = {
+        isActive: true,
+        currentBreadcrumb: { vod_id: video.vod_id, vod_name: video.vod_name },
+        currentData: []
+      };
+      const statsText = getStatsText(activeKey.value, folderInfo);
+      debouncedUpdateStats(statsText);
       console.log('🗂️ [DEBUG] 更新folder统计信息(错误):', statsText);
     }
   }
@@ -798,15 +932,17 @@ const handleFolderNavigate = async (breadcrumb) => {
   
   try {
     // 设置加载状态
-    const currentBreadcrumbs = props.folderNavigationState.breadcrumbs;
+    const currentBreadcrumbs = folderBreadcrumbs.value;
     const targetIndex = currentBreadcrumbs.findIndex(b => b.vod_id === breadcrumb.vod_id);
     const newBreadcrumbs = targetIndex >= 0 ? currentBreadcrumbs.slice(0, targetIndex + 1) : currentBreadcrumbs;
     
     const loadingState = {
-      ...props.folderNavigationState,
+      isActive: folderIsActive.value,
       breadcrumbs: newBreadcrumbs,
       currentBreadcrumb: breadcrumb,
-      loading: true
+      currentData: folderCurrentData.value,
+      loading: true,
+      hasMore: folderHasMore.value
     };
     
     emit('folder-navigate', loadingState);
@@ -843,20 +979,25 @@ const handleFolderNavigate = async (breadcrumb) => {
       folderLoadingMore[breadcrumb.vod_id] = false;
       
       const updatedState = {
-        ...props.folderNavigationState,
+        isActive: true,
         breadcrumbs: newBreadcrumbs,
         currentData: folderData,
         currentBreadcrumb: breadcrumb,
-        loading: false
+        loading: false,
+        hasMore: true
       };
       
       emit('folder-navigate', updatedState);
       
-      // 等待状态更新后，使用getStatsText生成正确的统计信息
-      await nextTick();
+      // 使用防抖更新统计信息
       if (activeKey.value) {
-        const statsText = getStatsText(activeKey.value);
-        paginationStore.updateStats(statsText);
+        const folderInfo = {
+          isActive: true,
+          currentBreadcrumb: breadcrumb,
+          currentData: folderData
+        };
+        const statsText = getStatsText(activeKey.value, folderInfo);
+        debouncedUpdateStats(statsText);
         console.log('🗂️ [DEBUG] 面包屑导航更新统计信息:', statsText);
       }
     }
@@ -868,7 +1009,7 @@ const handleFolderNavigate = async (breadcrumb) => {
 const handleFolderGoBack = () => {
   console.log('🗂️ [DEBUG] 返回上一级folder');
   
-  const currentBreadcrumbs = props.folderNavigationState.breadcrumbs;
+  const currentBreadcrumbs = folderBreadcrumbs.value;
   if (currentBreadcrumbs.length > 1) {
     const newBreadcrumbs = currentBreadcrumbs.slice(0, -1);
     const targetBreadcrumb = newBreadcrumbs[newBreadcrumbs.length - 1];
@@ -879,24 +1020,126 @@ const handleFolderGoBack = () => {
   }
 };
 
-const handleFolderGoHome = () => {
+const handleFolderGoHome = async () => {
   console.log('🗂️ [DEBUG] 返回folder根目录');
   
-  const homeState = {
-    isActive: false,
-    breadcrumbs: [],
-    currentData: [],
-    currentBreadcrumb: null,
-    loading: false
-  };
-  
-  emit('folder-navigate', homeState);
-  
-  // 恢复正常分类的统计信息
-  if (activeKey.value && listData[activeKey.value]) {
-    const statsText = getStatsText(activeKey.value);
-    paginationStore.updateStats(statsText);
-    console.log('🗂️ [DEBUG] 退出folder模式，恢复统计信息:', statsText);
+  // 获取第一级目录（根目录）
+  const currentBreadcrumbs = folderBreadcrumbs.value;
+  if (currentBreadcrumbs.length > 0) {
+    const rootBreadcrumb = currentBreadcrumbs[0];
+    
+    // 设置加载状态
+    const loadingState = {
+      isActive: true,
+      breadcrumbs: [rootBreadcrumb],
+      currentData: [],
+      currentBreadcrumb: rootBreadcrumb,
+      loading: true
+    };
+    
+    emit('folder-navigate', loadingState);
+    
+    try {
+      // 重新获取根目录数据
+      const filters = selectedFilters[activeKey.value] || {};
+      console.log('🗂️ [DEBUG] 返回根目录，应用筛选条件:', filters);
+      
+      const requestParams = {
+        t: rootBreadcrumb.vod_id,
+        pg: 1,
+        extend: processExtendParam(props.extend),
+        apiUrl: props.apiUrl
+      };
+      
+      // 如果有筛选条件，添加ext参数
+      if (Object.keys(filters).length > 0) {
+        // requestParams.ext = encodeFilters(filters);
+        console.log('🗂️ [DEBUG] 返回根目录，编码后的筛选条件:', requestParams.ext);
+      }
+      
+      const response = await getCategoryData(props.module, requestParams);
+      console.log('🗂️ [DEBUG] 返回根目录，T4分类接口响应:', response);
+      
+      if (response && response.list && response.list.length > 0) {
+        const folderData = response.list;
+        
+        // 更新翻页状态
+        folderPageData[rootBreadcrumb.vod_id] = {
+          page: response.page || 1,
+          hasNext: response.page < response.pagecount || false,
+          total: response.total || 0
+        };
+        folderLoadingMore[rootBreadcrumb.vod_id] = false;
+        
+        // 返回到第一级目录，包含最新数据
+        const homeState = {
+          isActive: true,
+          breadcrumbs: [rootBreadcrumb],
+          currentData: folderData,
+          currentBreadcrumb: rootBreadcrumb,
+          loading: false
+        };
+        
+        emit('folder-navigate', homeState);
+        
+        // 使用防抖更新统计信息
+        const statsText = `共 ${folderData.length} 个项目`;
+        debouncedUpdateStats(statsText);
+        console.log('🗂️ [DEBUG] 返回到根目录，统计信息:', statsText);
+      } else {
+        // 如果没有数据，显示空状态
+        const homeState = {
+          isActive: true,
+          breadcrumbs: [rootBreadcrumb],
+          currentData: [],
+          currentBreadcrumb: rootBreadcrumb,
+          loading: false
+        };
+        
+        emit('folder-navigate', homeState);
+        
+        // 使用防抖更新统计信息
+        const statsText = '共 0 个项目';
+        debouncedUpdateStats(statsText);
+        console.log('🗂️ [DEBUG] 返回到根目录，无数据，统计信息:', statsText);
+      }
+    } catch (error) {
+      console.error('🗂️ [ERROR] 返回根目录时获取数据失败:', error);
+      
+      // 错误状态
+      const errorState = {
+        isActive: true,
+        breadcrumbs: [rootBreadcrumb],
+        currentData: [],
+        currentBreadcrumb: rootBreadcrumb,
+        loading: false
+      };
+      
+      emit('folder-navigate', errorState);
+      
+      // 使用防抖更新统计信息
+      const statsText = '数据加载失败';
+      debouncedUpdateStats(statsText);
+      console.log('🗂️ [DEBUG] 返回根目录失败，统计信息:', statsText);
+    }
+  } else {
+    // 如果没有面包屑数据，则退出目录模式
+    const homeState = {
+      isActive: false,
+      breadcrumbs: [],
+      currentData: [],
+      currentBreadcrumb: null,
+      loading: false
+    };
+    
+    emit('folder-navigate', homeState);
+    
+    // 使用防抖更新统计信息
+    if (activeKey.value && listData[activeKey.value]) {
+      const statsText = getStatsText(activeKey.value, null);
+      debouncedUpdateStats(statsText);
+      console.log('🗂️ [DEBUG] 退出目录模式，恢复统计信息:', statsText);
+    }
   }
 };
 
@@ -913,10 +1156,10 @@ const handleExitFolder = () => {
   
   emit('folder-navigate', exitState);
   
-  // 恢复正常分类的统计信息
+  // 使用防抖更新统计信息
   if (activeKey.value && listData[activeKey.value]) {
-    const statsText = getStatsText(activeKey.value);
-    paginationStore.updateStats(statsText);
+    const statsText = getStatsText(activeKey.value, null);
+    debouncedUpdateStats(statsText);
     console.log('🗂️ [DEBUG] 退出folder模式，恢复统计信息:', statsText);
   }
 };

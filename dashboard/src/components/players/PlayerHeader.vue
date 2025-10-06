@@ -44,6 +44,39 @@
           <span class="btn-text">倒计时</span>
         </div>
         
+        <!-- 解析选择器 - 仅在需要解析时显示 -->
+        <div 
+          v-if="showParserSelector" 
+          class="compact-btn selector-btn"
+        >
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <a-select
+            :model-value="selectedParser"
+            @change="handleParserChange"
+            class="compact-select"
+            size="small"
+            :loading="parsersLoading"
+            :disabled="!availableParsers.length"
+          >
+            <a-option 
+              v-for="parser in availableParsers" 
+              :key="parser.id" 
+              :value="parser.id"
+              :title="`${parser.name} (${parser.type === '1' ? 'JSON' : '嗅探'})`"
+              :disabled="parser.type === '0' && !snifferEnabled"
+            >
+              解析:{{ parser.name }}
+              <span v-if="parser.type === '0' && !snifferEnabled" style="color: #ff4d4f; font-size: 10px;">
+                (需嗅探器)
+              </span>
+            </a-option>
+          </a-select>
+        </div>
+
         <!-- 代理播放地址选择器 -->
         <div class="compact-btn selector-btn">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -144,7 +177,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useParserStore } from '@/stores/parser'
+import { isSnifferEnabled } from '@/api/services/sniffer'
 
 // Props
 const props = defineProps({
@@ -192,6 +227,19 @@ const props = defineProps({
   currentQuality: {
     type: String,
     default: '默认'
+  },
+  // 解析相关属性
+  showParserSelector: {
+    type: Boolean,
+    default: false
+  },
+  needsParsing: {
+    type: Boolean,
+    default: false
+  },
+  parseData: {
+    type: Object,
+    default: () => null
   }
 })
 
@@ -204,12 +252,20 @@ const emit = defineEmits([
   'toggle-debug',
   'close',
   'proxy-change',
-  'quality-change'
+  'quality-change',
+  'parser-change'
 ])
 
 // 代理播放地址相关状态
 const currentProxyOption = ref('disabled')
 const proxyOptions = ref([])
+
+// 解析器相关状态
+const parserStore = useParserStore()
+const selectedParser = ref('')
+const availableParsers = ref([])
+const parsersLoading = ref(false)
+const snifferEnabled = ref(false)
 
 // 获取代理播放地址配置名称
 const getProxyName = (url) => {
@@ -354,6 +410,80 @@ const handleProxyChange = (value) => {
   emit('proxy-change', value)
 }
 
+// 加载解析器配置
+const loadParsers = async () => {
+  try {
+    parsersLoading.value = true
+    
+    // 获取已启用的解析器
+    availableParsers.value = parserStore.enabledParsers.map(parser => ({
+      id: parser.id,
+      name: parser.name,
+      type: parser.type,
+      url: parser.url,
+      enabled: parser.enabled
+    }))
+    
+    // 检查嗅探器是否可用
+    snifferEnabled.value = isSnifferEnabled()
+    
+    // 从本地存储加载上次选择的解析器
+    const savedParser = localStorage.getItem('selectedParser')
+    let shouldTriggerParsing = false
+    
+    if (savedParser && availableParsers.value.find(p => p.id === savedParser)) {
+      selectedParser.value = savedParser
+      shouldTriggerParsing = true
+    } else if (availableParsers.value.length > 0) {
+      // 默认选择第一个解析器
+      selectedParser.value = availableParsers.value[0].id
+      shouldTriggerParsing = true
+    }
+    
+    console.log('解析器配置加载完成:', {
+      count: availableParsers.value.length,
+      selected: selectedParser.value,
+      snifferEnabled: snifferEnabled.value,
+      shouldTriggerParsing
+    })
+    
+    // 如果选择了解析器且有解析数据，自动触发解析
+    if (shouldTriggerParsing && selectedParser.value && props.parseData) {
+      console.log('🚀 [自动解析] 触发默认解析器解析')
+      // 延迟一点时间确保组件完全初始化
+      nextTick(() => {
+        handleParserChange(selectedParser.value)
+      })
+    }
+  } catch (error) {
+    console.error('加载解析器配置失败:', error)
+  } finally {
+    parsersLoading.value = false
+  }
+}
+
+// 处理解析器变更
+const handleParserChange = (parserId) => {
+  selectedParser.value = parserId
+  
+  // 获取选中的解析器信息
+  const parser = availableParsers.value.find(p => p.id === parserId)
+  
+  // 保存到本地存储（统一保存为JSON对象格式）
+  if (parser) {
+    localStorage.setItem('selectedParser', JSON.stringify(parser))
+  }
+  
+  // 发送事件给父组件
+  emit('parser-change', {
+    parserId,
+    parser,
+    parseData: props.parseData
+  })
+  
+  console.log('解析器已切换:', parser)
+}
+
 // 监听设置变化
 const handleStorageChange = (event) => {
   if (event.key === 'addressSettings') {
@@ -366,11 +496,23 @@ const handleStorageChange = (event) => {
 onMounted(() => {
   loadProxyConfig()
   
+  // 如果需要解析，加载解析器配置
+  if (props.showParserSelector) {
+    loadParsers()
+  }
+  
   // 监听localStorage变化
   window.addEventListener('storage', handleStorageChange)
   
   // 监听自定义事件（用于同一页面内的设置变化）
   window.addEventListener('addressSettingsChanged', loadProxyConfig)
+})
+
+// 监听showParserSelector变化
+watch(() => props.showParserSelector, (newValue) => {
+  if (newValue) {
+    loadParsers()
+  }
 })
 
 // 组件卸载时清理监听器

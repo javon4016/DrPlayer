@@ -1,0 +1,184 @@
+/**
+ * 重置服务
+ * 负责应用的出厂重置功能
+ */
+
+import { Message, Modal } from '@arco-design/web-vue'
+import { saveCSPConfig, setGlobalReferrerPolicy } from '@/utils/csp'
+
+// 默认配置值
+const DEFAULT_CONFIGS = {
+  // 地址设置默认值
+  addressSettings: {
+    vodConfig: '',
+    liveConfig: '',
+    proxyAccess: '',
+    proxyAccessEnabled: false,
+    proxyPlay: 'http://localhost:57572/proxy?form=base64&url=${url}&headers=${headers}&type=${type}#嗷呜',
+    proxyPlayEnabled: false,
+    proxySniff: 'http://localhost:57573/sniffer',
+    proxySniffEnabled: false,
+    snifferTimeout: 10
+  },
+  
+  // 应用设置默认值
+  appSettings: {
+    datasourceDisplay: true,
+    windowPreview: true,
+    playerType: 'ijk',
+    adFilter: true,
+    ijkCache: false,
+    autoLive: false,
+    secureDns: false,
+    cspBypass: true,
+    referrerPolicy: 'no-referrer'
+  },
+  
+  // CSP配置默认值
+  cspConfig: {
+    enabled: true,
+    referrerPolicy: 'no-referrer'
+  },
+  
+  // 跳过设置默认值
+  skipSettings: {},
+  
+  // 解析器配置默认值
+  parserConfig: {},
+  
+  // 页面状态默认值
+  pageState: {},
+  
+  // 侧边栏状态默认值
+  sidebarCollapsed: false
+}
+
+// 需要完全清空的数据键
+const CLEAR_DATA_KEYS = [
+  // 用户数据
+  'drplayer-favorites',           // 收藏列表
+  'drplayer_watch_history',       // 观看历史
+  'drplayer_histories',           // 历史页面数据
+  'drplayer_daily_stats',         // 每日统计
+  'drplayer_weekly_stats',        // 周统计
+  'drplayer_parsers',             // 解析器数据
+  
+  // 站点数据
+  'siteStore',                    // 站点存储
+  'drplayer_config_url',          // 配置地址
+  'drplayer_live_config_url',     // 直播配置地址
+  'drplayer_current_site',        // 当前站点
+  
+  // 地址配置历史
+  'drplayer_vod_config_history',
+  'drplayer_live_config_history',
+  'drplayer_proxy_access_history',
+  'drplayer_proxy_play_history',
+  'drplayer_proxy_sniff_history'
+]
+
+/**
+ * 显示重置确认对话框
+ */
+export const showResetConfirmation = () => {
+  return new Promise((resolve) => {
+    Modal.confirm({
+      title: '确认重置',
+      content: `此操作将执行完整的出厂重置，包括：
+
+• 重置所有配置接口地址为默认值
+• 清空收藏列表
+• 清空观看历史记录
+• 清空解析器数据
+• 清空站点数据
+• 重置所有应用设置
+
+⚠️ 此操作不可撤销，请确认是否继续？`,
+      width: 480,
+      closable: true,
+      okText: '确认重置',
+      cancelText: '取消',
+      okButtonProps: {
+        status: 'danger'
+      },
+      onOk: () => {
+        resolve(true)
+      },
+      onCancel: () => {
+        resolve(false)
+      }
+    })
+  })
+}
+
+/**
+ * 执行完整的出厂重置
+ */
+export const performFactoryReset = async () => {
+  try {
+    // 1. 清空需要删除的数据
+    CLEAR_DATA_KEYS.forEach(key => {
+      localStorage.removeItem(key)
+    })
+    
+    // 2. 重置配置为默认值
+    Object.entries(DEFAULT_CONFIGS).forEach(([key, defaultValue]) => {
+      if (defaultValue !== null && defaultValue !== undefined) {
+        localStorage.setItem(key, JSON.stringify(defaultValue))
+      }
+    })
+    
+    // 3. 重置CSP配置
+    try {
+      saveCSPConfig(DEFAULT_CONFIGS.cspConfig)
+      setGlobalReferrerPolicy('no-referrer')
+    } catch (error) {
+      console.warn('CSP配置重置失败:', error)
+    }
+    
+    // 4. 显示成功消息
+    Message.success({
+      content: '出厂重置完成！应用已恢复到初始状态',
+      duration: 3000
+    })
+    
+    // 5. 建议用户刷新页面
+    setTimeout(() => {
+      Modal.info({
+        title: '重置完成',
+        content: '为确保所有更改生效，建议刷新页面。是否立即刷新？',
+        okText: '立即刷新',
+        cancelText: '稍后刷新',
+        onOk: () => {
+          window.location.reload()
+        }
+      })
+    }, 1000)
+    
+    return true
+  } catch (error) {
+    console.error('出厂重置失败:', error)
+    Message.error({
+      content: '出厂重置失败，请重试',
+      duration: 3000
+    })
+    return false
+  }
+}
+
+/**
+ * 带确认的出厂重置函数
+ */
+export const factoryResetWithConfirmation = async () => {
+  const confirmed = await showResetConfirmation()
+  if (confirmed) {
+    return await performFactoryReset()
+  }
+  return false
+}
+
+export default {
+  showResetConfirmation,
+  performFactoryReset,
+  factoryResetWithConfirmation
+}

@@ -262,6 +262,11 @@ export const useParserStore = defineStore('parser', () => {
   // 初始化时从本地存储加载
   loadFromLocalStorage()
   
+  // loadParsers作为loadFromLocalStorage的别名，用于兼容性
+  const loadParsers = () => {
+    loadFromLocalStorage()
+  }
+
   return {
     // 状态
     parsers,
@@ -274,6 +279,7 @@ export const useParserStore = defineStore('parser', () => {
     parserCount,
     
     // 方法
+    loadParsers,
     loadParsersFromConfig,
     loadFromLocalStorage,
     saveToLocalStorage,
