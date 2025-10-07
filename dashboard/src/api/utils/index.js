@@ -2,33 +2,69 @@
  * API工具函数
  * 提供常用的数据处理、验证和转换功能
  */
-
+import CryptoJS from 'crypto-js'
 /**
- * Base64编码
- * @param {string} str - 需要编码的字符串
+ * Base64编码（使用CryptoJS）
+ * @param {string} text 待编码文本
  * @returns {string} Base64编码结果
  */
-export const base64Encode = (str) => {
-  try {
-    return btoa(unescape(encodeURIComponent(str)))
-  } catch (error) {
-    console.error('Base64编码失败:', error)
-    return str
-  }
+export const base64Encode = (text) => {
+  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(text));
 }
 
 /**
- * Base64解码
- * @param {string} str - 需要解码的Base64字符串
+ * Base64解码（使用CryptoJS）
+ * @param {string} text Base64编码文本
  * @returns {string} 解码结果
  */
-export const base64Decode = (str) => {
-  try {
-    return decodeURIComponent(escape(atob(str)))
-  } catch (error) {
-    console.error('Base64解码失败:', error)
-    return str
+export const base64Decode = (text) => {
+  return CryptoJS.enc.Utf8.stringify(CryptoJS.enc.Base64.parse(text));
+}
+
+/**
+ * URL安全的Base64编码（Base64URL）
+ * 将 + 替换为 -，将 / 替换为 _，移除填充字符 =
+ * @param {string} text 待编码文本
+ * @returns {string} URL安全的Base64编码结果
+ */
+export const base64EncodeUrl = (text) => {
+  const base64 = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(text));
+  return base64
+    .replace(/\+/g, '-')    // 将 + 替换为 -
+    .replace(/\//g, '_')    // 将 / 替换为 _
+    .replace(/=/g, '');     // 移除填充字符 =
+}
+
+/**
+ * URL安全的Base64解码（Base64URL）
+ * 将 - 替换为 +，将 _ 替换为 /，补充填充字符 =
+ * @param {string} text URL安全的Base64编码文本
+ * @returns {string} 解码结果
+ */
+export const base64DecodeUrl = (text) => {
+  // 恢复标准Base64格式
+  let base64 = text
+    .replace(/-/g, '+')     // 将 - 替换为 +
+    .replace(/_/g, '/');    // 将 _ 替换为 /
+  
+  // 补充填充字符 =
+  const padding = base64.length % 4;
+  if (padding === 2) {
+    base64 += '==';
+  } else if (padding === 3) {
+    base64 += '=';
   }
+  
+  return CryptoJS.enc.Utf8.stringify(CryptoJS.enc.Base64.parse(base64));
+}
+
+/**
+ * MD5哈希
+ * @param {string} text 待哈希文本
+ * @returns {string} MD5哈希值
+ */
+export function md5(text) {
+  return CryptoJS.MD5(text).toString();
 }
 
 /**
@@ -268,6 +304,9 @@ export const throttle = (func, delay) => {
 export default {
   base64Encode,
   base64Decode,
+  base64EncodeUrl,
+  base64DecodeUrl,
+  md5,
   encodeFilters,
   decodeFilters,
   buildQueryString,

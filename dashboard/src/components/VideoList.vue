@@ -1,6 +1,6 @@
 <template>
   <div class="video-list-container">
-    <!-- 分类导航（集成筛选功能） -->
+    <!-- 分类导航（集成筛选功能） - 始终显示，目录模式下切换分类会自动退出目录模式 -->
     <CategoryNavigation
       :classList="classList"
       :trigger="trigger"
@@ -39,6 +39,7 @@
           :module="props.module"
           :extend="props.extend"
           :api-url="props.apiUrl"
+          :folderState="folderNavigationState"
           @load-more="loadMoreFolderData(folderCurrentBreadcrumb?.vod_id)"
           @scroll-bottom="loadMoreFolderData(folderCurrentBreadcrumb?.vod_id)"
           @refresh-list="handleRefreshList"
@@ -49,7 +50,13 @@
       
       <!-- 特殊分类内容 -->
       <div v-else-if="specialCategoryState.isActive" class="tab-content">
+        <!-- 分类数据获取loading -->
+        <div v-if="loadingCategory[specialCategoryState.categoryData?.type_id]" class="category-loading-container">
+          <a-spin :size="24" />
+          <div class="loading-text">正在加载分类数据...</div>
+        </div>
         <VideoGrid
+          v-else
           :videos="listData[specialCategoryState.categoryData?.type_id] || []"
           :loading="loadingMore[specialCategoryState.categoryData?.type_id] || false"
           :hasMore="pageData[specialCategoryState.categoryData?.type_id]?.hasNext || false"
@@ -68,7 +75,13 @@
       
       <!-- 推荐分类内容 -->
       <div v-else-if="activeKey === 'recommendTuijian404'" class="tab-content">
+        <!-- 分类数据获取loading -->
+        <div v-if="loadingCategory[activeKey]" class="category-loading-container">
+          <a-spin :size="24" />
+          <div class="loading-text">正在加载分类数据...</div>
+        </div>
         <VideoGrid
+          v-else
           :videos="listData[activeKey] || []"
           :loading="loadingMore[activeKey] || false"
           :hasMore="false"
@@ -84,8 +97,14 @@
 
       <!-- 其他分类内容 -->
       <div v-else class="tab-content">
+        <!-- 分类数据获取loading -->
+        <div v-if="loadingCategory[activeKey]" class="category-loading-container">
+          <a-spin :size="24" />
+          <div class="loading-text">正在加载分类数据...</div>
+        </div>
         <!-- 视频网格 -->
         <VideoGrid
+          v-else
           ref="videoGridRef"
           :videos="listData[activeKey] || []"
           :loading="loadingMore[activeKey] || false"
@@ -215,6 +234,7 @@ const activeKey = ref("");
 const listData = reactive({});
 const pageData = reactive({});
 const loadingMore = reactive({});
+const loadingCategory = reactive({}); // 新增：分类数据获取loading状态
 const filterVisible = reactive({});
 const selectedFilters = reactive({});
 const categoryModalVisible = ref(false);
@@ -286,7 +306,8 @@ const getDefaultActiveKey = () => {
     return "recommendTuijian404";
   }
   if (props.classList?.class && props.classList.class.length > 0) {
-    return props.classList.class[0].type_id;
+    const firstClassId = props.classList.class[0].type_id;
+    return firstClassId;
   }
   return "recommendTuijian404";
 };
@@ -377,6 +398,9 @@ const getStatsText = (categoryId, folderInfo = null) => {
 const getListData = async (key, forceReload = false) => {
   console.log(key, "选中分类id");
   if (!listData.hasOwnProperty(key) || forceReload) {
+    // 设置分类数据获取loading状态
+    loadingCategory[key] = true;
+    
     try {
       const currentSite = await siteService.getCurrentSite();
       
@@ -418,6 +442,9 @@ const getListData = async (key, forceReload = false) => {
       listData[key] = [];
       pageData[key] = { page: 1, hasNext: false };
       loadingMore[key] = false;
+    } finally {
+      // 清除分类数据获取loading状态
+      loadingCategory[key] = false;
     }
   }
 };
@@ -522,8 +549,6 @@ const loadMoreFolderData = async (folderId) => {
       apiUrl: props.apiUrl
     });
     
-    console.log('🗂️ [DEBUG] 目录翻页接口响应:', response);
-    
     if (response && response.list && response.list.length > 0) {
       const newVideos = response.list;
       
@@ -564,7 +589,6 @@ const loadMoreFolderData = async (folderId) => {
       if (activeKey.value) {
         const statsText = getStatsText(activeKey.value);
         paginationStore.updateStats(statsText);
-        console.log('🗂️ [DEBUG] 更新目录翻页统计信息:', statsText);
       }
     } else {
       // 没有更多数据
@@ -572,7 +596,6 @@ const loadMoreFolderData = async (folderId) => {
         ...folderPageData[folderId], 
         hasNext: false 
       };
-      console.log('🗂️ [DEBUG] 目录没有更多数据');
     }
   } catch (error) {
     console.error("目录加载更多数据失败:", error);
@@ -587,6 +610,11 @@ const loadMoreFolderData = async (folderId) => {
 
 // 事件处理方法
 const handleTabChange = (key) => {
+  // 如果当前在目录模式下，切换分类时自动退出目录模式
+  if (folderIsActive.value) {
+    handleExitFolder();
+  }
+  
   activeKey.value = key;
   getListData(key);
   emit('activeKeyChange', key);
@@ -640,7 +668,16 @@ watch(() => props.recommendVideos, (newVideos) => {
 }, { immediate: true });
 
 watch(() => props.classList, (newClassList, oldClassList) => {
+  console.log('🗂️ [DEBUG] ========== VideoList classList watch 触发 ==========');
+  console.log('🗂️ [DEBUG] oldClassList:', oldClassList);
+  console.log('🗂️ [DEBUG] newClassList:', newClassList);
+  console.log('🗂️ [DEBUG] classList是否发生变化:', newClassList !== oldClassList);
+  console.log('🗂️ [DEBUG] 当前activeKey.value:', activeKey.value);
+  console.log('🗂️ [DEBUG] 当前folderIsActive.value:', folderIsActive.value);
+  console.log('🗂️ [DEBUG] 当前folderNavigationState:', JSON.stringify(props.folderNavigationState, null, 2));
+  
   if (newClassList !== oldClassList) {
+    console.log('🗂️ [DEBUG] classList发生变化，清除筛选状态');
     // 清除筛选状态
     Object.keys(selectedFilters).forEach(key => {
       delete selectedFilters[key];
@@ -648,15 +685,28 @@ watch(() => props.classList, (newClassList, oldClassList) => {
     Object.keys(filterVisible).forEach(key => {
       delete filterVisible[key];
     });
+    console.log('🗂️ [DEBUG] 筛选状态已清除');
+  }
+  
+  // 如果当前处于folder模式，不要重置activeKey，避免覆盖folder状态
+  if (folderIsActive.value) {
+    console.log('🗂️ [DEBUG] 当前处于folder模式，跳过activeKey重置');
+    return;
   }
   
   const newActiveKey = getDefaultActiveKey();
+  
   if (activeKey.value !== newActiveKey) {
     activeKey.value = newActiveKey;
     getListData(newActiveKey);
     emit('activeKeyChange', newActiveKey);
   }
 }, { immediate: true });
+
+// 监听folderNavigationState的变化
+watch(() => props.folderNavigationState, (newState, oldState) => {
+  // 监听状态变化，无需调试日志
+}, { deep: true, immediate: true });
 
 onMounted(() => {
   activeKey.value = getDefaultActiveKey();
@@ -764,18 +814,11 @@ defineExpose({
       currentData: folderCurrentData.value
     } : null;
     debouncedUpdateStats(getStatsText(categoryId, folderInfo), 100);
-    
-    console.log('特殊分类数据设置完成:', {
-      categoryId,
-      videosCount: listData[categoryId]?.length || 0,
-      pageInfo: pageData[categoryId]
-    });
   }
 });
 
 // Folder导航相关方法
 const handleFolderNavigateFromGrid = async (video) => {
-  console.log('🗂️ [DEBUG] VideoList收到folder导航请求:', video);
   
   // 使用防抖机制防止快速连续点击
   debounceNavigation(async () => {
@@ -838,8 +881,6 @@ const performFolderNavigation = async (video) => {
     
     const response = await getCategoryData(props.module, requestParams);
     
-    console.log('🗂️ [DEBUG] T4分类接口响应:', response);
-    
     if (response && response.list && response.list.length > 0) {
       // 解析返回的分类数据
       const folderData = response.list;
@@ -872,10 +913,9 @@ const performFolderNavigation = async (video) => {
         };
         const statsText = getStatsText(activeKey.value, folderInfo);
         debouncedUpdateStats(statsText);
-        console.log('🗂️ [DEBUG] 更新folder统计信息:', statsText);
       }
     } else {
-      console.warn('🗂️ [DEBUG] T4分类接口返回数据为空');
+      console.warn('T4分类接口返回数据为空');
       // 返回空数据状态
       const emptyState = {
         isActive: true,
@@ -896,11 +936,10 @@ const performFolderNavigation = async (video) => {
         };
         const statsText = getStatsText(activeKey.value, folderInfo);
         debouncedUpdateStats(statsText);
-        console.log('🗂️ [DEBUG] 更新folder统计信息(空):', statsText);
       }
     }
   } catch (error) {
-    console.error('🗂️ [ERROR] Folder导航失败:', error);
+    console.error('Folder导航失败:', error);
     
     // 返回错误状态
     const errorState = {
@@ -922,13 +961,11 @@ const performFolderNavigation = async (video) => {
       };
       const statsText = getStatsText(activeKey.value, folderInfo);
       debouncedUpdateStats(statsText);
-      console.log('🗂️ [DEBUG] 更新folder统计信息(错误):', statsText);
     }
   }
 };
 
 const handleFolderNavigate = async (breadcrumb) => {
-  console.log('🗂️ [DEBUG] 面包屑导航到:', breadcrumb);
   
   try {
     // 设置加载状态
@@ -949,7 +986,6 @@ const handleFolderNavigate = async (breadcrumb) => {
     
     // 获取当前分类的筛选条件
     const filters = selectedFilters[activeKey.value] || {};
-    console.log('🗂️ [DEBUG] 面包屑导航应用筛选条件:', filters);
     
     // 调用T4分类接口，包含筛选条件
     const requestParams = {
@@ -962,7 +998,6 @@ const handleFolderNavigate = async (breadcrumb) => {
     // 如果有筛选条件，添加ext参数
     if (Object.keys(filters).length > 0) {
       // requestParams.ext = encodeFilters(filters);
-      console.log('🗂️ [DEBUG] 面包屑导航编码后的筛选条件:', requestParams.ext);
     }
     
     const response = await getCategoryData(props.module, requestParams);
@@ -1054,11 +1089,9 @@ const handleFolderGoHome = async () => {
       // 如果有筛选条件，添加ext参数
       if (Object.keys(filters).length > 0) {
         // requestParams.ext = encodeFilters(filters);
-        console.log('🗂️ [DEBUG] 返回根目录，编码后的筛选条件:', requestParams.ext);
       }
       
       const response = await getCategoryData(props.module, requestParams);
-      console.log('🗂️ [DEBUG] 返回根目录，T4分类接口响应:', response);
       
       if (response && response.list && response.list.length > 0) {
         const folderData = response.list;
@@ -1085,7 +1118,6 @@ const handleFolderGoHome = async () => {
         // 使用防抖更新统计信息
         const statsText = `共 ${folderData.length} 个项目`;
         debouncedUpdateStats(statsText);
-        console.log('🗂️ [DEBUG] 返回到根目录，统计信息:', statsText);
       } else {
         // 如果没有数据，显示空状态
         const homeState = {
@@ -1101,10 +1133,9 @@ const handleFolderGoHome = async () => {
         // 使用防抖更新统计信息
         const statsText = '共 0 个项目';
         debouncedUpdateStats(statsText);
-        console.log('🗂️ [DEBUG] 返回到根目录，无数据，统计信息:', statsText);
       }
     } catch (error) {
-      console.error('🗂️ [ERROR] 返回根目录时获取数据失败:', error);
+      console.error('返回根目录时获取数据失败:', error);
       
       // 错误状态
       const errorState = {
@@ -1120,7 +1151,6 @@ const handleFolderGoHome = async () => {
       // 使用防抖更新统计信息
       const statsText = '数据加载失败';
       debouncedUpdateStats(statsText);
-      console.log('🗂️ [DEBUG] 返回根目录失败，统计信息:', statsText);
     }
   } else {
     // 如果没有面包屑数据，则退出目录模式
@@ -1138,13 +1168,11 @@ const handleFolderGoHome = async () => {
     if (activeKey.value && listData[activeKey.value]) {
       const statsText = getStatsText(activeKey.value, null);
       debouncedUpdateStats(statsText);
-      console.log('🗂️ [DEBUG] 退出目录模式，恢复统计信息:', statsText);
     }
   }
 };
 
 const handleExitFolder = () => {
-  console.log('🗂️ [DEBUG] 退出folder模式');
   
   const exitState = {
     isActive: false,
@@ -1160,15 +1188,12 @@ const handleExitFolder = () => {
   if (activeKey.value && listData[activeKey.value]) {
     const statsText = getStatsText(activeKey.value, null);
     debouncedUpdateStats(statsText);
-    console.log('🗂️ [DEBUG] 退出folder模式，恢复统计信息:', statsText);
   }
 };
 
 // 处理刷新列表事件
 const handleRefreshList = () => {
-  console.log('VideoList收到刷新列表请求');
   if (activeKey.value) {
-    console.log('刷新当前分类:', activeKey.value);
     // 重置当前分类的数据
     listData[activeKey.value] = [];
     pageData[activeKey.value] = { page: 1, hasNext: true };
@@ -1199,5 +1224,19 @@ const handleRefreshList = () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.category-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 16px;
+}
+
+.loading-text {
+  color: #666;
+  font-size: 14px;
 }
 </style>

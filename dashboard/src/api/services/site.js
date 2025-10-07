@@ -403,6 +403,9 @@ class SiteService {
       const sites = await configService.getSites(forceRefresh)
       
       if (sites && sites.length > 0) {
+        // 保存当前站点信息用于智能切换
+        const previousCurrentSite = this.currentSite
+        
         // 清空现有站点（保留本地添加的站点）
         const localSites = Array.from(this.sites.values()).filter(site => site.isLocal)
         this.sites.clear()
@@ -418,6 +421,9 @@ class SiteService {
           siteInfo.isFromConfig = true // 标记为来自配置
           this.sites.set(siteInfo.key, siteInfo)
         })
+        
+        // 智能源切换逻辑
+        this.handleSmartSiteSwitch(previousCurrentSite)
         
         this.saveSitesToStorage()
         console.log(`从配置加载了 ${sites.length} 个站点`)
@@ -494,6 +500,70 @@ class SiteService {
           count: this.sites.size
         }
       }))
+    }
+  }
+
+  /**
+   * 智能站点切换处理
+   * @param {object} previousCurrentSite - 之前的当前站点
+   */
+  handleSmartSiteSwitch(previousCurrentSite) {
+    let needReload = false
+    
+    if (previousCurrentSite && previousCurrentSite.key) {
+      // 检查之前的当前站点是否还在新的站点列表中
+      const siteStillExists = this.sites.has(previousCurrentSite.key)
+      
+      if (siteStillExists) {
+        // 如果站点仍然存在，保持当前选择
+        this.currentSite = this.sites.get(previousCurrentSite.key)
+        console.log('保持当前源:', this.currentSite.name)
+      } else {
+        // 如果站点不存在，切换到第一个可用站点
+        const availableSites = this.getAllSites()
+        if (availableSites.length > 0) {
+          // 优先选择type为4的站点，如果没有则选择第一个
+          const firstSite = availableSites.find(site => site.type === 4) || availableSites[0]
+          this.currentSite = firstSite
+          needReload = true
+          console.log('自动切换到新源:', this.currentSite.name)
+          
+          // 触发站点切换事件
+          this.emitSiteChange(this.currentSite)
+        }
+      }
+    } else {
+      // 如果之前没有当前站点，设置第一个可用站点
+      const availableSites = this.getAllSites()
+      if (availableSites.length > 0) {
+        const firstSite = availableSites.find(site => site.type === 4) || availableSites[0]
+        this.currentSite = firstSite
+        needReload = true
+        console.log('设置默认源:', this.currentSite.name)
+        
+        // 触发站点切换事件
+        this.emitSiteChange(this.currentSite)
+      }
+    }
+    
+    // 如果需要重载，触发重载源事件
+    if (needReload) {
+      this.emitReloadSource()
+    }
+  }
+
+  /**
+   * 触发重载源事件
+   */
+  emitReloadSource() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('reloadSource', {
+        detail: { 
+          site: this.currentSite,
+          timestamp: Date.now()
+        }
+      }))
+      console.log('触发重载源事件')
     }
   }
 }

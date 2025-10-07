@@ -450,7 +450,7 @@ export const executeAction = async (module, data) => {
         timeout: 30000,
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json;charset=UTF-8',
         }
       })
       console.log('API响应 (POST):', response.data)

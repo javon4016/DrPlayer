@@ -57,8 +57,8 @@ export function buildProxyPlayUrl(originalUrl, proxyAddress, headers = {}) {
 
     // 替换模板字符串中的${url}和${headers}
     let proxyUrl = cleanProxyAddress
-      .replace(/\$\{url\}/g, encodedUrl)
-      .replace(/\$\{headers\}/g, encodedHeaders)
+      .replace(/\$\{url\}/g, encodeURIComponent(encodedUrl))
+      .replace(/\$\{headers\}/g, encodeURIComponent(encodedHeaders))
       .replace(/\$\{type\}/g, encodedType)
 
     console.log('🔄 [代理播放] 构建代理URL:')

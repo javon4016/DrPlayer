@@ -68,7 +68,10 @@
                 </div>
                 <!-- 文件类型图标 (当vod_pic为空且是目录模式下的非文件夹项目时) -->
                 <div v-else-if="isDirectoryFile(video)" class="file-icon-container">
-                  <i class="iconfont file-type-icon" :class="getFileTypeIcon(video.vod_name)"></i>
+<!--                  <i class="iconfont file-type-icon" :class="getFileTypeIcon(video.vod_name)"></i>-->
+                  <svg style="width:30%">
+                    <use :href="`#${getFileTypeIcon(video.vod_name)}`"></use>
+                  </svg>
                 </div>
                 <!-- 默认图片 (当vod_pic为空且没有特殊标识时) -->
                 <a-image

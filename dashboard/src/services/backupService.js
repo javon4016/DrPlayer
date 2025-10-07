@@ -4,6 +4,7 @@
  */
 
 import { Message } from '@arco-design/web-vue'
+import siteService from '@/api/services/site'
 
 // 备份数据版本号，用于兼容性检查
 const BACKUP_VERSION = '1.0.0'
@@ -344,13 +345,42 @@ export const restoreBackupData = (backupData) => {
         currentSite: BACKUP_KEYS.CURRENT_SITE
       }
       
+      let restoredCurrentSite = null
+      
       for (const [key, value] of Object.entries(backupData.siteData)) {
         const storageKey = siteDataMapping[key]
         if (storageKey && setLocalStorageData(storageKey, value)) {
           restoredCount++
+          
+          // 记录还原的当前站点信息
+          if (key === 'currentSite' && value) {
+            restoredCurrentSite = value
+          }
         } else {
           failedCount++
           errors.push(`站点数据 ${key}`)
+        }
+      }
+      
+      // 如果还原了当前站点，需要同步到siteService
+      if (restoredCurrentSite) {
+        try {
+          // 解析当前站点数据（可能是字符串或对象）
+          const currentSiteData = typeof restoredCurrentSite === 'string' 
+            ? JSON.parse(restoredCurrentSite) 
+            : restoredCurrentSite
+          
+          if (currentSiteData && currentSiteData.key) {
+            // 同步到siteService（如果站点存在）
+            const success = siteService.setCurrentSite(currentSiteData.key)
+            if (success) {
+              console.log('已同步还原的当前站点到siteService:', currentSiteData.name)
+            } else {
+              console.warn('还原的当前站点在站点列表中不存在，可能需要重新配置:', currentSiteData.key)
+            }
+          }
+        } catch (error) {
+          console.error('同步还原的当前站点到siteService失败:', error)
         }
       }
     }

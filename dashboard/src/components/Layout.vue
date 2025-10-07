@@ -41,7 +41,7 @@
           >
             <a-menu-item :key="item.id">
               <!--            <IconHome></IconHome>-->
-              <svg style="width: 16px; height: 16px; margin-right: 8px;">
+              <svg style="width:20px; height: 20px; margin-right: 8px;">
                 <use :href="`#${item.icon}`"></use>
               </svg>
               {{ item.name }}

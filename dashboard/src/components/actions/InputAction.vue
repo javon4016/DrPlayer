@@ -59,7 +59,7 @@
         </div>
       </div>
 
-      <!-- 输入区域 -->
+      <!-- 输入区域 fixme 有二维码也要显示这个输入框-->
       <div v-if="!config.qrcode" class="input-section">
         <!-- 快速选择 - 在输入框上方 -->
         <div v-if="quickSelectOptions.length > 0" class="quick-select">

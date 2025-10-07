@@ -5,6 +5,7 @@
       :player-type="playerType"
       :episodes="episodes"
       :auto-next-enabled="autoNextEnabled"
+      :loop-enabled="loopEnabled"
       :countdown-enabled="countdownEnabled"
       :skip-enabled="skipEnabled"
       :show-debug-button="showDebugButton"
@@ -14,6 +15,7 @@
       :needs-parsing="needsParsing"
       :parse-data="parseData"
       @toggle-auto-next="toggleAutoNext"
+      @toggle-loop="toggleLoop"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
       @open-skip-settings="openSkipSettingsDialog"
@@ -170,6 +172,7 @@ const dynamicHeight = ref(450) // 动态计算的高度
 
 // 自动下一集功能相关数据
 const autoNextEnabled = ref(true) // 自动下一集开关，默认关闭
+const loopEnabled = ref(JSON.parse(localStorage.getItem('loopEnabled') || 'false')) // 循环播放开关，从本地存储读取
 const autoNextCountdown = ref(0) // 自动下一集倒计时
 const autoNextTimer = ref(null) // 自动下一集定时器
 const showAutoNextDialog = ref(false) // 显示自动下一集对话框
@@ -659,12 +662,34 @@ const initArtPlayer = async (url) => {
     })
 
     art.on('video:ended', () => {
-      console.log('视频播放结束')
-      // 视频结束时启动自动下一集
-      if (autoNextEnabled.value && hasNextEpisode()) {
-        startAutoNextCountdown()
-      } else if (!hasNextEpisode()) {
-        Message.info('全部播放完毕')
+      try {
+        console.log('视频播放结束')
+        
+        // 优先处理循环播放
+        if (loopEnabled.value) {
+          console.log('循环播放：重新播放当前选集')
+          // 重新执行当前选集的播放逻辑
+          setTimeout(() => {
+            try {
+              // 触发重新选择当前选集，这会重新获取播放链接
+              emit('episode-selected', props.currentEpisodeIndex)
+            } catch (error) {
+              console.error('循环播放触发选集事件失败:', error)
+              Message.error('循环播放失败，请重试')
+            }
+          }, 1000)
+          return
+        }
+        
+        // 视频结束时启动自动下一集
+        if (autoNextEnabled.value && hasNextEpisode()) {
+          startAutoNextCountdown()
+        } else if (!hasNextEpisode()) {
+          Message.info('全部播放完毕')
+        }
+      } catch (error) {
+        console.error('视频结束事件处理失败:', error)
+        Message.error('视频结束处理失败')
       }
     })
 
@@ -1022,9 +1047,31 @@ const playNextEpisode = () => {
 const toggleAutoNext = () => {
   autoNextEnabled.value = !autoNextEnabled.value
   
+  // 如果开启自动连播，则关闭循环播放
+  if (autoNextEnabled.value) {
+    loopEnabled.value = false
+    localStorage.setItem('loopEnabled', 'false')
+  }
+  
   if (!autoNextEnabled.value) {
     cancelAutoNext()
   }
+}
+
+// 切换循环播放开关
+const toggleLoop = () => {
+  loopEnabled.value = !loopEnabled.value
+  
+  // 保存到本地存储
+  localStorage.setItem('loopEnabled', JSON.stringify(loopEnabled.value))
+  
+  // 如果开启循环播放，则关闭自动连播
+  if (loopEnabled.value) {
+    autoNextEnabled.value = false
+    cancelAutoNext()
+  }
+  
+  console.log('循环播放开关:', loopEnabled.value ? '开启' : '关闭')
 }
 
 // 切换倒计时开关

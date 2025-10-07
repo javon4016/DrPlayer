@@ -68,6 +68,20 @@ const CLEAR_DATA_KEYS = [
   'drplayer_config_url',          // 配置地址
   'drplayer_live_config_url',     // 直播配置地址
   'drplayer_current_site',        // 当前站点
+  'drplayer_sites',               // 站点列表数据
+  'site-nowSite',                 // 当前站点（兼容旧系统）
+  
+  // 配置数据
+  'drplayer_config_data',         // 配置数据缓存
+  'drplayer_config_fetch_time',   // 配置获取时间
+  
+  // 播放器相关
+  'drplayer_preferred_player_type', // 首选播放器类型
+  'selectedParser',               // 选中的解析器
+  'last-clicked-video',           // 最后点击的视频
+  
+  // 界面状态
+  'sidebar-collapsed',            // 侧边栏折叠状态
   
   // 地址配置历史
   'drplayer_vod_config_history',

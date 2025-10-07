@@ -249,10 +249,10 @@
         </a-form-item>
         
         <a-form-item label="解析地址" required>
-          <a-input v-model="parserForm.url" placeholder="请输入解析地址，使用{url}作为视频地址占位符" />
+          <a-input v-model="parserForm.url" placeholder="请输入解析地址，视频地址会直接与解析地址相加" />
           <template #extra>
             <div class="form-help">
-              示例: https://jx.example.com/api?url={url}
+              示例: https://jx.example.com/api?url=
             </div>
           </template>
         </a-form-item>

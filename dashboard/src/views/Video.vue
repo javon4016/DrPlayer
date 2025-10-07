@@ -22,6 +22,15 @@
       <div class="global-loading-content">
         <a-spin :size="32" />
         <div class="loading-text">正在切换数据源...</div>
+        <!-- 手动关闭按钮 -->
+        <a-button 
+          type="outline" 
+          size="small" 
+          @click="handleCloseGlobalLoading"
+          class="close-loading-btn"
+        >
+          手动关闭
+        </a-button>
       </div>
     </div>
     
@@ -168,9 +177,6 @@ const folderNavigationState = shallowRef({
   loading: false
 });
 
-// 验证初始化
-console.log('🗂️ [DEBUG] folderNavigationState 初始化:', folderNavigationState.value);
-
 // 全局loading状态（用于换源等操作）
 const globalLoading = ref(false);
 
@@ -191,7 +197,6 @@ const getData = async (forceRefresh = false) => {
       try {
         // 如果有配置地址，从配置地址加载站点数据
         await siteService.loadSitesFromConfig(forceRefresh);
-        console.log("从配置地址加载站点数据成功");
       } catch (configError) {
         console.error("从配置地址加载站点数据失败:", configError);
         // 配置加载失败时，使用本地存储的站点数据
@@ -203,7 +208,7 @@ const getData = async (forceRefresh = false) => {
     
     // 如果仍然没有站点配置，提示用户设置配置地址
     if (form.sites.length === 0) {
-      console.log("暂无站点配置，请在设置中配置数据源地址");
+      // 暂无站点配置，请在设置中配置数据源地址
     }
   } catch (error) {
     console.error("获取站点配置失败:", error);
@@ -271,6 +276,13 @@ const refreshPage = () => {
   window.location.reload();
 };
 
+// 处理重载源事件
+const handleReloadSource = (event) => {
+  console.log('收到重载源事件:', event.detail);
+  // 执行重载源功能（相当于点击重载源按钮）
+  refreshPage();
+};
+
 const minimize = () => {};
 const maximize = () => {};
 const closeWindow = () => {};
@@ -294,7 +306,6 @@ const handleConfirmChange = (site) => {
   
   // 1. 如果当前在目录模式，自动退出目录模式
   if (folderNavigationState.value?.isActive) {
-    console.log('🔄 [换源] 检测到目录模式，自动退出目录模式');
     folderNavigationState.value = {
       isActive: false,
       breadcrumbs: [],
@@ -314,11 +325,8 @@ const handleConfirmChange = (site) => {
 //获取分类列表
 const getClassList = async (site) => {
   if (!site || !site.key) {
-    console.log("站点信息无效");
     return;
   }
-
-  console.log(site, "确认换源");
   
   // 2. 显示loading状态
   globalLoading.value = true;
@@ -344,9 +352,6 @@ const getClassList = async (site) => {
     
     // 保存推荐视频数据，如果没有推荐数据则保持为空数组
     form.recommendVideos = homeData.videos || [];
-    
-    console.log("分类列表:", form.classList);
-    console.log("推荐视频:", form.recommendVideos);
   } catch (error) {
     console.error("获取分类列表失败:", error);
     // 降级处理：使用空的分类列表
@@ -470,7 +475,6 @@ const handleVideoClick = (video) => {
     // 判断当前是否在搜索状态
     if (searchState.isSearching) {
       // 搜索状态的保存由SearchResults组件处理
-      console.log('从搜索结果点击视频，状态保存由SearchResults组件处理');
       fromSearch = 'true';
     } else {
       // 保存分类状态
@@ -483,47 +487,54 @@ const handleVideoClick = (video) => {
           false, // loading状态
           window.scrollY // 当前滚动位置
         );
-        console.log('从分类列表点击视频，保存分类状态');
       }
+    }
+    
+    // 构建目标路由的query参数
+    const targetQuery = {
+      name: video.vod_name,
+      pic: video.vod_pic,
+      year: video.vod_year,
+      area: video.vod_area,
+      type: video.vod_type,
+      remarks: video.vod_remarks,
+      content: video.vod_content,
+      actor: video.vod_actor,
+      director: video.vod_director,
+      // 传递来源页面信息
+      sourceRouteName: route.name,
+      sourceRouteParams: JSON.stringify(route.params),
+      sourceRouteQuery: JSON.stringify({ ...route.query, activeKey: currentActiveKey.value }),
+      fromSearch: fromSearch, // 标识是否来自搜索
+      // 添加来源图片信息，用于详情页图片备用
+      sourcePic: video.vod_pic
+    };
+    
+    // 如果当前在folder模式，添加folder状态信息
+    if (folderNavigationState.value?.isActive) {
+      targetQuery.folderState = JSON.stringify({
+        isActive: folderNavigationState.value.isActive,
+        breadcrumbs: folderNavigationState.value.breadcrumbs,
+        currentBreadcrumb: folderNavigationState.value.currentBreadcrumb
+      });
     }
     
     router.push({
       name: 'VideoDetail',
       params: { id: video.vod_id },
-      query: {
-        name: video.vod_name,
-        pic: video.vod_pic,
-        year: video.vod_year,
-        area: video.vod_area,
-        type: video.vod_type,
-        remarks: video.vod_remarks,
-        content: video.vod_content,
-        actor: video.vod_actor,
-        director: video.vod_director,
-        // 传递来源页面信息
-        sourceRouteName: route.name,
-        sourceRouteParams: JSON.stringify(route.params),
-        sourceRouteQuery: JSON.stringify({ ...route.query, activeKey: currentActiveKey.value }),
-        fromSearch: fromSearch, // 标识是否来自搜索
-        // 添加来源图片信息，用于详情页图片备用
-        sourcePic: video.vod_pic
-      }
+      query: targetQuery
     });
   }
 };
 
 // 处理刷新列表事件
 const handleRefreshList = () => {
-  console.log('收到刷新列表请求');
-  
   if (searchState.isSearching) {
     // 如果在搜索状态，重新执行搜索
-    console.log('刷新搜索结果');
     // 可以重新调用搜索方法
     // searchVideos(searchState.searchKeyword);
   } else {
     // 如果在分类列表状态，刷新当前分类
-    console.log('刷新分类列表');
     if (videoListRef.value) {
       videoListRef.value.refreshCurrentCategory();
     }
@@ -532,13 +543,8 @@ const handleRefreshList = () => {
 
 // 处理特殊动作事件
 const handleSpecialAction = async (actionType, actionData) => {
-  console.log('🎯 [DEBUG] handleSpecialAction 被调用');
-  console.log('🎯 [DEBUG] actionType:', actionType);
-  console.log('🎯 [DEBUG] actionData:', JSON.stringify(actionData, null, 2));
-  
   switch (actionType) {
     case '__self_search__':
-      console.log('🎯 [DEBUG] 匹配到 __self_search__ 动作，调用 handleSelfSearchAction');
       await handleSelfSearchAction(actionData);
       break;
     default:
@@ -550,12 +556,8 @@ const handleSpecialAction = async (actionType, actionData) => {
 // 处理源内搜索动作
 const handleSelfSearchAction = async (categoryData) => {
   try {
-    console.log('🔍 [DEBUG] handleSelfSearchAction 被调用');
-    console.log('🔍 [DEBUG] 接收到的 categoryData:', JSON.stringify(categoryData, null, 2));
-    
     // 保存当前状态
     if (!specialCategoryState.isActive) {
-      console.log('🔍 [DEBUG] 保存当前状态');
       specialCategoryState.originalClassList = form.classList;
       specialCategoryState.originalRecommendVideos = form.recommendVideos;
     }
@@ -563,16 +565,6 @@ const handleSelfSearchAction = async (categoryData) => {
     // 解析T4返回的参数
     const tid = categoryData.tid || categoryData.type_id || categoryData.actionData?.tid;
     const typeName = categoryData.name || categoryData.type_name || `搜索: ${tid}`;
-    
-    console.log('🔍 [DEBUG] 解析的参数:', { 
-      tid, 
-      typeName,
-      'categoryData.tid': categoryData.tid,
-      'categoryData.type_id': categoryData.type_id,
-      'categoryData.actionData?.tid': categoryData.actionData?.tid,
-      'categoryData.name': categoryData.name,
-      'categoryData.type_name': categoryData.type_name
-    });
     
     if (!tid) {
       console.error('🔍 [ERROR] 源内搜索参数不完整：缺少tid');
@@ -591,8 +583,6 @@ const handleSelfSearchAction = async (categoryData) => {
         extend: form.now_site?.ext
       }
     );
-    
-    console.log('T4分类接口返回数据:', categoryResult);
     
     // 构造特殊分类数据结构
     const specialClassList = {
@@ -620,20 +610,11 @@ const handleSelfSearchAction = async (categoryData) => {
     // 切换到特殊分类
     currentActiveKey.value = tid;
     
-    console.log('特殊分类设置完成:', {
-      tid,
-      categoryName: typeName,
-      isActive: specialCategoryState.isActive,
-      videosCount: categoryResult.videos?.length || 0,
-      classList: form.classList
-    });
-    
     // 等待下一个tick，确保VideoList组件已经接收到新的props
     await nextTick();
     
     // 直接设置VideoList组件的数据，而不是触发刷新
     if (videoListRef.value && categoryResult.videos) {
-      console.log('直接设置VideoList组件的特殊分类数据');
       // 通过VideoList的暴露方法直接设置数据
       videoListRef.value.setSpecialCategoryData(tid, categoryResult.videos, categoryResult.pagination);
     }
@@ -650,8 +631,6 @@ const closeSpecialCategory = () => {
     return;
   }
   
-  console.log('关闭特殊分类，恢复正常显示');
-  
   // 恢复原始状态
   form.classList = specialCategoryState.originalClassList;
   form.recommendVideos = specialCategoryState.originalRecommendVideos;
@@ -664,8 +643,6 @@ const closeSpecialCategory = () => {
   
   // 切换回推荐分类
   currentActiveKey.value = 'recommendTuijian404';
-  
-  console.log('特殊分类已关闭，恢复到推荐分类');
 };
 
 // 防止递归更新的标志
@@ -674,17 +651,14 @@ let updateTimeout = null;
 
 // 处理folder导航事件
 const handleFolderNavigate = async (navigationData) => {
-  console.log('🗂️ [DEBUG] handleFolderNavigate 被调用:', navigationData);
-  
   // 参数验证
   if (!navigationData || typeof navigationData !== 'object') {
-    console.error('🗂️ [ERROR] navigationData 无效:', navigationData);
+    console.error('navigationData 无效:', navigationData);
     return;
   }
   
   // 防止重复更新
   if (isUpdatingFolderState) {
-    console.log('🗂️ [DEBUG] 正在更新中，跳过此次调用');
     return;
   }
   
@@ -699,7 +673,6 @@ const handleFolderNavigate = async (navigationData) => {
   try {
     // 保存当前状态（进入folder模式时）
     if (navigationData.isActive && !folderNavigationState.value?.isActive) {
-      console.log('🗂️ [DEBUG] 进入folder模式，保存当前状态');
       previousState.activeKey = currentActiveKey.value;
       previousState.scrollPosition = window.scrollY || 0;
       previousState.savedAt = Date.now();
@@ -707,7 +680,6 @@ const handleFolderNavigate = async (navigationData) => {
     
     // 恢复之前的状态（退出folder模式时）
     if (!navigationData.isActive && folderNavigationState.value?.isActive) {
-      console.log('🗂️ [DEBUG] 退出folder模式，恢复之前的状态');
       if (previousState.activeKey) {
         currentActiveKey.value = previousState.activeKey;
       }
@@ -755,15 +727,8 @@ const handleFolderNavigate = async (navigationData) => {
     // 使用 shallowRef 的 .value 完全替换对象，避免响应式循环
     folderNavigationState.value = newState;
     
-    console.log('🗂️ [DEBUG] folder导航状态已更新:', {
-      isActive: folderNavigationState.value?.isActive,
-      breadcrumbsCount: folderNavigationState.value?.breadcrumbs?.length || 0,
-      currentDataCount: folderNavigationState.value?.currentData?.length || 0,
-      currentBreadcrumb: folderNavigationState.value?.currentBreadcrumb
-    });
-    
   } catch (error) {
-    console.error('🗂️ [ERROR] 更新folder状态时出错:', error);
+    console.error('更新folder状态时出错:', error);
   } finally {
     // 重置更新标志
     isUpdatingFolderState = false;
@@ -779,6 +744,11 @@ const handleOpenForm = () => {
   const type4Sites = form.sites.filter(site => site.type === 4);
   form.form_title = `请选择数据源(${type4Sites.length})`;
   checkNowSite();
+};
+
+// 手动关闭全局loading
+const handleCloseGlobalLoading = () => {
+  globalLoading.value = false;
 };
 
 // 处理推送功能
@@ -797,12 +767,6 @@ const handlePush = async (vodId) => {
   }
 
   try {
-    console.log('推送功能，使用临时站源:', {
-      siteName: pushAgentSite.name,
-      siteKey: pushAgentSite.key,
-      siteApi: pushAgentSite.api
-    });
-
     // 参考收藏和历史功能，使用临时源跳转到详情页
     router.push({
       name: 'VideoDetail',
@@ -846,61 +810,57 @@ onMounted(async () => {
   getData(); // 页面加载时获取数据
   getNowSite(); // 获取储存的当前源
   
-  // 检查是否需要恢复搜索状态
-  const restoreSearch = route.query._restoreSearch;
-  const returnToActiveKey = route.query._returnToActiveKey;
+  // 监听重载源事件
+  window.addEventListener('reloadSource', handleReloadSource);
   
-  if (restoreSearch === 'true') {
-    // 恢复搜索状态
-    const savedSearchState = pageStateStore.getPageState('search');
-    if (savedSearchState && savedSearchState.keyword && !pageStateStore.isStateExpired('search')) {
-      console.log('恢复搜索状态:', savedSearchState);
-      
-      // 恢复搜索相关状态
-      searchState.isSearching = true;
-      searchState.searchKeyword = savedSearchState.keyword;
-      searchState.searchResults = savedSearchState.videos || [];
-      searchState.currentPage = savedSearchState.currentPage || 1;
-      searchState.hasMore = savedSearchState.hasMore || false;
-      searchState.searchLoading = false;
-      searchState.searchError = null;
-      searchState.scrollPosition = savedSearchState.scrollPosition || 0;
-      
-      // 清除URL中的恢复参数
-      const newQuery = { ...route.query };
-      delete newQuery._restoreSearch;
-      router.replace({ query: newQuery });
-      
-      await getClassList(form.now_site);
-      startClock(); // 启动时钟
-      
-      // 注意：搜索结果的滚动位置恢复由SearchResults组件自动处理
-      console.log('搜索状态恢复完成，滚动位置由SearchResults组件处理');
-      
-      return; // 搜索状态恢复完成，不再执行分类恢复逻辑
+  // 检查是否需要恢复搜索状态
+    const restoreSearch = route.query._restoreSearch;
+    const returnToActiveKey = route.query._returnToActiveKey;
+    const restoreFolderState = route.query.folderState;
+    
+    if (restoreSearch === 'true') {
+      // 恢复搜索状态
+      const savedSearchState = pageStateStore.getPageState('search');
+      if (savedSearchState && savedSearchState.keyword && !pageStateStore.isStateExpired('search')) {
+        // 恢复搜索相关状态
+        searchState.isSearching = true;
+        searchState.searchKeyword = savedSearchState.keyword;
+        searchState.searchResults = savedSearchState.videos || [];
+        searchState.currentPage = savedSearchState.currentPage || 1;
+        searchState.hasMore = savedSearchState.hasMore || false;
+        searchState.searchLoading = false;
+        searchState.searchError = null;
+        searchState.scrollPosition = savedSearchState.scrollPosition || 0;
+        
+        // 清除URL中的恢复参数
+        const newQuery = { ...route.query };
+        delete newQuery._restoreSearch;
+        router.replace({ query: newQuery });
+        
+        await getClassList(form.now_site);
+        startClock(); // 启动时钟
+        
+        return; // 搜索状态恢复完成，不再执行分类恢复逻辑
+      }
     }
-  }
   
   // 尝试恢复页面状态
   const savedState = pageStateStore.getPageState('video');
   const isStateExpired = pageStateStore.isStateExpired('video');
   
   let shouldRestoreState = false;
+  let hasFolderStateToRestore = false;
   
   if (returnToActiveKey) {
     // 如果有返回参数，优先使用返回参数
     currentActiveKey.value = returnToActiveKey;
-    shouldRestoreState = true;
-    console.log('从详情页返回，恢复到分类:', returnToActiveKey);
     
     // 检查是否需要恢复folder状态
-    if (route.query.folderState) {
+    if (restoreFolderState) {
       try {
-        const folderState = JSON.parse(route.query.folderState);
-        console.log('🗂️ [DEBUG] 从详情页返回，恢复folder状态:', folderState);
-        
+        const folderState = JSON.parse(restoreFolderState);
         // 恢复folder导航状态
-        folderNavigationState.value = {
+        const newFolderState = {
           isActive: folderState.isActive,
           breadcrumbs: folderState.breadcrumbs || [],
           currentBreadcrumb: folderState.currentBreadcrumb,
@@ -908,10 +868,10 @@ onMounted(async () => {
           loading: false
         };
         
+        folderNavigationState.value = newFolderState;
+        
         // 如果有当前面包屑，重新获取folder数据
         if (folderState.currentBreadcrumb && folderState.currentBreadcrumb.vod_id) {
-          console.log('🗂️ [DEBUG] 重新获取folder数据:', folderState.currentBreadcrumb.vod_id);
-          
           // 设置加载状态
           folderNavigationState.value = {
             ...folderNavigationState.value,
@@ -920,31 +880,45 @@ onMounted(async () => {
           
           // 调用T4分类接口获取folder内容
           try {
-            const response = await getCategoryData(form.now_site?.key || nowSite?.key, {
+            const requestParams = {
               t: folderState.currentBreadcrumb.vod_id,
               apiUrl: form.now_site?.api,
               extend: form.now_site?.ext
-            });
+            };
+            
+            const response = await getCategoryData(form.now_site?.key || nowSite?.key, requestParams);
             
             if (response && response.list) {
-              folderNavigationState.value = {
+              const updatedState = {
                 ...folderNavigationState.value,
                 currentData: response.list,
                 loading: false
               };
-              console.log('🗂️ [DEBUG] folder数据获取成功:', response.list.length);
+              folderNavigationState.value = updatedState;
+            } else {
+              folderNavigationState.value = {
+                ...folderNavigationState.value,
+                loading: false
+              };
             }
           } catch (error) {
-            console.error('🗂️ [ERROR] 获取folder数据失败:', error);
+            console.error('获取folder数据失败:', error);
             folderNavigationState.value = {
               ...folderNavigationState.value,
               loading: false
             };
           }
         }
+        
+        hasFolderStateToRestore = true;
       } catch (error) {
-        console.error('🗂️ [ERROR] 解析folder状态失败:', error);
+        console.error('解析folder状态失败:', error);
       }
+    }
+    
+    // 只有在没有folder状态需要恢复时，才设置shouldRestoreState
+    if (!hasFolderStateToRestore) {
+      shouldRestoreState = true;
     }
     
     // 清除URL中的返回参数
@@ -956,15 +930,16 @@ onMounted(async () => {
     // 如果有保存的状态且未过期，恢复状态
     currentActiveKey.value = savedState.activeKey;
     shouldRestoreState = true;
-    console.log('恢复保存的分类状态:', savedState.activeKey);
   }
   
   // 确保分类列表已加载
+  
   await getClassList(form.now_site);
+  
   startClock(); // 启动时钟
   
-  // 如果需要恢复状态，等待VideoList组件挂载后再恢复
-  if (shouldRestoreState) {
+  // 如果需要恢复状态且没有folder状态需要恢复，等待VideoList组件挂载后再恢复
+  if (shouldRestoreState && !hasFolderStateToRestore) {
     setTimeout(() => {
       if (videoListRef.value) {
         videoListRef.value.restoreFullState({
@@ -985,6 +960,9 @@ onBeforeUnmount(() => {
     clearInterval(timer.value); // 销毁时清除定时器
   }
   
+  // 移除重载源事件监听器
+  window.removeEventListener('reloadSource', handleReloadSource);
+  
   // 保存当前页面状态
   if (currentActiveKey.value && videoListRef.value) {
     const currentState = videoListRef.value.getCurrentState();
@@ -996,14 +974,6 @@ onBeforeUnmount(() => {
       false, // loading状态
       currentState.scrollPosition // 从VideoList组件获取滚动位置
     );
-    console.log('保存Video页面状态:', {
-      activeKey: currentActiveKey.value,
-      currentPage: currentState.currentPage,
-      videosCount: currentState.videos.length,
-      hasMore: currentState.hasMore,
-      hasData: currentState.hasData,
-      scrollPosition: currentState.scrollPosition
-    });
   }
 });
 </script>
@@ -1076,5 +1046,13 @@ onBeforeUnmount(() => {
   color: var(--color-text-1);
   font-weight: 500;
   text-align: center;
+}
+
+.close-loading-btn {
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 4px 12px;
+  height: auto;
+  min-height: 28px;
 }
 </style>

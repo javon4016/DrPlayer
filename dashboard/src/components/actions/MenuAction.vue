@@ -292,7 +292,7 @@ export default {
       default: ''
     }
   },
-  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset'],
+  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset', 'special-action'],
   setup(props, { emit }) {
     const router = useRouter()
     const selectedOptions = ref([])

@@ -6,6 +6,7 @@
       :player-type="playerType"
       :episodes="episodes"
       :auto-next-enabled="autoNext"
+      :loop-enabled="loopEnabled"
       :countdown-enabled="showCountdown"
       :skip-enabled="skipEnabled"
       :show-debug-button="showDebugButton"
@@ -15,6 +16,7 @@
       :needs-parsing="needsParsing"
       :parse-data="parseData"
       @toggle-auto-next="toggleAutoNext"
+      @toggle-loop="toggleLoop"
       @toggle-countdown="toggleCountdown"
       @player-change="handlePlayerTypeChange"
       @open-skip-settings="openSkipSettingsDialog"
@@ -176,12 +178,13 @@ const props = defineProps({
 })
 
 // Emits
-const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'quality-change', 'parser-change'])
+const emit = defineEmits(['close', 'error', 'player-change', 'next-episode', 'episode-selected', 'quality-change', 'parser-change'])
 
 // 响应式数据
 const videoPlayer = ref(null)
 const mediaPlayerManager = ref(null)
 const autoNext = ref(true) // 默认开启自动连播
+const loopEnabled = ref(JSON.parse(localStorage.getItem('loopEnabled') || 'false')) // 循环播放开关，从本地存储读取
 const showCountdown = ref(false)
 const showAutoNextDialog = ref(false)
 const autoNextCountdown = ref(10)
@@ -386,6 +389,26 @@ const {
 // 切换自动连播
 const toggleAutoNext = () => {
   autoNext.value = !autoNext.value
+  // 如果开启自动连播，则关闭循环播放
+  if (autoNext.value) {
+    loopEnabled.value = false
+    localStorage.setItem('loopEnabled', 'false')
+  }
+}
+
+// 切换循环播放
+const toggleLoop = () => {
+  loopEnabled.value = !loopEnabled.value
+  
+  // 保存到本地存储
+  localStorage.setItem('loopEnabled', JSON.stringify(loopEnabled.value))
+  
+  // 如果开启循环播放，则关闭自动连播
+  if (loopEnabled.value) {
+    autoNext.value = false
+  }
+  
+  console.log('循环播放开关:', loopEnabled.value ? '开启' : '关闭')
 }
 
 // 切换倒计时显示
@@ -515,22 +538,43 @@ const initVideoPlayer = (url) => {
   
   // 视频结束事件处理函数
   const handleVideoEnded = () => {
-    // 防抖：如果正在处理自动连播，则忽略
-    if (isProcessingAutoNext.value) {
-      return
-    }
-    
-    if (autoNext.value && hasNextEpisode()) {
-      isProcessingAutoNext.value = true
-      
-      if (showCountdown.value) {
-        showAutoNextDialogFunc()
-      } else {
-        // 如果不显示倒计时，直接播放下一集
-        setTimeout(() => {
-          playNextEpisode()
-        }, 1000)
+    try {
+      // 防抖：如果正在处理自动连播，则忽略
+      if (isProcessingAutoNext.value) {
+        return
       }
+      
+      // 优先处理循环播放
+      if (loopEnabled.value) {
+        console.log('循环播放：重新播放当前选集')
+        // 重新执行当前选集的播放逻辑
+        setTimeout(() => {
+          try {
+            // 触发重新选择当前选集，这会重新获取播放链接
+            emit('episode-selected', props.currentEpisodeIndex)
+          } catch (error) {
+            console.error('循环播放触发选集事件失败:', error)
+            Message.error('循环播放失败，请重试')
+          }
+        }, 1000)
+        return
+      }
+      
+      if (autoNext.value && hasNextEpisode()) {
+        isProcessingAutoNext.value = true
+        
+        if (showCountdown.value) {
+          showAutoNextDialogFunc()
+        } else {
+          // 如果不显示倒计时，直接播放下一集
+          setTimeout(() => {
+            playNextEpisode()
+          }, 1000)
+        }
+      }
+    } catch (error) {
+      console.error('视频结束事件处理失败:', error)
+      Message.error('视频结束处理失败')
     }
   }
 

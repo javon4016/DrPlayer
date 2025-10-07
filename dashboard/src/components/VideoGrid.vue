@@ -25,10 +25,16 @@
               <!-- 文件夹图标 (当vod_pic为空且是文件夹时) -->
               <div v-else-if="video.vod_tag && video.vod_tag.includes('folder')" class="folder-icon-container">
                 <i class="iconfont icon-wenjianjia folder-icon"></i>
+<!--                <svg style="width:30%">-->
+<!--                  <use :href="`#icon-wenjianjia`"></use>-->
+<!--                </svg>-->
               </div>
               <!-- 文件类型图标 (当vod_pic为空且是目录模式下的非文件夹项目时) -->
               <div v-else-if="video.vod_tag && !video.vod_tag.includes('folder')" class="file-icon-container">
-                <i class="iconfont file-type-icon" :class="getFileTypeIcon(video.vod_name)"></i>
+<!--                <i class="iconfont file-type-icon" :class="getFileTypeIcon(video.vod_name)"></i>-->
+                <svg style="width:30%">
+                  <use :href="`#${getFileTypeIcon(video.vod_name)}`"></use>
+                </svg>
               </div>
               <!-- 默认图片 (当vod_pic为空且没有vod_tag时) -->
               <a-image
@@ -130,6 +136,11 @@ const props = defineProps({
   apiUrl: {
     type: String,
     default: ''
+  },
+  // 新增：folder状态信息，用于详情页返回时恢复
+  folderState: {
+    type: Object,
+    default: null
   }
 });
 
@@ -154,7 +165,6 @@ const handleVideoClick = async (video) => {
   if (video && video.vod_id) {
     // 检查是否为folder类型
     if (video.vod_tag && video.vod_tag.includes('folder')) {
-      console.log('VideoGrid检测到folder类型:', video);
       // 触发folder导航事件，传递当前点击的视频信息
       emit('folder-navigate', {
         vod_id: video.vod_id,
@@ -169,14 +179,12 @@ const handleVideoClick = async (video) => {
       try {
         // 尝试解析vod_id中的JSON字符串获取action配置
         const actionConfig = JSON.parse(video.vod_id);
-        console.log('VideoGrid解析action配置:', actionConfig);
         
         // 传递解析后的action配置给ActionRenderer
         currentActionData.value = actionConfig;
         showActionRenderer.value = true;
         return;
       } catch (error) {
-        console.log('VideoGrid vod_id不是JSON格式，调用T4 action接口:', video.vod_id);
         
         // 如果解析失败，说明vod_id是普通文本，需要调用T4 action接口获取真正的action配置
         await handleT4ActionCall(video.vod_id);
@@ -205,6 +213,11 @@ const handleVideoClick = async (video) => {
       sourcePic: video.vod_pic
     }
     
+    // 如果当前在folder模式下，传递folderState用于返回时恢复
+    if (props.folderState && props.folderState.isActive) {
+      routeQuery.folderState = JSON.stringify(props.folderState);
+    }
+    
     router.push({
         name: 'VideoDetail',
         params: { id: video.vod_id },
@@ -225,8 +238,6 @@ const handleT4ActionCall = async (actionName) => {
         extend: props.extend.ext
       }
     );
-
-    console.log('result:', result);
     
     // 检查返回结果是否包含action配置
     if (result && result.action) {
@@ -234,7 +245,7 @@ const handleT4ActionCall = async (actionName) => {
       currentActionData.value = result.action;
       showActionRenderer.value = true;
     } else if(result){
-      showToast('执行源内搜索', 'success')
+      showToast(result, 'success')
     }else {
       // 如果没有返回action配置，显示错误提示
       Message.error({
@@ -289,8 +300,6 @@ const updateScrollAreaHeight = () => {
           containerHeight = baseHeight;
         }
 
-        console.log(`CategoryNavigation高度: ${categoryNavHeight}px, 内容区域高度: ${containerHeight}px`);
-
         // 改进的高度计算逻辑：
         // 1. 正确计算网格列数（基于容器宽度）
         // 2. 估算内容实际需要的高度
@@ -315,7 +324,6 @@ const updateScrollAreaHeight = () => {
           // 对于空数据，需要确保有足够的滚动空间来触发翻页
           // 减去更多高度以确保滚动条出现
           heightReduction = Math.min(containerHeight * 0.4, 300); // 增加减值比例
-          console.log(`无视频数据，使用保守高度减值: ${heightReduction}px`);
         } else if (estimatedContentHeight < containerHeight) {
           // 有数据但内容不足时，需要减少容器高度以触发滚动
           // 策略：容器高度 = 内容高度 - 150px（确保有足够滚动空间）
@@ -323,11 +331,9 @@ const updateScrollAreaHeight = () => {
           const idealHeight = estimatedContentHeight - 5; // 增加滚动空间
           const targetHeight = Math.max(idealHeight, minDisplayHeight, containerHeight * 0.3); // 降低最小比例
           heightReduction = Math.max(containerHeight - targetHeight, 50); // 增加最小减值
-          console.log(`内容高度不足，估算内容高度: ${estimatedContentHeight}px, 理想高度: ${idealHeight}px, 最小显示高度: ${minDisplayHeight}px, 容器高度: ${containerHeight}px, 调整高度减值: ${heightReduction}px`);
         } else {
           // 内容充足时，减少一些高度确保滚动正常
           heightReduction = Math.min(containerHeight * 0.02, 20);
-          console.log(`内容充足，使用标准高度减值: ${heightReduction}px`);
         }
         
         const newHeight = Math.max(containerHeight - footerHeight - heightReduction, 250); // 降低最小高度
@@ -337,8 +343,6 @@ const updateScrollAreaHeight = () => {
           containerHeight = newHeight;
           containerHeightRef.value = newHeight;
         }
-        
-        console.log(`视频数量: ${videoCount}, 估算行数: ${estimatedRows}, 列数: ${gridCols}, 容器宽度: ${containerWidth}px, 最终高度: ${newHeight}px`);
       } catch (error) {
         console.warn('updateScrollAreaHeight error:', error);
       } finally {
@@ -506,7 +510,6 @@ const restoreScrollPosition = (scrollPosition) => {
           top: scrollPosition,
           behavior: 'smooth'
         });
-        console.log('VideoGrid恢复滚动位置:', scrollPosition);
       }
     });
   }
@@ -528,14 +531,11 @@ const handleActionClose = () => {
 };
 
 const handleActionSubmit = (result) => {
-  console.log('Action提交结果:', result);
   // 这里可以根据需要处理action的提交结果
   // 比如刷新列表、显示消息等
 };
 
 const handleSpecialAction = (actionType, actionData) => {
-  console.log('VideoGrid处理专项动作:', actionType, actionData);
-  
   // 将special-action事件传递给父组件处理
   emit('special-action', actionType, actionData);
   

@@ -1311,14 +1311,14 @@ const handleProxyPlayEnabledChange = (enabled) => {
 
 // 下载代理播放器
 const downloadProxyPlayer = () => {
-  const url = 'https://wwvy.lanzouo.com/i527V37opr4b'
+  const url = 'https://wwvy.lanzouo.com/iPNGu37snuna'
   window.open(url, '_blank')
   Message.success('正在打开代理播放器下载页面')
 }
 
 // 下载代理嗅探器
 const downloadProxySniffer = () => {
-  const url = 'https://wwvy.lanzouo.com/ipJdB37otz1a'
+  const url = 'https://wwvy.lanzouo.com/iXrG437tedfc'
   window.open(url, '_blank')
   Message.success('正在打开代理嗅探器下载页面')
 }
