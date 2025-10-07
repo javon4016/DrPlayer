@@ -49,10 +49,24 @@ class VideoService {
 
     const { apiUrl, ...otherOptions } = options
     const cacheKey = `home_${module}_${JSON.stringify(options)}`
+    console.log('[VideoService] getRecommendVideos 缓存检查:', {
+      module,
+      cacheKey,
+      cacheSize: this.cache.size,
+      allCacheKeys: Array.from(this.cache.keys())
+    });
+    
     const cached = this.getFromCache(cacheKey)
     if (cached) {
+      console.log('[VideoService] 使用缓存数据:', {
+        module,
+        videosCount: cached.videos?.length || 0,
+        categoriesCount: cached.categories?.length || 0
+      });
       return cached
     }
+    
+    console.log('[VideoService] 缓存未命中，发起新请求:', module);
 
     try {
       const requestOptions = { ...otherOptions }
@@ -68,6 +82,13 @@ class VideoService {
         videos: (response.list || []).map(this.formatVideoInfo),
         pagination: this.createPagination(response)
       }
+
+      console.log('[VideoService] 新数据已获取并缓存:', {
+        module,
+        videosCount: result.videos?.length || 0,
+        categoriesCount: result.categories?.length || 0,
+        cacheKey
+      });
 
       this.setCache(cacheKey, result)
       return result

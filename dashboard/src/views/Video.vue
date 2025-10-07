@@ -103,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, shallowRef, onMounted, onBeforeUnmount, nextTick } from "vue";
+import { ref, reactive, shallowRef, onMounted, onBeforeUnmount, nextTick, watch } from "vue";
 import SourceDialog from "../components/SourceDialog.vue";
 import Breadcrumb from "../components/Breadcrumb.vue";
 import VideoList from "../components/VideoList.vue";
@@ -134,7 +134,7 @@ const formatDate = (date) => {
 };
 
 const currentDateTime = ref(formatDate(new Date())); // 初始化时就设置当前时间
-const currentActiveKey = ref(""); // 当前选中的分类key
+const currentActiveKey = ref(route.query.activeKey || ""); // 当前选中的分类key，优先使用URL参数
 const videoListRef = ref(null); // VideoList组件引用
 const form = reactive({
   sites: [],
@@ -339,10 +339,34 @@ const getClassList = async (site) => {
   form.recommendVideos = [];
 
   try {
+    const isFirstSite = form.sites.findIndex(s => s.key === site.key) === 0;
+    
+    console.log('[Video.vue] 开始获取首页数据:', {
+      siteKey: site.key,
+      siteName: site.name,
+      extend: site.ext,
+      apiUrl: site.api,
+      isFirstSite: isFirstSite
+    });
+    
+    // 如果是第一个源，强制清除该模块的缓存
+    if (isFirstSite) {
+      console.log('[Video.vue] 检测到第一个源，清除缓存');
+      videoService.clearModuleCache(site.key);
+    }
+    
     // 使用videoService获取首页数据，包含分类信息
     const homeData = await videoService.getRecommendVideos(site.key, {
       extend: site.ext,
       apiUrl: site.api
+    });
+    
+    console.log('[Video.vue] 首页数据获取成功:', {
+      siteKey: site.key,
+      categoriesCount: homeData.categories?.length || 0,
+      videosCount: homeData.videos?.length || 0,
+      hasVideos: !!(homeData.videos && homeData.videos.length > 0),
+      firstVideo: homeData.videos?.[0]
     });
     
     form.classList = {
@@ -352,6 +376,12 @@ const getClassList = async (site) => {
     
     // 保存推荐视频数据，如果没有推荐数据则保持为空数组
     form.recommendVideos = homeData.videos || [];
+    
+    console.log('[Video.vue] 推荐数据已设置:', {
+      siteKey: site.key,
+      recommendVideosLength: form.recommendVideos.length,
+      isFirstSite: form.sites.findIndex(s => s.key === site.key) === 0
+    });
   } catch (error) {
     console.error("获取分类列表失败:", error);
     // 降级处理：使用空的分类列表
@@ -465,6 +495,23 @@ const exitSearch = () => {
 // 处理分类变化事件
 const handleActiveKeyChange = (activeKey) => {
   currentActiveKey.value = activeKey;
+  
+  // 同步更新地址栏的activeKey参数
+  const newQuery = { ...route.query };
+  if (activeKey) {
+    newQuery.activeKey = activeKey;
+  } else {
+    delete newQuery.activeKey;
+  }
+  
+  // 使用replace避免产生新的历史记录
+  router.replace({ 
+    name: route.name,
+    params: route.params,
+    query: newQuery 
+  });
+  
+  console.log('[DEBUG] 地址栏activeKey已更新:', activeKey);
 };
 
 // 处理视频点击事件
@@ -648,6 +695,8 @@ const closeSpecialCategory = () => {
 // 防止递归更新的标志
 let isUpdatingFolderState = false;
 let updateTimeout = null;
+let lastNavigationData = null;
+let lastNavigationTime = 0;
 
 // 处理folder导航事件
 const handleFolderNavigate = async (navigationData) => {
@@ -659,6 +708,21 @@ const handleFolderNavigate = async (navigationData) => {
   
   // 防止重复更新
   if (isUpdatingFolderState) {
+    console.log('folder状态正在更新中，跳过重复调用');
+    return;
+  }
+  
+  // 防止过于频繁的更新（最小间隔200ms）
+  const now = Date.now();
+  if (now - lastNavigationTime < 200) {
+    console.log('folder导航更新过于频繁，跳过');
+    return;
+  }
+  
+  // 检查是否是相同的导航数据
+  const navigationDataStr = JSON.stringify(navigationData);
+  if (lastNavigationData === navigationDataStr) {
+    console.log('相同的folder导航数据，跳过重复处理');
     return;
   }
   
@@ -669,6 +733,8 @@ const handleFolderNavigate = async (navigationData) => {
   }
   
   isUpdatingFolderState = true;
+  lastNavigationData = navigationDataStr;
+  lastNavigationTime = now;
   
   try {
     // 保存当前状态（进入folder模式时）
@@ -805,10 +871,19 @@ const handlePush = async (vodId) => {
   }
 };
 
+// 监听路由查询参数变化，确保activeKey与URL同步
+watch(() => route.query.activeKey, (newActiveKey) => {
+  if (newActiveKey && newActiveKey !== currentActiveKey.value) {
+    console.log('[DEBUG] URL activeKey changed:', newActiveKey, 'current:', currentActiveKey.value);
+    currentActiveKey.value = newActiveKey;
+  }
+}, { immediate: true });
+
 // 页面加载时获取数据
 onMounted(async () => {
-  getData(); // 页面加载时获取数据
+  await getData(); // 页面加载时获取数据，等待完成
   getNowSite(); // 获取储存的当前源
+  checkNowSite(); // 确保当前源设置正确
   
   // 监听重载源事件
   window.addEventListener('reloadSource', handleReloadSource);
