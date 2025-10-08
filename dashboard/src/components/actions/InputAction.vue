@@ -264,6 +264,7 @@ import { executeAction } from '@/api/modules/module.js'
 import { showToast } from '@/stores/toast.js'
 import siteService from '@/api/services/site'
 import { useRouter } from 'vue-router'
+import { getActionTimeout } from '@/api/config'
 
 export default {
   name: 'InputAction',
@@ -957,7 +958,7 @@ export default {
         console.log('直接调用API:', props.apiUrl)
         const axios = (await import('axios')).default
         const response = await axios.post(props.apiUrl, actionData, {
-          timeout: 30000,
+          timeout: getActionTimeout(),
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'

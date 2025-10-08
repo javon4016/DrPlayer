@@ -3,13 +3,47 @@
  * 定义接口相关的配置信息和常量
  */
 
+/**
+ * 获取API超时时间（毫秒）
+ * 从设置中读取，如果没有设置则使用默认值30秒
+ */
+export const getApiTimeout = () => {
+  try {
+    const addressSettings = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+    const timeoutSeconds = addressSettings.apiTimeout || 30
+    return timeoutSeconds * 1000 // 转换为毫秒
+  } catch (error) {
+    console.warn('Failed to get API timeout from settings, using default:', error)
+    return 30000 // 默认30秒
+  }
+}
+
+/**
+ * 获取Action接口超时时间（毫秒）
+ * Action接口通常需要更长的超时时间，默认100秒
+ */
+export const getActionTimeout = () => {
+  try {
+    const addressSettings = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+    const apiTimeoutSeconds = addressSettings.apiTimeout || 30
+    // Action接口超时时间为普通接口的3倍，但最少100秒
+    const actionTimeoutSeconds = Math.max(apiTimeoutSeconds * 3, 100)
+    return actionTimeoutSeconds * 1000 // 转换为毫秒
+  } catch (error) {
+    console.warn('Failed to get Action timeout from settings, using default:', error)
+    return 100000 // 默认100秒
+  }
+}
+
 // 基础配置
 export const API_CONFIG = {
   // 基础URL配置
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5707',
   
-  // 超时配置
-  TIMEOUT: 30000,
+  // 超时配置（动态获取）
+  get TIMEOUT() {
+    return getApiTimeout()
+  },
   
   // 请求头配置
   HEADERS: {

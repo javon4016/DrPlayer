@@ -58,7 +58,7 @@
 
     <!-- 筛选区域 -->
     <FilterSection
-      v-if="getFiltersForCategory(activeKey) && filterVisible[activeKey]"
+      v-if="getFiltersForCategory(activeKey) && props.filterVisible[activeKey]"
       :filters="getFiltersForCategory(activeKey)"
       :selectedFilters="selectedFilters[activeKey] || {}"
       :visible="true"
@@ -98,6 +98,11 @@ const props = defineProps({
     type: Object,
     default: () => ({})
   },
+  // 筛选展开状态
+  filterVisible: {
+    type: Object,
+    default: () => ({})
+  },
   // 特殊分类状态
   specialCategoryState: {
     type: Object,
@@ -110,7 +115,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['tab-change', 'open-category-modal', 'toggle-filter', 'reset-filters', 'close-special-category']);
+const emit = defineEmits(['tab-change', 'open-category-modal', 'toggle-filter', 'reset-filters', 'close-special-category', 'filter-visible-change']);
 
 // 计算默认的activeKey
 const getDefaultActiveKey = () => {
@@ -126,8 +131,8 @@ const getDefaultActiveKey = () => {
 // 响应式数据
 const activeKey = ref(props.activeKey || getDefaultActiveKey());
 const navWrapperRef = ref(null);
-const filterVisible = ref({});
 let wheelHandler = null;
+const isInitialized = ref(false);
 
 // 监听props变化，更新activeKey
 watch(() => [props.hasRecommendVideos, props.classList, props.activeKey], () => {
@@ -141,12 +146,13 @@ watch(() => [props.hasRecommendVideos, props.classList, props.activeKey], () => 
   }
 }, { immediate: true });
 
-// 当分类切换时，隐藏之前分类的筛选条件
+// 当分类切换时，通知父组件隐藏之前分类的筛选条件
+// 注意：不在初始化时触发，避免干扰状态恢复
 watch(activeKey, (newKey, oldKey) => {
-  if (oldKey && filterVisible.value[oldKey]) {
-    filterVisible.value[oldKey] = false;
+  if (isInitialized.value && oldKey && oldKey !== newKey && props.filterVisible[oldKey]) {
+    emit('filter-visible-change', { categoryId: oldKey, visible: false });
   }
-});
+}, { flush: 'post' });
 
 const handleTabChange = (key) => {
   activeKey.value = key;
@@ -156,7 +162,9 @@ const handleTabChange = (key) => {
 // 处理分类点击（显示/隐藏筛选）
 const handleCategoryClick = (categoryId) => {
   if (hasFiltersForCategory(categoryId)) {
-    filterVisible.value[categoryId] = !filterVisible.value[categoryId];
+    const newVisible = !props.filterVisible[categoryId];
+    // 通知父组件筛选展开状态变化
+    emit('filter-visible-change', { categoryId, visible: newVisible });
   }
 };
 
@@ -205,6 +213,11 @@ onMounted(() => {
     }
   };
   list.addEventListener('wheel', wheelHandler, { passive: false });
+  
+  // 设置初始化完成标志，允许后续的筛选状态重置
+  setTimeout(() => {
+    isInitialized.value = true;
+  }, 100);
 });
 
 onBeforeUnmount(() => {

@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios'
+import { API_CONFIG } from '@/api/config'
 
 class ParserService {
   /**
@@ -174,7 +175,7 @@ class ParserService {
           'Referer': fullParseUrl, // 使用拼接后的解析地址作为Referer
           ...parser.headers
         },
-        timeout: 30000
+        timeout: API_CONFIG.TIMEOUT
       }
       
       const response = await axios(axiosConfig)
@@ -228,7 +229,7 @@ class ParserService {
           'Referer': data.referer || '',
           ...parser.headers
         },
-        timeout: 30000,
+        timeout: API_CONFIG.TIMEOUT,
         maxRedirects: 5
       })
       

@@ -8,11 +8,13 @@
       :activeKey="activeKey"
       :filters="props.classList?.filters || {}"
       :selectedFilters="selectedFilters"
+      :filterVisible="filterVisible"
       :specialCategoryState="props.specialCategoryState"
       @tab-change="handleTabChange"
       @open-category-modal="openCategoryModal"
       @toggle-filter="handleToggleFilter"
       @reset-filters="handleResetFilters"
+      @filter-visible-change="handleFilterVisibleChange"
       @close-special-category="() => emit('close-special-category')"
     />
 
@@ -143,6 +145,7 @@ import { usePaginationStore } from '@/stores/paginationStore';
 import { getCategoryData } from '@/api/modules/module';
 import { processExtendParam } from '@/utils/apiUtils';
 import { encodeFilters } from '@/api/utils';
+import { useRouter } from 'vue-router';
 import CategoryNavigation from './CategoryNavigation.vue';
 import FilterSection from './FilterSection.vue';
 import VideoGrid from './VideoGrid.vue';
@@ -207,6 +210,8 @@ const props = defineProps({
 
 const emit = defineEmits(['activeKeyChange', 'special-action', 'close-special-category', 'folder-navigate']);
 
+const router = useRouter();
+
 // 使用翻页统计store
 const paginationStore = usePaginationStore();
 
@@ -260,6 +265,69 @@ const filterVisible = reactive({});
 const selectedFilters = reactive({});
 const categoryModalVisible = ref(false);
 const videoGridRef = ref(null);
+
+// 筛选条件和展开状态持久化函数
+const saveFiltersToUrl = () => {
+  const currentQuery = { ...router.currentRoute.value.query };
+  
+  if (Object.keys(selectedFilters).length > 0) {
+    // 将筛选条件编码为JSON字符串保存到URL
+    currentQuery.filters = JSON.stringify(selectedFilters);
+  } else {
+    // 如果没有筛选条件，删除URL中的filters参数
+    delete currentQuery.filters;
+  }
+  
+  // 保存筛选展开状态
+  if (Object.keys(filterVisible).length > 0) {
+    currentQuery.filterVisible = JSON.stringify(filterVisible);
+  } else {
+    delete currentQuery.filterVisible;
+  }
+  
+  // 更新URL，但不触发页面刷新
+  router.replace({
+    query: currentQuery
+  }).catch(() => {
+    // 忽略导航重复错误
+  });
+};
+
+// 从URL恢复筛选条件和展开状态
+const restoreFiltersFromUrl = () => {
+  const urlFilters = router.currentRoute.value.query.filters;
+  const urlFilterVisible = router.currentRoute.value.query.filterVisible;
+  
+  // 恢复筛选条件
+  if (urlFilters) {
+    try {
+      const parsedFilters = JSON.parse(urlFilters);
+      // 清空现有筛选条件
+      Object.keys(selectedFilters).forEach(key => {
+        delete selectedFilters[key];
+      });
+      // 恢复筛选条件
+      Object.assign(selectedFilters, parsedFilters);
+    } catch (error) {
+      console.error('解析URL中的筛选条件失败:', error);
+    }
+  }
+  
+  // 恢复筛选展开状态
+  if (urlFilterVisible) {
+    try {
+      const parsedFilterVisible = JSON.parse(urlFilterVisible);
+      // 清空现有展开状态
+      Object.keys(filterVisible).forEach(key => {
+        delete filterVisible[key];
+      });
+      // 恢复展开状态
+      Object.assign(filterVisible, parsedFilterVisible);
+    } catch (error) {
+      console.error('解析URL中的筛选展开状态失败:', error);
+    }
+  }
+};
 
 // 目录模式翻页状态管理
 const folderPageData = reactive({});
@@ -358,6 +426,9 @@ const toggleFilter = (filterKey, filterValue, filterName) => {
     selectedFilters[activeKey.value][filterKey] = filterValue;
   }
   
+  // 保存筛选条件到URL
+  saveFiltersToUrl();
+  
   // 如果在目录模式下，重新获取目录数据
   if (folderIsActive.value && folderCurrentBreadcrumb.value) {
     handleFolderNavigate(folderCurrentBreadcrumb.value);
@@ -369,6 +440,9 @@ const toggleFilter = (filterKey, filterValue, filterName) => {
 
 const resetFilters = (categoryId) => {
   delete selectedFilters[categoryId];
+  
+  // 保存筛选条件到URL
+  saveFiltersToUrl();
   
   // 如果在目录模式下，重新获取目录数据
   if (folderIsActive.value && folderCurrentBreadcrumb.value) {
@@ -673,6 +747,13 @@ const handleToggleFilter = (data) => {
   toggleFilter(filterKey, filterValue, filterName);
 };
 
+const handleFilterVisibleChange = (data) => {
+  const { categoryId, visible } = data;
+  filterVisible[categoryId] = visible;
+  // 保存筛选展开状态到URL
+  saveFiltersToUrl();
+};
+
 const handleResetFilters = () => {
   resetFilters(activeKey.value);
 };
@@ -721,6 +802,7 @@ watch(() => props.recommendVideos, (newVideos) => {
 }, { immediate: true });
 
 // 添加classList watch的防护变量
+// 防止递归更新的标志
 let isClassListUpdating = false;
 let lastClassListHash = '';
 
@@ -755,8 +837,13 @@ watch(() => props.classList, (newClassList, oldClassList) => {
   lastClassListHash = newHash;
   
   try {
-    if (newClassList !== oldClassList) {
-      console.log('🗂️ [DEBUG] classList发生变化，清除筛选状态');
+    // 检查URL中是否有筛选参数需要恢复
+    const currentQuery = router.currentRoute.value.query;
+    const hasFiltersInUrl = currentQuery.filters || currentQuery.filterVisible;
+    
+    // 只有在classList真正发生变化且URL中没有筛选参数时才清除筛选状态
+    if (newClassList !== oldClassList && !hasFiltersInUrl) {
+      console.log('🗂️ [DEBUG] classList发生变化且URL中无筛选参数，清除筛选状态');
       // 清除筛选状态
       Object.keys(selectedFilters).forEach(key => {
         delete selectedFilters[key];
@@ -765,6 +852,8 @@ watch(() => props.classList, (newClassList, oldClassList) => {
         delete filterVisible[key];
       });
       console.log('🗂️ [DEBUG] 筛选状态已清除');
+    } else if (hasFiltersInUrl) {
+      console.log('🗂️ [DEBUG] URL中有筛选参数，跳过筛选状态清除');
     }
     
     // 如果当前处于folder模式，不要重置activeKey，避免覆盖folder状态
@@ -811,14 +900,21 @@ watch(() => props.sourceRoute?.query?.activeKey, (newActiveKey) => {
   }
 }, { immediate: true });
 
-onMounted(() => {
+onMounted(async () => {
+  // 从URL恢复筛选条件
+  restoreFiltersFromUrl();
+  
   // 优先使用父组件传递的activeKey，如果没有则使用默认值
   const parentActiveKey = props.sourceRoute?.query?.activeKey;
   const targetActiveKey = parentActiveKey || getDefaultActiveKey();
   
-  console.log('[DEBUG] VideoList onMounted - parentActiveKey:', parentActiveKey, 'targetActiveKey:', targetActiveKey);
-  
+  // 使用nextTick确保筛选状态已经传递给子组件
+  await nextTick();
   activeKey.value = targetActiveKey;
+  
+  // 再次使用nextTick确保classList watcher执行完毕后，重新恢复筛选状态
+  await nextTick();
+  restoreFiltersFromUrl();
   
   // 对于推荐分类，确保loading状态正确
   if (targetActiveKey === "recommendTuijian404") {
@@ -828,7 +924,6 @@ onMounted(() => {
       listData[targetActiveKey] = [...props.recommendVideos];
       pageData[targetActiveKey] = { page: 1, hasNext: false };
       loadingMore[targetActiveKey] = false;
-      console.log('[DEBUG] 推荐数据已设置，跳过getListData调用');
     } else {
       // 如果没有推荐数据，才调用getListData
       getListData(activeKey.value);

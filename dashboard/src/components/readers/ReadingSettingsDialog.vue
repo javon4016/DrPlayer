@@ -362,8 +362,8 @@ watch(dialogVisible, (visible) => {
 <style scoped>
 /* 重写模态框样式，确保头部和底部固定 */
 .reading-settings-dialog :deep(.arco-modal) {
-  height: 60vh;
-  max-height: 600px;
+  height: 50vh;
+  max-height: 480px;
   display: flex;
   flex-direction: column;
 }
@@ -371,6 +371,7 @@ watch(dialogVisible, (visible) => {
 .reading-settings-dialog :deep(.arco-modal-header) {
   flex-shrink: 0;
   border-bottom: 1px solid var(--color-border-2);
+  padding: 12px 20px;
 }
 
 .reading-settings-dialog :deep(.arco-modal-body) {
@@ -390,15 +391,13 @@ watch(dialogVisible, (visible) => {
 
 .settings-content {
   flex: 1;
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-
-
 .setting-section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .setting-section:last-of-type {
@@ -408,12 +407,12 @@ watch(dialogVisible, (visible) => {
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
+  gap: 6px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-text-1);
-  margin-bottom: 16px;
-  padding-bottom: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--color-border-2);
 }
 
@@ -421,7 +420,7 @@ watch(dialogVisible, (visible) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .setting-label {
@@ -433,7 +432,7 @@ watch(dialogVisible, (visible) => {
 .font-size-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .font-size-value {
@@ -445,34 +444,34 @@ watch(dialogVisible, (visible) => {
 
 .line-height-slider,
 .max-width-slider {
-  width: 200px;
+  width: 180px;
 }
 
 .font-family-select {
-  width: 200px;
+  width: 180px;
 }
 
 .theme-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
 }
 
 .theme-option {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px;
   border: 2px solid var(--color-border-2);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .theme-option:hover {
   border-color: var(--color-border-3);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .theme-option.active {
@@ -481,41 +480,41 @@ watch(dialogVisible, (visible) => {
 }
 
 .theme-preview {
-  width: 60px;
-  height: 40px;
+  width: 50px;
+  height: 32px;
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .theme-name {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-2);
 }
 
 .color-settings {
   display: flex;
-  gap: 20px;
+  gap: 16px;
 }
 
 .color-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .color-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-2);
 }
 
 .color-picker {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -523,15 +522,15 @@ watch(dialogVisible, (visible) => {
 }
 
 .preview-area {
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--color-border-2);
-  border-radius: 8px;
+  border-radius: 6px;
   margin: 0 auto;
   transition: all 0.3s ease;
 }
 
 .preview-title {
-  margin: 0 0 16px 0;
+  margin: 0 0 12px 0;
   font-weight: 600;
 }
 
@@ -545,7 +544,7 @@ watch(dialogVisible, (visible) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 12px 20px;
   border-top: 1px solid var(--color-border-2);
   background: var(--color-bg-1);
   flex-shrink: 0;
@@ -553,7 +552,7 @@ watch(dialogVisible, (visible) => {
 
 .action-buttons {
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 
 .reset-btn {
@@ -563,13 +562,13 @@ watch(dialogVisible, (visible) => {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .settings-content {
-    padding: 16px;
+    padding: 12px;
   }
   
   .setting-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
   }
   
   .line-height-slider,
@@ -588,7 +587,7 @@ watch(dialogVisible, (visible) => {
   
   .dialog-footer {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
   
   .action-buttons {

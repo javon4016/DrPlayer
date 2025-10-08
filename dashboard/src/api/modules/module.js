@@ -4,7 +4,7 @@
  */
 
 import { get, post } from '../request'
-import { API_PATHS, MODULE_ACTIONS, PAGINATION } from '../config'
+import { API_PATHS, MODULE_ACTIONS, PAGINATION, API_CONFIG } from '../config'
 import { processExtendParam } from '@/utils/apiUtils'
 import axios from 'axios'
 
@@ -68,7 +68,7 @@ const directApiCall = async (apiUrl, params = {}) => {
   try {
     const response = await axios.get(apiUrl, {
       params,
-      timeout: 30000,
+      timeout: API_CONFIG.TIMEOUT,
       headers: {
         'Accept': 'application/json'
       }
@@ -437,7 +437,7 @@ export const executeAction = async (module, data) => {
     // 如果是测试用的JSON文件，使用GET请求
     if (apiUrl.endsWith('.json')) {
       const response = await axios.get(apiUrl, {
-        timeout: 30000,
+        timeout: API_CONFIG.TIMEOUT,
         headers: {
           'Accept': 'application/json'
         }
@@ -447,7 +447,7 @@ export const executeAction = async (module, data) => {
     } else {
       // 否则使用POST请求
       const response = await axios.post(apiUrl, requestData, {
-        timeout: 30000,
+        timeout: API_CONFIG.TIMEOUT,
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json;charset=UTF-8',

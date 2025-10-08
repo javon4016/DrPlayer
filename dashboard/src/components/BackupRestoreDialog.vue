@@ -77,6 +77,7 @@
           <div class="restore-actions">
             <a-upload
               ref="uploadRef"
+              :key="uploadKey"
               :show-file-list="false"
               :auto-upload="false"
               :custom-request="() => {}"
@@ -201,6 +202,7 @@ const restoreLoading = ref(false)
 const selectedFile = ref(null)
 const fileList = ref([])
 const uploadRef = ref(null)
+const uploadKey = ref(0) // 用于强制重新渲染Upload组件
 
 // 计算属性：是否可以还原
 const canRestore = computed(() => {
@@ -312,11 +314,8 @@ const handleFileChange = (fileListParam, file) => {
 const handleRemoveFile = (file) => {
   selectedFile.value = null
   fileList.value = []
-  
-  // 清空 Upload 组件的文件列表
-  if (uploadRef.value) {
-    uploadRef.value.clearFiles()
-  }
+  // 强制重新渲染Upload组件
+  uploadKey.value++
   
   Message.info('已移除选中的备份文件')
 }
@@ -365,6 +364,14 @@ const handleRestore = async () => {
       }
     }
   })
+}
+
+// 清空选中的文件
+const clearSelectedFile = () => {
+  selectedFile.value = null
+  fileList.value = []
+  // 强制重新渲染Upload组件
+  uploadKey.value++
 }
 
 // 处理对话框关闭

@@ -18,7 +18,8 @@ const DEFAULT_CONFIGS = {
     proxyPlayEnabled: false,
     proxySniff: 'http://localhost:57573/sniffer',
     proxySniffEnabled: false,
-    snifferTimeout: 10
+    snifferTimeout: 10,
+    apiTimeout: 30
   },
   
   // 应用设置默认值
