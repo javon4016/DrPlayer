@@ -144,9 +144,7 @@ export default {
         style.width = '95vw'
         style.maxWidth = '95vw'
         style.margin = '0 auto'
-        if (props.height && props.height !== 'auto') {
-          style.maxHeight = '85vh'
-        }
+        // 移除移动端的高度限制，让CSS控制
       } else {
         // 桌面端样式
         if (props.width) {
@@ -154,10 +152,11 @@ export default {
           style.maxWidth = '90vw'
         }
         
+        // 只有明确设置了固定高度时才应用
         if (props.height && props.height !== 'auto') {
           style.height = typeof props.height === 'number' ? `${props.height}px` : props.height
-          style.maxHeight = '90vh'
         }
+        // 移除桌面端的maxHeight限制，让CSS控制
       }
       
       if (props.bottom > 0) {
@@ -171,11 +170,12 @@ export default {
     const contentStyle = computed(() => {
       const style = {}
       
+      // 只有在明确设置了固定高度时才应用内容区域的高度限制
       if (props.height && props.height !== 'auto') {
-        // 如果设置了固定高度，内容区域需要减去头部和底部的高度
         style.maxHeight = 'calc(100% - 120px)' // 预留头部和底部空间
         style.overflowY = 'auto'
       }
+      // 其他情况让CSS的max-height规则控制
       
       return style
     })
@@ -264,7 +264,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 10000;
+  z-index: 20000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -272,12 +272,13 @@ export default {
   background: rgba(0, 0, 0, calc(var(--dim-amount, 0.45)));
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  overflow: hidden;
 }
 
 /* 现代化弹窗容器 */
 .action-dialog {
   position: relative;
-  z-index: 10001;
+  z-index: 20001;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -289,6 +290,10 @@ export default {
   overflow: hidden;
   transform-origin: center;
   transition: all var(--ds-duration-normal) cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-height: calc(100vh - 2rem);
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 装饰性背景 */
@@ -342,6 +347,7 @@ export default {
   padding: 2rem 2rem 1rem;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .action-dialog-title {
@@ -358,29 +364,13 @@ export default {
   position: relative;
   z-index: 1;
   padding: 1.5rem 2rem;
-  max-height: calc(85vh - 200px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  flex: 1 1 auto;
+  overflow: visible; /* 移除滚动条，让子元素处理滚动 */
+  min-height: 0; /* 重要：允许flex子项收缩 */
+  max-height: 100%; /* 确保不超出父容器 */
 }
 
-/* 自定义滚动条 */
-.action-dialog-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.action-dialog-content::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 3px;
-}
-
-.action-dialog-content::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-}
-
-.action-dialog-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
+/* action-dialog-content 不再需要滚动条样式，因为滚动由子元素处理 */
 
 /* 底部样式 */
 .action-dialog-footer {
@@ -392,6 +382,7 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 /* 移动端适配 */
@@ -406,7 +397,7 @@ export default {
 
 .action-dialog-mobile .action-dialog-content {
   padding: 1rem 1.5rem;
-  max-height: calc(85vh - 150px);
+  /* 移除max-height，使用flex布局控制 */
 }
 
 .action-dialog-mobile .action-dialog-footer {

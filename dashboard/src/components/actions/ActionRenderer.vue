@@ -62,7 +62,8 @@ import {
   validateActionConfig, 
   ActionType, 
   ActionErrorType,
-  createActionError 
+  createActionError,
+  isSpecialAction
 } from './types.js'
 import { executeAction } from '@/api/modules/module.js'
 import { showToast } from '@/stores/toast.js'
@@ -155,7 +156,7 @@ export default {
     })
 
     // 解析Action配置
-    const parseConfig = (data) => {
+    const parseConfig = async (data) => {
       try {
         console.log('ActionRenderer parseConfig 开始解析:', data)
         if (!data) {
@@ -167,8 +168,12 @@ export default {
         console.log('ActionRenderer parseConfig 解析后的配置:', config)
         validateActionConfig(config)
         
-        // 处理特殊动作
-        handleSpecialActions(config)
+        // 检查是否为特殊动作，如果是则立即执行
+        if (isSpecialAction(config)) {
+          console.log('检测到特殊动作，立即执行:', config)
+          await handleSpecialAction(config)
+          return // 特殊动作执行完毕后直接返回，不需要显示UI
+        }
         
         parsedConfig.value = config
         error.value = null
@@ -187,32 +192,7 @@ export default {
       }
     }
 
-    // 处理特殊动作
-    const handleSpecialActions = (config) => {
-      const { actionId } = config
 
-      // 专项动作处理
-      switch (actionId) {
-        case '源内搜索':
-          // 可以在这里添加特殊处理逻辑
-          break
-        case '详情页跳转':
-          // 可以在这里添加特殊处理逻辑
-          break
-        case 'KTV播放':
-          // 可以在这里添加特殊处理逻辑
-          break
-        case '刷新列表':
-          // 可以在这里添加特殊处理逻辑
-          break
-        case '放入剪贴板':
-          // 可以在这里添加特殊处理逻辑
-          break
-        case '保持窗口':
-          // 可以在这里添加特殊处理逻辑
-          break
-      }
-    }
 
     // 处理专项动作（动态动作）
     const handleSpecialAction = async (actionData) => {
@@ -278,7 +258,7 @@ export default {
           if (actionData.content) {
             try {
               await navigator.clipboard.writeText(actionData.content)
-              showToast('已复制到剪贴板', 'success')
+              showToast('已复制到剪切板', 'success')
             } catch (err) {
               showToast('复制失败', 'error')
             }
@@ -386,7 +366,7 @@ export default {
             // 处理新的action（动态action）
             if (result.action) {
               console.log('检测到动态action，重新解析:', result.action)
-              parseConfig(result.action)
+              await parseConfig(result.action)
               return
             }
 
@@ -409,7 +389,7 @@ export default {
                     if (dataResult.action || dataResult.actionId) {
                       console.log('在data字段中检测到action:', dataResult)
                       if (dataResult.action) {
-                        parseConfig(dataResult.action)
+                        await parseConfig(dataResult.action)
                         return
                       }
                       if (dataResult.actionId) {
@@ -465,7 +445,7 @@ export default {
         // 等待一个短暂的时间让当前弹窗完全关闭
         await new Promise(resolve => setTimeout(resolve, 100))
         // 然后解析新的配置
-        parseConfig(action)
+        await parseConfig(action)
         return
       }
       
@@ -495,8 +475,8 @@ export default {
 
 
     // 监听actionData变化
-    watch(() => props.actionData, (newData) => {
-      parseConfig(newData)
+    watch(() => props.actionData, async (newData) => {
+      await parseConfig(newData)
     }, { immediate: true })
 
     // 监听visible变化
@@ -505,9 +485,9 @@ export default {
     })
 
     // 公开方法
-    const show = (actionData) => {
+    const show = async (actionData) => {
       if (actionData) {
-        parseConfig(actionData)
+        await parseConfig(actionData)
       }
       isVisible.value = true
     }

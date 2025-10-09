@@ -43,7 +43,7 @@
       <!-- 消息内容 -->
       <div class="content-section">
         <!-- 主要消息 -->
-        <div v-if="config.msg" class="message-container glass-effect">
+        <div v-if="config.msg || config.htmlMsg" class="message-container glass-effect">
           <div class="message-bg gradient-primary"></div>
           <div class="message-content">
             <div class="message-icon">
@@ -51,7 +51,7 @@
                 <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4l4 4 4-4h4c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
               </svg>
             </div>
-            <div class="message-text" v-html="formatMessage(config.msg)"></div>
+            <div class="message-text" v-html="formatMessage(config.htmlMsg || config.msg)"></div>
           </div>
         </div>
 
@@ -74,7 +74,7 @@
             <div class="image-bg gradient-accent"></div>
             <img
               :src="config.imageUrl"
-              :style="{ height: config.imageHeight ? `${config.imageHeight}px` : 'auto' }"
+              :style="{ height: config.imageHeight ? `${config.imageHeight}px` : '200px' }"
               class="action-image-modern"
               @load="onImageLoad"
               @error="onImageError"
@@ -468,7 +468,7 @@ export default {
 <style scoped>
 /* 主容器 */
 .msgbox-action-modern {
-  padding: 24px;
+  padding: 16px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
   border-radius: 16px;
   backdrop-filter: blur(10px);
@@ -542,7 +542,7 @@ export default {
 .icon-section {
   display: flex;
   justify-content: center;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .icon-container {
@@ -617,12 +617,12 @@ export default {
 .content-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* 消息容器 */
 .message-container {
-  padding: 20px;
+  padding: 16px;
   position: relative;
 }
 
@@ -703,7 +703,8 @@ export default {
 
 .action-image-modern {
   max-width: 100%;
-  height: auto;
+  height: 100px;
+  object-fit: cover;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   position: relative;

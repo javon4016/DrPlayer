@@ -13,7 +13,9 @@ export const ActionType = {
   SELECT: 'select',
   MSGBOX: 'msgbox',
   WEBVIEW: 'webview',
-  HELP: 'help'
+  HELP: 'help',
+  // 专项动作类型（通常不包含type字段，通过其他字段识别）
+  SPECIAL: 'special'
 }
 
 // 错误类型枚举
@@ -259,6 +261,61 @@ export const parseActionConfig = (data) => {
 }
 
 /**
+ * 检测是否为专项动作
+ * 专项动作通常不包含type字段，而是通过特定的字段组合来识别
+ */
+export const isSpecialAction = (config) => {
+  if (!config || typeof config !== 'object') {
+    return false
+  }
+
+  // 检测剪贴板操作：包含content字段且actionId为__copy__
+  if (config.actionId === '__copy__' && config.content) {
+    return true
+  }
+
+  // 检测其他专项动作模式
+  // 可以根据需要添加更多专项动作的检测逻辑
+  
+  // 检测是否有特殊的actionId前缀（如__开头的系统动作）
+  if (config.actionId && config.actionId.startsWith('__') && config.actionId.endsWith('__')) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * 验证专项动作配置
+ */
+export const validateSpecialAction = (config) => {
+  // 剪贴板操作验证
+  if (config.actionId === '__copy__') {
+    if (!config.content) {
+      throw createActionError(
+        ActionErrorType.VALIDATION_ERROR,
+        '剪贴板操作必须包含content字段'
+      )
+    }
+    return true
+  }
+
+  // 其他专项动作的验证逻辑可以在这里添加
+  // 例如：文件操作、系统调用等
+
+  // 对于未知的专项动作，进行基本验证
+  if (config.actionId && config.actionId.startsWith('__') && config.actionId.endsWith('__')) {
+    // 系统动作通常只需要actionId即可
+    return true
+  }
+
+  throw createActionError(
+    ActionErrorType.VALIDATION_ERROR,
+    `未知的专项动作类型: ${config.actionId}`
+  )
+}
+
+/**
  * 验证Action配置
  */
 export const validateActionConfig = (config) => {
@@ -276,6 +333,22 @@ export const validateActionConfig = (config) => {
     )
   }
 
+  console.log('config:',config)
+  
+  // 检查是否为专项动作
+  if (isSpecialAction(config)) {
+    // 专项动作有自己的验证逻辑
+    return validateSpecialAction(config)
+  }
+  
+  // 对于普通动作，type字段是必需的
+  if (!config.type) {
+    throw createActionError(
+      ActionErrorType.VALIDATION_ERROR,
+      'type字段是必需的（除非是专项动作）'
+    )
+  }
+  
   if (!Object.values(ActionType).includes(config.type)) {
     throw createActionError(
       ActionErrorType.VALIDATION_ERROR,
@@ -293,9 +366,53 @@ export const parseSelectData = (selectData) => {
   if (!selectData) return []
   
   try {
-    // 支持JSON格式
-    if (selectData.startsWith('[') || selectData.startsWith('{')) {
-      return JSON.parse(selectData)
+    // 检查是否为特殊选择器（如 [folder], [calendar] 等）
+    if (selectData.match(/^\[(?:folder|calendar|file|image)\]$/)) {
+      const type = selectData.slice(1, -1).toLowerCase()
+      const displayNames = {
+        'calendar': '📅 选择日期',
+        'file': '📄 选择文件',
+        'folder': '📁 选择文件夹',
+        'image': '🖼️ 选择图片'
+      }
+      return [{
+        name: displayNames[type] || selectData,
+        value: selectData
+      }]
+    }
+    
+    // 检查是否为带前缀的特殊选择器（如 [请选择字母]a,b,c,d）
+    if (selectData.startsWith('[') && selectData.includes(']')) {
+      const bracketEnd = selectData.indexOf(']')
+      const prefix = selectData.substring(1, bracketEnd)
+      const options = selectData.substring(bracketEnd + 1)
+      
+      if (options) {
+        // 有选项列表，解析选项
+        return options.split(',').map(item => {
+          const trimmed = item.trim()
+          return {
+            name: trimmed,
+            value: trimmed
+          }
+        }).filter(item => item.name)
+      } else {
+        // 只有前缀，可能是特殊选择器
+        return [{
+          name: prefix,
+          value: selectData
+        }]
+      }
+    }
+    
+    // 支持标准JSON格式
+    if ((selectData.startsWith('[') && selectData.endsWith(']')) || 
+        (selectData.startsWith('{') && selectData.endsWith('}'))) {
+      try {
+        return JSON.parse(selectData)
+      } catch (jsonError) {
+        // JSON解析失败，继续其他格式处理
+      }
     }
     
     // 支持 [tag]:=[value] 格式，用逗号分隔

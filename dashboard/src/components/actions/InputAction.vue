@@ -586,7 +586,7 @@ export default {
         
         await navigator.clipboard.writeText(content)
         if(!toastData){
-        showToast('已复制到剪贴板', 'success')
+        showToast('已复制到剪切板', 'success')
         }
         
       } catch (error) {

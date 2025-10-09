@@ -50,21 +50,27 @@
               <label class="input-label">
                 {{ input.name }}
                 <span v-if="input.required" class="required-indicator">*</span>
+                <button 
+                  v-if="input.help" 
+                  class="help-button"
+                  @click="showHelpPopup(input.help)"
+                  title="查看帮助信息"
+                >
+                  ?
+                </button>
               </label>
-              <div v-if="input.help" class="input-help">
-                {{ input.help }}
-              </div>
             </div>
 
             <!-- 输入区域 -->
             <div class="input-group">
-              <!-- 快速选择 - 在输入框上方 -->
-              <div v-if="input.selectData" class="quick-select">
+              <!-- 快速选择 - 在输入框上方，只显示非特殊选择器，且非多选模式 -->
+              <div v-if="input.selectData && hasNonSpecialOptions(input.selectData) && !input.multiSelect" class="quick-select">
                 <div class="quick-select-options">
                   <button
-                    v-for="option in parseSelectData(input.selectData)"
+                    v-for="option in getNonSpecialOptions(input.selectData)"
                     :key="option.value"
                     class="quick-select-tag"
+                    :class="{ 'selected': isOptionSelected(index, option) }"
                     @click="selectQuickOption(index, option)"
                   >
                     {{ option.name }}
@@ -72,8 +78,26 @@
                 </div>
               </div>
 
+              <!-- 日期选择器 (当selectData为[calendar]且inputType为0时) -->
+              <div v-if="(!input.multiLine || input.multiLine <= 1) && !input.onlyQuickSelect && input.selectData === '[calendar]' && input.inputType === 0" class="input-container">
+                <div class="input-wrapper-modern">
+                  <DatePicker
+                    v-model="inputValues[index]"
+                    :placeholder="input.tip || input.name"
+                    class="date-picker-modern"
+                    style="width: 100%;"
+                    :class="{
+                      error: inputErrors[index],
+                      success: !inputErrors[index] && inputValues[index] && input.required
+                    }"
+                    format="YYYY-MM-DD"
+                    @change="handleDateChange(index, $event)"
+                  />
+                </div>
+              </div>
+
               <!-- 单行输入 -->
-              <div v-if="!input.multiLine || input.multiLine <= 1" class="input-container">
+              <div v-else-if="(!input.multiLine || input.multiLine <= 1) && !input.onlyQuickSelect" class="input-container">
                 <div class="input-wrapper-modern">
                   <input
                     v-model="inputValues[index]"
@@ -84,16 +108,55 @@
                       error: inputErrors[index],
                       success: !inputErrors[index] && inputValues[index] && input.required
                     }"
+                    :readonly="input.inputType === 0"
                     @input="handleInputChange(index, $event)"
                     @blur="validateInput(index)"
                   />
                   <div class="input-actions">
+                    <!-- 特殊输入框图标按钮 -->
                     <button
+                      v-if="getSpecialInputType(input)"
+                      class="special-input-btn"
+                      :class="`special-${getSpecialInputType(input)}`"
+                      @click="handleSpecialInput(index, getSpecialInputType(input))"
+                      :title="getSpecialInputTitle(getSpecialInputType(input))"
+                    >
+                      <!-- 日历图标 -->
+                      <svg v-if="getSpecialInputType(input) === 'calendar'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 7h12v9H4V7z"/>
+                      </svg>
+                      <!-- 文件图标 -->
+                      <svg v-else-if="getSpecialInputType(input) === 'file'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm0 2h12v10H4V5z"/>
+                      </svg>
+                      <!-- 文件夹图标 -->
+                      <svg v-else-if="getSpecialInputType(input) === 'folder'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+                      </svg>
+                      <!-- 图像图标 -->
+                      <svg v-else-if="getSpecialInputType(input) === 'image'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"/>
+                      </svg>
+                    </button>
+                    <!-- 展开选项按钮 (inputType为0时) -->
+                    <button
+                      v-else-if="input.inputType === 0 && input.selectData"
+                      class="expand-options-btn"
+                      @click="openSelectOptions(index)"
+                      title="展开选项"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7 10l5 5 5-5z"/>
+                      </svg>
+                    </button>
+                    <!-- 普通展开按钮 -->
+                    <button
+                      v-else
                       class="expand-btn"
                       @click="openTextEditor(index)"
                       title="打开大文本编辑器"
                     >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 7h14v2H5zm0 4h14v2H5zm0 4h10v2H5z"/>
                       </svg>
                     </button>
@@ -102,26 +165,54 @@
               </div>
 
               <!-- 多行输入 -->
-              <div v-else class="textarea-container">
+              <div v-else-if="!input.onlyQuickSelect" class="textarea-container">
                 <div class="textarea-wrapper-modern">
                   <textarea
                     v-model="inputValues[index]"
                     :placeholder="input.tip || input.name"
-                    :rows="input.multiLine || 3"
+                    :rows="Math.min(input.multiLine || 3, 4)"
                     class="textarea-field-modern"
                     :class="{ 
                       error: inputErrors[index],
                       success: !inputErrors[index] && inputValues[index] && input.required
                     }"
+                    :readonly="input.inputType === 0"
                     @input="handleInputChange(index, $event)"
                     @blur="validateInput(index)"
                   ></textarea>
+                  <!-- 特殊输入框图标按钮 -->
                   <button
+                    v-if="getSpecialInputType(input)"
+                    class="special-input-btn textarea-expand"
+                    :class="`special-${getSpecialInputType(input)}`"
+                    @click="handleSpecialInput(index, getSpecialInputType(input))"
+                    :title="getSpecialInputTitle(getSpecialInputType(input))"
+                  >
+                    <!-- 日历图标 -->
+                    <svg v-if="getSpecialInputType(input) === 'calendar'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 7h12v9H4V7z"/>
+                    </svg>
+                    <!-- 文件图标 -->
+                    <svg v-else-if="getSpecialInputType(input) === 'file'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm0 2h12v10H4V5z"/>
+                    </svg>
+                    <!-- 文件夹图标 -->
+                    <svg v-else-if="getSpecialInputType(input) === 'folder'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+                    </svg>
+                    <!-- 图像图标 -->
+                    <svg v-else-if="getSpecialInputType(input) === 'image'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"/>
+                    </svg>
+                  </button>
+                  <!-- 普通展开按钮 -->
+                  <button
+                    v-else
                     class="expand-btn textarea-expand"
                     @click="openTextEditor(index)"
                     title="打开大文本编辑器"
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 7h14v2H5zm0 4h14v2H5zm0 4h10v2H5z"/>
                     </svg>
                   </button>
@@ -132,7 +223,7 @@
               <div class="input-status">
                 <!-- 错误提示 -->
                 <div v-if="inputErrors[index]" class="error-message">
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293-1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
                   </svg>
                   <span>{{ inputErrors[index] }}</span>
@@ -152,7 +243,7 @@
               @click="removeInputItem(index)"
               title="删除此项"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -289,6 +380,125 @@
       </div>
     </template>
   </ActionDialog>
+
+  <!-- 日期选择器弹窗 -->
+  <ActionDialog
+    :visible="showDatePicker"
+    title="选择日期"
+    :width="400"
+    @close="handleDateCancel"
+  >
+    <div class="date-picker-container">
+      <DatePicker
+        v-model="selectedDate"
+        :style="{ width: '100%' }"
+        placeholder="请选择日期"
+        format="YYYY-MM-DD"
+        @change="handleDateConfirm"
+      />
+    </div>
+
+    <template #footer>
+      <div class="modern-footer">
+        <button class="btn-modern btn-secondary" @click="handleDateCancel">
+          取消
+        </button>
+      </div>
+    </template>
+   </ActionDialog>
+
+   <!-- 帮助信息弹窗 -->
+   <ActionDialog
+     :visible="showHelpDialog"
+     title="帮助信息"
+     :width="500"
+     @close="closeHelpDialog"
+   >
+     <div class="help-content" v-html="helpContent"></div>
+
+     <template #footer>
+       <div class="modern-footer">
+         <button class="btn-modern btn-primary" @click="closeHelpDialog">
+           确定
+         </button>
+       </div>
+     </template>
+   </ActionDialog>
+
+   <!-- 选项弹窗 -->
+   <ActionDialog
+     :visible="showSelectOptions"
+     :title="isMultiSelectMode ? '请选择字母' : '请选择'"
+     :width="isMultiSelectMode ? (currentSelectColumn * 160 + 200) : 400"
+     @close="showSelectOptions = false"
+   >
+     <div class="select-options-content">
+       <!-- 单选模式 -->
+       <div v-if="!isMultiSelectMode" class="radio-container">
+         <a-radio-group 
+           v-model="selectedRadioValue"
+           @change="handleRadioChange"
+           direction="vertical"
+           class="radio-options-list"
+         >
+           <a-radio
+             v-for="option in currentSelectOptions"
+             :key="option.value"
+             :value="option.value"
+             class="radio-option-item"
+           >
+             {{ option.name }}
+           </a-radio>
+         </a-radio-group>
+       </div>
+
+       <!-- 多选模式 -->
+       <div v-else class="multiselect-container">
+         <div class="multiselect-main">
+           <a-checkbox-group 
+             v-model="selectedCheckboxValues"
+             class="checkbox-grid"
+             :style="{ gridTemplateColumns: `repeat(${currentSelectColumn}, 1fr)` }"
+           >
+             <a-checkbox
+               v-for="option in currentSelectOptions"
+               :key="option.value"
+               :value="option.value"
+               class="checkbox-option-item"
+             >
+               {{ option.name }}
+             </a-checkbox>
+           </a-checkbox-group>
+         </div>
+         
+         <div class="multiselect-actions">
+           <button class="btn-modern btn-secondary btn-small" @click="selectAll">
+             全选
+           </button>
+           <button class="btn-modern btn-secondary btn-small" @click="clearSelection">
+              全清
+            </button>
+           <button class="btn-modern btn-secondary btn-small" @click="invertSelection">
+             反选
+           </button>
+           <button class="btn-modern btn-primary btn-small" @click="confirmMultiSelection">
+             确定
+           </button>
+         </div>
+       </div>
+     </div>
+
+     <template #footer v-if="!isMultiSelectMode">
+       <div class="modern-footer">
+         <button class="btn-modern btn-secondary" @click="showSelectOptions = false">
+           取消
+         </button>
+         <button class="btn-modern btn-primary" @click="confirmRadioSelection">
+           确认
+         </button>
+       </div>
+     </template>
+   </ActionDialog>
 </template>
 
 <script>
@@ -304,11 +514,17 @@ import { executeAction } from '@/api/modules/module.js'
 import { showToast } from '@/stores/toast.js'
 import siteService from '@/api/services/site'
 import { useRouter } from 'vue-router'
+import { DatePicker, Radio, RadioGroup, Checkbox, CheckboxGroup } from '@arco-design/web-vue'
 
 export default {
   name: 'MultiInputAction',
   components: {
-    ActionDialog
+    ActionDialog,
+    DatePicker,
+    'a-radio': Radio,
+    'a-radio-group': RadioGroup,
+    'a-checkbox': Checkbox,
+    'a-checkbox-group': CheckboxGroup
   },
   props: {
     config: {
@@ -349,11 +565,32 @@ export default {
     const editorText = ref('')
     const currentEditIndex = ref(-1)
 
+    // 日期选择器相关
+    const showDatePicker = ref(false)
+    const currentDateIndex = ref(-1)
+    const selectedDate = ref('')
+
+    // 选项弹窗相关
+    const showSelectOptions = ref(false)
+    const currentSelectIndex = ref(-1)
+    const currentSelectOptions = ref([])
+    const selectedRadioValue = ref('')
+    
+    // 多选相关
+    const selectedCheckboxValues = ref([])
+    const isMultiSelectMode = ref(false)
+    const currentSelectColumn = ref(4)
+
+    // 帮助弹窗相关
+    const showHelpDialog = ref(false)
+    const helpContent = ref('')
+
     // 计算属性
     const isEnhanced = computed(() => {
       return props.config.type === 'multiInputEnhanced'
     })
 
+    // 按钮显示逻辑，与InputAction.vue保持一致
     const showOkButton = computed(() => {
       const button = normalizeButtonType(props.config.button)
       return button === ButtonType.OK_CANCEL || button === ButtonType.OK_ONLY || button === ButtonType.CUSTOM
@@ -545,7 +782,7 @@ export default {
         
         await navigator.clipboard.writeText(content)
         if (!toastData) {
-          showToast('已复制到剪贴板', 'success')
+          showToast('已复制到剪切板', 'success')
         }
         
       } catch (error) {
@@ -640,6 +877,12 @@ export default {
       const value = event.target.value
       inputValues.value[index] = value
       debouncedValidate(index)
+    }
+
+    // 处理日期选择器变化
+    const handleDateChange = (index, value) => {
+      inputValues.value[index] = value
+      validateInput(index)
     }
 
     const handleSubmit = async () => {
@@ -779,9 +1022,339 @@ export default {
       currentEditIndex.value = -1
     }
 
+    // 获取选择选项
+    const getSelectOptions = (selectData) => {
+      return parseSelectData(selectData)
+    }
+
+    // 获取特殊输入框类型
+    const getSpecialInputType = (input) => {
+      if (!input.selectData) return null
+      
+      const options = parseSelectData(input.selectData)
+      for (const option of options) {
+        if (option.value && option.value.startsWith('[') && option.value.endsWith(']')) {
+          const type = option.value.slice(1, -1).toLowerCase()
+          if (['calendar', 'file', 'folder', 'image'].includes(type)) {
+            return type
+          }
+        }
+      }
+      return null
+    }
+
+    // 获取特殊输入框按钮标题
+    const getSpecialInputTitle = (type) => {
+      const titles = {
+        'calendar': '选择日期',
+        'file': '选择文件',
+        'folder': '选择文件夹',
+        'image': '选择图片'
+      }
+      return titles[type] || '特殊输入'
+    }
+
+    // 处理特殊输入框点击
+    const handleSpecialInput = (index, type) => {
+      switch (type) {
+        case 'calendar':
+          handleDateSelect(index)
+          break
+        case 'file':
+          handleFileSelect(index)
+          break
+        case 'folder':
+          handleFolderSelect(index)
+          break
+        case 'image':
+          handleImageSelect(index)
+          break
+        default:
+          console.warn('未知的特殊输入类型:', type)
+      }
+    }
+
+    // 打开选项弹窗
+    const openSelectOptions = (index) => {
+      const input = inputItems.value[index]
+      if (input.selectData) {
+        currentSelectIndex.value = index
+        currentSelectOptions.value = parseSelectData(input.selectData)
+        
+        // 判断是否为多选模式
+        isMultiSelectMode.value = input.multiSelect === true
+        currentSelectColumn.value = input.selectColumn || 4
+        
+        if (isMultiSelectMode.value) {
+          // 多选模式：解析已选中的值
+          const currentValue = inputValues.value[index] || ''
+          selectedCheckboxValues.value = currentValue ? currentValue.split(',').map(v => v.trim()).filter(v => v) : []
+        } else {
+          // 单选模式：设置当前选中的值
+          selectedRadioValue.value = inputValues.value[index] || ''
+        }
+        
+        showSelectOptions.value = true
+      }
+    }
+
+    // 选择选项
+    const selectOption = (option) => {
+      if (currentSelectIndex.value >= 0) {
+        inputValues.value[currentSelectIndex.value] = option.value
+        validateInput(currentSelectIndex.value)
+      }
+      showSelectOptions.value = false
+      currentSelectIndex.value = -1
+      currentSelectOptions.value = []
+    }
+
+    // 处理radio变化
+    const handleRadioChange = (value) => {
+      if (currentSelectIndex.value >= 0) {
+        inputValues.value[currentSelectIndex.value] = value
+        validateInput(currentSelectIndex.value)
+      }
+    }
+
+    // 确认单选
+    const confirmRadioSelection = () => {
+      showSelectOptions.value = false
+      currentSelectIndex.value = -1
+      currentSelectOptions.value = []
+      selectedRadioValue.value = ''
+    }
+
+
+
+
+
+
+
+    // 全选
+    const selectAll = () => {
+      selectedCheckboxValues.value = currentSelectOptions.value.map(option => option.value)
+    }
+
+    // 全清选择
+    const clearSelection = () => {
+      selectedCheckboxValues.value = []
+    }
+
+    // 反选
+    const invertSelection = () => {
+      const allValues = currentSelectOptions.value.map(option => option.value)
+      selectedCheckboxValues.value = allValues.filter(value => !selectedCheckboxValues.value.includes(value))
+    }
+
+    // 确认选择（单选和多选）
+    const confirmMultiSelection = () => {
+      if (currentSelectIndex.value >= 0) {
+        if (isMultiSelectMode.value) {
+          // 多选模式：将选中的值用逗号连接
+          inputValues.value[currentSelectIndex.value] = selectedCheckboxValues.value.join(',')
+        } else {
+          // 单选模式：只取第一个值
+          inputValues.value[currentSelectIndex.value] = selectedCheckboxValues.value[0] || ''
+        }
+        validateInput(currentSelectIndex.value)
+      }
+      showSelectOptions.value = false
+      currentSelectIndex.value = -1
+      currentSelectOptions.value = []
+      selectedCheckboxValues.value = []
+      isMultiSelectMode.value = false
+    }
+
+    // 判断是否为特殊选择器
+    const isSpecialSelector = (value) => {
+      return value && value.startsWith('[') && value.endsWith(']')
+    }
+
+    // 获取选项显示名称
+    const getOptionDisplayName = (option) => {
+      if (isSpecialSelector(option.value)) {
+        const selectorType = option.value.slice(1, -1).toLowerCase()
+        const displayNames = {
+          'calendar': '📅 选择日期',
+          'file': '📄 选择文件',
+          'folder': '📁 选择文件夹',
+          'image': '🖼️ 选择图片'
+        }
+        return displayNames[selectorType] || option.name
+      }
+      return option.name
+    }
+
+    // 检查是否有非特殊选择器选项
+    const hasNonSpecialOptions = (selectData) => {
+      const options = getSelectOptions(selectData)
+      return options.some(option => !isSpecialSelector(option.value))
+    }
+
+    // 获取非特殊选择器选项
+    const getNonSpecialOptions = (selectData) => {
+      const options = getSelectOptions(selectData)
+      return options.filter(option => !isSpecialSelector(option.value))
+    }
+
     const selectQuickOption = (index, option) => {
-      inputValues.value[index] = option.value
+      // 处理特殊选择器
+      if (option.value.startsWith('[') && option.value.endsWith(']')) {
+        const selectorType = option.value.slice(1, -1).toLowerCase()
+        
+        switch (selectorType) {
+          case 'calendar':
+            // 日期选择器
+            handleDateSelect(index)
+            break
+          case 'file':
+            // 文件选择器
+            handleFileSelect(index)
+            break
+          case 'folder':
+            // 文件夹选择器
+            handleFolderSelect(index)
+            break
+          case 'image':
+            // 图像文件选择器
+            handleImageSelect(index)
+            break
+          default:
+            // 普通选择
+            inputValues.value[index] = option.value
+            break
+        }
+      } else {
+        // 普通选择
+        inputValues.value[index] = option.value
+      }
       validateInput(index)
+    }
+
+    // 判断选项是否被选中
+    const isOptionSelected = (index, option) => {
+      return inputValues.value[index] === option.value
+    }
+
+    // 日期选择处理
+    const handleDateSelect = (index) => {
+      currentDateIndex.value = index
+      showDatePicker.value = true
+    }
+
+    // 日期选择确认
+    const handleDateConfirm = (dateString) => {
+      if (dateString && currentDateIndex.value >= 0) {
+        inputValues.value[currentDateIndex.value] = dateString
+        validateInput(currentDateIndex.value)
+      }
+      showDatePicker.value = false
+      currentDateIndex.value = -1
+    }
+
+    // 日期选择取消
+    const handleDateCancel = () => {
+      showDatePicker.value = false
+      currentDateIndex.value = -1
+    }
+
+    // 显示帮助弹窗
+    const showHelpPopup = (content) => {
+      helpContent.value = content
+      showHelpDialog.value = true
+    }
+
+    // 关闭帮助弹窗
+    const closeHelpDialog = () => {
+      showHelpDialog.value = false
+      helpContent.value = ''
+    }
+
+    // 文件选择处理
+    const handleFileSelect = (index) => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.style.position = 'absolute'
+      input.style.left = '-9999px'
+      document.body.appendChild(input)
+      
+      input.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          inputValues.value[index] = e.target.files[0].name
+          validateInput(index)
+        }
+        document.body.removeChild(input)
+      })
+      
+      input.click()
+    }
+
+    // 文件夹选择处理
+    const handleFolderSelect = (index) => {
+      // 创建一个隐藏的文件夹选择器
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.webkitdirectory = true
+      input.multiple = true
+      input.style.position = 'absolute'
+      input.style.left = '-9999px'
+      input.style.opacity = '0'
+      document.body.appendChild(input)
+      
+      input.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          // 从第一个文件的路径中提取文件夹路径
+          const firstFile = e.target.files[0]
+          const relativePath = firstFile.webkitRelativePath
+          
+          if (relativePath) {
+            // 获取文件夹名称（第一级目录）
+            const folderName = relativePath.split('/')[0]
+            inputValues.value[index] = folderName
+          } else {
+            // 如果没有相对路径，使用文件名去掉扩展名
+            const fileName = firstFile.name
+            const folderName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName
+            inputValues.value[index] = folderName
+          }
+          
+          validateInput(index)
+        }
+        document.body.removeChild(input)
+      })
+      
+      // 添加取消事件监听
+      input.addEventListener('cancel', () => {
+        document.body.removeChild(input)
+      })
+      
+      input.click()
+    }
+
+    // 图像文件选择处理
+    const handleImageSelect = (index) => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/*'
+      input.style.position = 'absolute'
+      input.style.left = '-9999px'
+      document.body.appendChild(input)
+      
+      input.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0]
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            inputValues.value[index] = event.target.result
+            validateInput(index)
+          }
+          reader.readAsDataURL(file)
+        }
+        document.body.removeChild(input)
+      })
+      
+      input.click()
     }
 
     // 增强功能
@@ -890,22 +1463,62 @@ export default {
       getInputType,
       validateInput,
       handleInputChange,
+      handleDateChange,
       handleSubmit,
       handleCancel,
       handleReset,
       selectQuickOption,
+      handleDateSelect,
+      handleFileSelect,
+      handleFolderSelect,
+      handleImageSelect,
       addInputItem,
       removeInputItem,
       clearAll,
       fillExample,
       parseSelectData,
+      getSelectOptions,
+      isSpecialSelector,
+      getOptionDisplayName,
+      getSpecialInputType,
+      getSpecialInputTitle,
+      handleSpecialInput,
+      hasNonSpecialOptions,
+      getNonSpecialOptions,
       // 大文本编辑器
       showTextEditor,
       textEditorRef,
       editorText,
       openTextEditor,
       closeTextEditor,
-      saveEditorText
+      saveEditorText,
+      // 日期选择器
+      showDatePicker,
+      selectedDate,
+      handleDateConfirm,
+      handleDateCancel,
+      // 选项弹窗
+      showSelectOptions,
+      currentSelectOptions,
+      selectedRadioValue,
+      openSelectOptions,
+      selectOption,
+      handleRadioChange,
+      confirmRadioSelection,
+      isOptionSelected,
+      // 多选相关
+      selectedCheckboxValues,
+      isMultiSelectMode,
+      currentSelectColumn,
+      selectAll,
+      clearSelection,
+      invertSelection,
+      confirmMultiSelection,
+      // 帮助弹窗
+      showHelpDialog,
+      helpContent,
+      showHelpPopup,
+      closeHelpDialog
     }
   }
 }
@@ -914,160 +1527,282 @@ export default {
 <style scoped>
 /* 主容器 */
 .multi-input-action-modern {
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  height: 100%;
+  max-height: 100vh;
+  background: var(--ds-surface);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 /* 消息区域 */
 .message-section {
-  margin-bottom: 0.5rem;
+  padding: 12px 16px;
+  background: var(--ds-background-information-subtle);
+  border-bottom: 1px solid var(--ds-border-subtle);
+  flex-shrink: 0;
 }
 
 .message-content {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--ds-radius-lg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  gap: 8px;
 }
 
 .message-icon {
   flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(59, 130, 246, 0.1);
-  border-radius: var(--ds-radius-md);
-  color: rgb(59, 130, 246);
+  margin-top: 2px;
 }
 
 .message-text {
-  margin: 0;
-  color: rgba(0, 0, 0, 0.8);
-  font-size: 0.875rem;
+  flex: 1;
+  font-size: 13px;
   line-height: 1.5;
-  font-weight: 500;
+  color: var(--ds-text);
 }
 
 /* 媒体区域 */
 .media-section {
-  margin-bottom: 0.5rem;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--ds-border-subtle);
+  flex-shrink: 0;
 }
 
 .image-container {
-  text-align: center;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--ds-radius-lg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
 .action-image-modern {
   max-width: 100%;
-  height: auto;
-  border-radius: var(--ds-radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all var(--ds-duration-fast) ease;
+  max-height: 200px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* 输入区域 */
+/* 输入项容器 - 修复滚动问题 */
 .inputs-section {
   flex: 1;
+  min-height: 0; /* 关键：允许flex子项收缩 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 防止整个section滚动 */
+  max-height: 60vh; /* 使用视口高度单位，更适合不同屏幕 */
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .inputs-section {
+    max-height: 70vh; /* 移动端使用更大的高度比例 */
+  }
+}
+
+@media (max-width: 480px) {
+  .inputs-section {
+    max-height: 75vh; /* 小屏手机使用更大的高度比例 */
+  }
 }
 
 .inputs-container {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px; /* 减少间距从12px到8px */
+  padding: 8px 16px; /* 减少上下内边距 */
+  overflow-y: auto; /* 启用垂直滚动 */
+  overflow-x: hidden;
+  min-height: 0; /* 允许flex收缩 */
+  max-height: 100%; /* 不超出父容器 */
+  /* 自定义滚动条样式 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-border-subtle) transparent;
+}
+
+/* 移动端内边距优化 */
+@media (max-width: 768px) {
+  .inputs-container {
+    padding: 6px 12px; /* 移动端使用更紧凑的内边距 */
+    gap: 6px; /* 减少项目间距 */
+  }
+}
+
+@media (max-width: 480px) {
+  .inputs-container {
+    padding: 4px 8px; /* 小屏手机使用最紧凑的内边距 */
+    gap: 4px; /* 最小项目间距 */
+  }
+}
+
+.inputs-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.inputs-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.inputs-container::-webkit-scrollbar-thumb {
+  background: var(--ds-border-subtle);
+  border-radius: 3px;
+}
+
+.inputs-container::-webkit-scrollbar-thumb:hover {
+  background: var(--ds-border);
 }
 
 .input-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* 进一步减少内部间距 */
   position: relative;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--ds-radius-lg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: all var(--ds-duration-fast) ease;
+  background: var(--ds-background-subtle, #f6f8fa);
+  border: 1px solid var(--ds-border-subtle, #d1d9e0);
+  border-radius: 8px;
+  padding: 10px; /* 进一步减少内边距 */
+  transition: all 0.2s ease;
 }
 
 .input-item:hover {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: var(--ds-border-brand);
+  box-shadow: 0 0 0 1px var(--ds-border-brand-alpha);
 }
 
+/* 标签容器 */
 .input-label-container {
-  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* 减少标签和帮助文本间距 */
 }
 
 .input-label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: rgba(0, 0, 0, 0.8);
-  margin-bottom: 0.25rem;
+  font-size: 13px; /* 稍微减小字体 */
+  font-weight: 500;
+  color: var(--ds-text-subtle);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
 }
 
 .required-indicator {
-  color: rgb(239, 68, 68);
-  margin-left: 0.25rem;
+  color: var(--ds-text-danger);
+  font-size: 12px;
+}
+
+.help-button {
+  background: #3742fa;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.help-button:hover {
+  background: #2f3542;
+  transform: scale(1.1);
+}
+
+.help-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ds-text);
+  padding: 16px 0;
 }
 
 .input-help {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.6);
-  line-height: 1.4;
+  font-size: 11px; /* 减小帮助文本字体 */
+  color: var(--ds-text-subtlest);
+  line-height: 1.3;
 }
 
+/* 输入组 */
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 6px; /* 减少组内间距 */
 }
 
 /* 快速选择 */
 .quick-select {
-  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* 减少间距 */
 }
 
 .quick-select-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 4px; /* 减少标签间距 */
 }
 
 .quick-select-tag {
-  padding: 0.375rem 0.75rem;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--ds-radius-full);
-  color: rgb(59, 130, 246);
-  font-size: 0.75rem;
-  font-weight: 500;
+  padding: 3px 8px; /* 减少标签内边距 */
+  font-size: 11px; /* 减小字体 */
+  background: #f5f5f5; /* 灰底 */
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  color: #333; /* 黑字 */
   cursor: pointer;
-  transition: all var(--ds-duration-fast) ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .quick-select-tag:hover {
-  background: rgb(59, 130, 246);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  background: #e8e8e8;
+  border-color: #b0b0b0;
 }
 
-/* 输入框样式 */
+.quick-select-tag:active {
+  background: #d8d8d8;
+}
+
+/* 选中状态 - 绿底白字 */
+.quick-select-tag.selected {
+  background: #22c55e; /* 绿底 */
+  border-color: #16a34a;
+  color: #ffffff; /* 白字 */
+}
+
+.quick-select-tag.selected:hover {
+  background: #16a34a;
+  border-color: #15803d;
+}
+
+.quick-select-tag.selected:active {
+  background: #15803d;
+}
+
+.quick-select-tag.special-selector {
+  background: var(--ds-background-brand-subtle);
+  color: var(--ds-text-brand);
+  border-color: var(--ds-border-brand);
+}
+
+.quick-select-tag.special-selector:hover {
+  background: var(--ds-background-brand);
+  color: var(--ds-text-inverse);
+}
+
+.selector-icon {
+  flex-shrink: 0;
+}
+
+/* 现代输入框 */
 .input-container {
   position: relative;
 }
@@ -1076,215 +1811,297 @@ export default {
   position: relative;
   display: flex;
   align-items: center;
+  background: var(--ds-surface, #ffffff);
+  border: 1px solid var(--ds-border, #d0d7de);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.input-wrapper-modern:focus-within {
+  border-color: var(--ds-border-focused);
+  box-shadow: 0 0 0 1px var(--ds-border-focused-alpha);
 }
 
 .input-field-modern {
-  width: 100%;
-  padding: 0.75rem;
-  padding-right: 3rem;
-  border: 2px solid rgba(0, 0, 0, 0.1);
-  border-radius: var(--ds-radius-md);
-  background: rgba(255, 255, 255, 0.8);
-  color: rgba(0, 0, 0, 0.9);
-  font-size: 0.875rem;
-  transition: all var(--ds-duration-fast) ease;
+  flex: 1;
+  padding: 8px 10px; /* 减少内边距 */
+  border: none;
+  background: transparent;
+  font-size: 13px; /* 稍微减小字体 */
+  color: var(--ds-text);
   outline: none;
+  min-height: 20px; /* 减少最小高度 */
 }
 
-.input-field-modern:focus {
-  border-color: rgb(59, 130, 246);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  background: white;
+.input-field-modern::placeholder {
+  color: var(--ds-text-subtlest, #8b949e);
 }
 
 .input-field-modern.error {
-  border-color: rgb(239, 68, 68);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  color: var(--ds-text-danger);
 }
 
 .input-field-modern.success {
-  border-color: rgb(34, 197, 94);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+  color: var(--ds-text-success);
 }
 
+/* 日期选择器样式 */
+.date-picker-modern {
+  flex: 1;
+  border: none;
+  background: transparent;
+  width: 100%;
+}
+
+/* 自定义 Arco DatePicker 样式 */
+.date-picker-modern :deep(.arco-picker) {
+  width: 100%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 8px 10px;
+  font-size: 13px;
+  min-height: 20px;
+}
+
+.date-picker-modern :deep(.arco-picker-input) {
+  color: var(--ds-text);
+  font-size: 13px;
+}
+
+.date-picker-modern :deep(.arco-picker-input::placeholder) {
+  color: var(--ds-text-subtlest, #8b949e);
+}
+
+.date-picker-modern :deep(.arco-picker-suffix) {
+  color: var(--ds-text-subtle);
+}
+
+/* 确保日期选择器面板正确显示 */
+.date-picker-modern :deep(.arco-picker-dropdown) {
+  z-index: 9999 !important;
+}
+
+/* 修复日期选择器弹出层样式 */
+.date-picker-modern :deep(.arco-picker-panel) {
+  z-index: 9999 !important;
+}
+
+.date-picker-modern :deep(.arco-picker-popup) {
+  z-index: 9999 !important;
+}
+
+/* 确保日期选择器容器不被遮挡 */
+.date-picker-modern :deep(.arco-picker-container) {
+  position: relative;
+  z-index: 1;
+}
+
+
+
+/* 输入操作按钮 */
 .input-actions {
-  position: absolute;
-  right: 0.5rem;
   display: flex;
-  gap: 0.25rem;
+  align-items: center;
+  padding: 0 6px; /* 减少内边距 */
 }
 
 .expand-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: rgba(59, 130, 246, 0.1);
-  color: rgb(59, 130, 246);
-  border-radius: var(--ds-radius-sm);
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--ds-duration-fast) ease;
-  opacity: 0.8;
+  width: 24px; /* 减小按钮尺寸 */
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--ds-text-subtle);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .expand-btn:hover {
-  opacity: 1;
-  background: rgb(59, 130, 246);
-  color: white;
-  transform: scale(1.1);
+  background: var(--ds-background-neutral-hovered);
+  color: var(--ds-text);
 }
 
-/* 多行输入 */
+.expand-btn:active {
+  background: var(--ds-background-neutral-pressed);
+}
+
+/* 展开选项按钮 */
+.expand-options-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--ds-text-subtle);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.expand-options-btn:hover {
+  background: var(--ds-background-neutral-hovered);
+  color: var(--ds-text);
+}
+
+.expand-options-btn:active {
+  background: var(--ds-background-neutral-pressed);
+}
+
+/* 特殊输入框按钮 */
+.special-input-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.special-input-btn:hover {
+  background: var(--ds-background-neutral-hovered);
+}
+
+.special-input-btn:active {
+  background: var(--ds-background-neutral-pressed);
+}
+
+/* 特殊输入框按钮颜色 */
+.special-calendar {
+  color: #3b82f6; /* 蓝色 - 日历 */
+}
+
+.special-file {
+  color: #10b981; /* 绿色 - 文件 */
+}
+
+.special-folder {
+  color: #f59e0b; /* 橙色 - 文件夹 */
+}
+
+.special-image {
+  color: #8b5cf6; /* 紫色 - 图片 */
+}
+
+.special-input-btn:hover {
+  opacity: 0.8;
+}
+
+/* 文本域容器 */
 .textarea-container {
   position: relative;
 }
 
 .textarea-wrapper-modern {
   position: relative;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--ds-radius-lg);
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  transition: all var(--ds-duration-fast) ease;
-  overflow: hidden;
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
 .textarea-wrapper-modern:focus-within {
-  border-color: rgba(59, 130, 246, 0.5);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 
-    0 0 0 4px rgba(59, 130, 246, 0.1),
-    0 8px 25px rgba(59, 130, 246, 0.15);
-  transform: translateY(-1px);
+  border-color: var(--ds-border-focused);
+  box-shadow: 0 0 0 1px var(--ds-border-focused-alpha);
 }
 
 .textarea-field-modern {
   width: 100%;
+  padding: 8px 10px; /* 减少内边距 */
   border: none;
-  outline: none;
   background: transparent;
-  padding: 1rem 1.25rem;
-  padding-bottom: 2.5rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: rgba(0, 0, 0, 0.85);
-  font-weight: 500;
-  font-family: inherit;
+  font-size: 13px; /* 稍微减小字体 */
+  color: var(--ds-text);
+  outline: none;
   resize: vertical;
-  min-height: 4rem;
-  box-sizing: border-box;
-  transition: all var(--ds-duration-fast) ease;
+  min-height: 60px; /* 减少最小高度 */
+  line-height: 1.4;
+  font-family: inherit;
 }
 
 .textarea-field-modern::placeholder {
-  color: rgba(0, 0, 0, 0.4);
-  font-weight: 400;
-}
-
-.textarea-field-modern:focus {
-  /* 焦点样式由wrapper处理 */
+  color: var(--ds-text-subtlest);
 }
 
 .textarea-field-modern.error {
-  color: rgb(239, 68, 68);
-}
-
-.textarea-field-modern.error ~ .textarea-expand {
-  border-left-color: rgba(239, 68, 68, 0.3);
-}
-
-.textarea-wrapper-modern:has(.error) {
-  border-color: rgba(239, 68, 68, 0.5);
-  background: rgba(254, 242, 242, 0.8);
+  color: var(--ds-text-danger);
 }
 
 .textarea-field-modern.success {
-  color: rgb(34, 197, 94);
-}
-
-.textarea-wrapper-modern:has(.success) {
-  border-color: rgba(34, 197, 94, 0.3);
+  color: var(--ds-text-success);
 }
 
 .textarea-expand {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  padding: 0.5rem;
-  border-radius: var(--ds-radius-md);
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(0, 0, 0, 0.5);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--ds-duration-fast) ease;
+  top: 6px; /* 调整位置 */
+  right: 6px;
+  z-index: 1;
 }
 
-.textarea-expand:hover {
-  background: rgba(59, 130, 246, 0.1);
-  color: rgb(59, 130, 246);
-}
-
-/* 状态指示器 */
+/* 输入状态 */
 .input-status {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.5rem;
-  min-height: 1.25rem;
+  gap: 8px;
+  min-height: 16px; /* 减少最小高度 */
 }
 
 .error-message {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  color: rgb(239, 68, 68);
-  font-size: 0.75rem;
-  font-weight: 500;
+  gap: 4px;
+  color: var(--ds-text-danger);
+  font-size: 11px; /* 减小字体 */
 }
 
 .char-count {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
-  font-weight: 500;
+  font-size: 10px; /* 减小字体 */
+  color: var(--ds-text-subtlest);
+  white-space: nowrap;
 }
 
 /* 删除按钮 */
 .remove-btn {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: none;
-  background: rgba(239, 68, 68, 0.1);
-  color: rgb(239, 68, 68);
-  border-radius: var(--ds-radius-sm);
-  cursor: pointer;
+  top: 8px; /* 调整位置 */
+  right: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--ds-duration-fast) ease;
-  opacity: 0.7;
+  width: 20px; /* 减小尺寸 */
+  height: 20px;
+  border: none;
+  background: var(--ds-background-danger-subtle);
+  color: var(--ds-text-danger);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 2;
 }
 
 .remove-btn:hover {
-  opacity: 1;
-  background: rgb(239, 68, 68);
-  color: white;
-  transform: scale(1.1);
+  background: var(--ds-background-danger);
+  color: var(--ds-text-inverse);
+}
+
+.remove-btn:active {
+  background: var(--ds-background-danger-bold);
 }
 
 /* 增强功能区域 */
 .enhanced-section {
-  padding: 1rem;
+  padding: 0.75rem;
   background: rgba(248, 250, 252, 0.8);
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: var(--ds-radius-lg);
@@ -1292,21 +2109,64 @@ export default {
   -webkit-backdrop-filter: blur(10px);
 }
 
+/* 增强控制区域 */
 .enhanced-controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  justify-content: space-between;
   align-items: center;
+  padding: 8px 12px; /* 减少内边距 */
+  background: var(--ds-background-subtle);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: 6px;
+  margin-top: 8px; /* 减少上边距 */
+  gap: 8px;
+}
+
+.enhanced-controls-left {
+  display: flex;
+  gap: 6px; /* 减少按钮间距 */
+}
+
+.enhanced-controls-right {
+  display: flex;
+  gap: 6px; /* 减少按钮间距 */
+}
+
+.add-input-btn,
+.batch-action-btn {
+  padding: 4px 8px; /* 减少内边距 */
+  font-size: 11px; /* 减小字体 */
+  background: var(--ds-background-brand-subtle);
+  color: var(--ds-text-brand);
+  border: 1px solid var(--ds-border-brand);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.add-input-btn:hover,
+.batch-action-btn:hover {
+  background: var(--ds-background-brand);
+  color: var(--ds-text-inverse);
+}
+
+.add-input-btn:active,
+.batch-action-btn:active {
+  background: var(--ds-background-brand-bold);
 }
 
 .batch-controls {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 /* 超时提示 */
 .timeout-section {
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 0.75rem;
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
   border: 1px solid rgba(251, 191, 36, 0.2);
   border-radius: var(--ds-radius-lg);
@@ -1345,6 +2205,31 @@ export default {
   transition: width 1s linear;
 }
 
+/* 超时显示 */
+.timeout-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px; /* 减少内边距 */
+  background: var(--ds-background-warning-subtle);
+  color: var(--ds-text-warning);
+  border: 1px solid var(--ds-border-warning);
+  border-radius: 6px;
+  font-size: 12px; /* 减小字体 */
+  font-weight: 500;
+  gap: 6px;
+  margin-top: 8px; /* 减少上边距 */
+}
+
+.timeout-icon {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* 现代化底部 */
 .modern-footer {
   display: flex;
@@ -1353,6 +2238,74 @@ export default {
   gap: 0.75rem;
   margin: 0;
   padding: 0;
+}
+
+/* 底部按钮区域 */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px; /* 减少按钮间距 */
+  padding: 12px 16px; /* 减少内边距 */
+  background: var(--ds-background-subtle);
+  border-top: 1px solid var(--ds-border-subtle);
+  margin-top: auto;
+}
+
+.footer-btn {
+  padding: 6px 16px; /* 减少内边距 */
+  font-size: 13px; /* 稍微减小字体 */
+  font-weight: 500;
+  border: 1px solid var(--ds-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 60px; /* 减少最小宽度 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.footer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.footer-btn.cancel {
+  background: var(--ds-background);
+  color: var(--ds-text-subtle);
+  border-color: var(--ds-border);
+}
+
+.footer-btn.cancel:hover:not(:disabled) {
+  background: var(--ds-background-neutral-hovered);
+  color: var(--ds-text);
+}
+
+.footer-btn.reset {
+  background: var(--ds-background-warning-subtle);
+  color: var(--ds-text-warning);
+  border-color: var(--ds-border-warning);
+}
+
+.footer-btn.reset:hover:not(:disabled) {
+  background: var(--ds-background-warning);
+  color: var(--ds-text-inverse);
+}
+
+.footer-btn.confirm {
+  background: var(--ds-background-brand);
+  color: var(--ds-text-inverse);
+  border-color: var(--ds-border-brand);
+}
+
+.footer-btn.confirm:hover:not(:disabled) {
+  background: var(--ds-background-brand-bold);
+}
+
+.footer-btn.confirm:active:not(:disabled) {
+  background: var(--ds-background-brand-boldest);
 }
 
 .btn-modern {
@@ -1476,19 +2429,85 @@ export default {
   color: rgba(0, 0, 0, 0.4);
 }
 
+/* 大文本编辑器对话框 */
+.large-text-editor {
+  .dialog-content {
+    width: 90vw;
+    max-width: 800px;
+    height: 70vh;
+    max-height: 600px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dialog-header {
+    padding: 12px 16px; /* 减少内边距 */
+    border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-background-subtle);
+  }
+
+  .dialog-title {
+    font-size: 14px; /* 减小字体 */
+    font-weight: 600;
+    color: var(--ds-text);
+    margin: 0;
+  }
+
+  .dialog-body {
+    flex: 1;
+    padding: 12px; /* 减少内边距 */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .large-textarea {
+    flex: 1;
+    width: 100%;
+    border: 1px solid var(--ds-border);
+    border-radius: 6px;
+    padding: 12px; /* 减少内边距 */
+    font-size: 13px; /* 稍微减小字体 */
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    background: var(--ds-surface);
+    color: var(--ds-text);
+  }
+
+  .large-textarea:focus {
+    border-color: var(--ds-border-focused);
+    box-shadow: 0 0 0 1px var(--ds-border-focused-alpha);
+  }
+
+  .dialog-footer {
+    padding: 12px 16px; /* 减少内边距 */
+    border-top: 1px solid var(--ds-border-subtle);
+    background: var(--ds-background-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px; /* 减少按钮间距 */
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 640px) {
   .multi-input-action-modern {
-    gap: 1rem;
+    gap: 0.75rem;
   }
   
   .input-item {
-    padding: 0.75rem;
+    padding: 0.5rem;
   }
   
   .enhanced-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+  
+  .enhanced-controls-left,
+  .enhanced-controls-right {
+    justify-content: center;
   }
   
   .batch-controls {
@@ -1525,5 +2544,163 @@ export default {
   .quick-select-tag:hover {
     transform: none;
   }
+}
+
+/* 日期选择器容器样式 */
+.date-picker-container {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 日期选择器输入框样式 */
+.date-picker-container :deep(.ant-picker) {
+  width: 100%;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--ds-border, #d0d7de);
+  font-size: 14px;
+}
+
+.date-picker-container :deep(.ant-picker-input > input) {
+  font-size: 14px;
+  color: var(--ds-text, #24292f);
+}
+
+.date-picker-container :deep(.ant-picker-input > input::placeholder) {
+  color: var(--ds-text-subtlest, #8b949e);
+}
+
+/* 选项弹窗样式 */
+.select-options-content {
+  padding: 16px;
+}
+
+/* 单选容器样式 */
+.radio-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--ds-border, #d0d7de);
+  border-radius: 8px;
+  background: var(--ds-surface, #ffffff);
+  padding: 8px;
+}
+
+.radio-options-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.radio-option-item {
+  margin: 0;
+  padding: 0;
+}
+
+/* 自定义radio样式，让它看起来像按钮 */
+.radio-options-list :deep(.arco-radio) {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--ds-border, #d0d7de);
+  background: var(--ds-surface, #ffffff);
+  transition: all 0.2s ease;
+}
+
+.radio-options-list :deep(.arco-radio:hover) {
+  border-color: var(--ds-border-accent, #3b82f6);
+  background: var(--ds-background-neutral-hovered, #f6f8fa);
+}
+
+.radio-options-list :deep(.arco-radio-checked) {
+  border-color: var(--ds-border-accent, #3b82f6);
+  background: var(--ds-background-accent-subtle, #dbeafe);
+}
+
+.radio-options-list :deep(.arco-radio-checked:hover) {
+  background: var(--ds-background-accent-subtle-hovered, #bfdbfe);
+}
+
+.radio-options-list :deep(.arco-radio .arco-radio-label) {
+  width: 100%;
+  padding: 8px 12px;
+  margin: 0;
+  color: var(--ds-text, #24292f);
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.radio-options-list :deep(.arco-radio-checked .arco-radio-label) {
+  color: var(--ds-text-accent, #1e40af);
+  font-weight: 500;
+}
+
+.radio-options-list :deep(.arco-radio .arco-radio-button) {
+  margin: 6px 0 6px 10px;
+}
+
+.radio-options-list :deep(.arco-radio .arco-radio-button::after) {
+  border-color: var(--ds-border-accent, #3b82f6);
+}
+
+.radio-options-list :deep(.arco-radio-checked .arco-radio-button) {
+  border-color: var(--ds-border-accent, #3b82f6);
+  background-color: var(--ds-background-accent, #3b82f6);
+}
+
+/* 多选相关样式 */
+.multiselect-container {
+  display: flex;
+  gap: 16px;
+  min-height: 300px;
+}
+
+.multiselect-main {
+  flex: 1;
+}
+
+.checkbox-grid {
+  display: grid;
+  gap: 12px 16px;
+  padding: 8px;
+}
+
+.checkbox-option-item {
+  padding: 8px 12px;
+  border: 1px solid var(--ds-border, #d1d5db);
+  border-radius: 6px;
+  background: var(--ds-background, #ffffff);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.checkbox-option-item:hover {
+  border-color: var(--ds-border-accent, #3b82f6);
+  background: var(--ds-background-hover, #f8fafc);
+}
+
+.checkbox-option-item :deep(.arco-checkbox-checked .arco-checkbox-icon) {
+  background-color: var(--ds-background-accent, #3b82f6);
+  border-color: var(--ds-border-accent, #3b82f6);
+}
+
+.multiselect-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 80px;
+  padding: 8px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+  min-height: 32px;
+  white-space: nowrap;
 }
 </style>

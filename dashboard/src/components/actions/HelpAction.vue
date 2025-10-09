@@ -30,6 +30,32 @@
           ></div>
         </div>
 
+        <!-- 数据键值对 -->
+        <div v-if="config.data && dataList.length > 0" class="help-data-modern">
+          <div class="section-header">
+            <div class="section-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10,9 9,9 8,9"/>
+              </svg>
+            </div>
+            <h3 class="section-title">帮助信息</h3>
+          </div>
+          <div class="data-content-modern">
+            <div
+              v-for="(item, index) in dataList"
+              :key="index"
+              class="data-item glass-effect"
+            >
+              <div class="data-title-modern">{{ item.key }}</div>
+              <div class="data-text-modern" v-html="formatDataText(item.value)"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- 图片 -->
         <div v-if="config.img" class="help-image-modern">
           <div class="image-container glass-effect">
@@ -467,7 +493,32 @@ export default {
       return []
     })
 
+    const dataList = computed(() => {
+      if (!props.config.data || typeof props.config.data !== 'object') return []
+      
+      return Object.entries(props.config.data).map(([key, value]) => ({
+        key,
+        value
+      }))
+    })
+
     // 方法
+    const formatDataText = (text) => {
+      if (!text) return ''
+      
+      // 如果文本已经包含HTML标签，直接返回
+      if (/<[^>]+>/.test(text)) {
+        return text
+      }
+      
+      // 否则支持简单的 Markdown 格式转换和换行
+      return String(text)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>')
+    }
+
     const onImageLoad = () => {
       imageError.value = false
     }
@@ -609,6 +660,8 @@ export default {
       stepsList,
       faqList,
       linksList,
+      dataList,
+      formatDataText,
       onImageLoad,
       onImageError,
       onQrLoad,
@@ -637,9 +690,9 @@ export default {
 .help-content-modern {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
   padding: 24px;
-  max-height: calc(85vh - 80px);
+  max-height: 60vh;
   overflow-y: auto;
 }
 
@@ -653,32 +706,41 @@ export default {
 
 /* 消息区域 */
 .help-message-modern {
-  padding: 24px;
-  border-radius: 16px;
+  padding: 16px;
+  border-radius: 12px;
   font-size: 16px;
   line-height: 1.7;
   color: #2d3748;
   white-space: pre-wrap;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 4px solid #3182ce;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .help-message-modern:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
 .message-icon {
-  width: 24px;
-  height: 24px;
-  color: #4299e1;
-  margin-bottom: 12px;
+  width: 20px;
+  height: 20px;
+  color: #3182ce;
+  flex-shrink: 0;
 }
 
 .message-text-modern {
-  line-height: 1.6;
+  flex: 1;
+  line-height: 1.5;
   color: #2d3748;
+  font-size: 14px;
 }
 
 /* 图片区域 */
@@ -800,24 +862,33 @@ export default {
 }
 
 /* 通用区域样式 */
+.help-image-modern,
+.help-qrcode-modern,
 .help-details-modern,
 .help-steps-modern,
 .help-faq-modern,
 .help-links-modern,
-.help-contact-modern {
-  padding: 24px;
-  border-radius: 16px;
+.help-contact-modern,
+.help-data-modern {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   transition: all 0.3s ease;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
+.help-image-modern:hover,
+.help-qrcode-modern:hover,
 .help-details-modern:hover,
 .help-steps-modern:hover,
 .help-faq-modern:hover,
 .help-links-modern:hover,
-.help-contact-modern:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+.help-contact-modern:hover,
+.help-data-modern:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
 .help-details-modern {
@@ -840,30 +911,38 @@ export default {
   border-left: 4px solid #9f7aea;
 }
 
+.help-data-modern {
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border-left: 4px solid #4299e1;
+}
+
 /* 通用区域标题 */
 .section-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .section-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   color: #4299e1;
   flex-shrink: 0;
 }
 
+.section-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
 .section-title {
-  margin: 0;
-  color: #2d3748;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  background: linear-gradient(135deg, #4299e1, #667eea);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #2d3748;
+  margin: 0;
 }
 
 /* 详细信息内容 */
@@ -895,6 +974,40 @@ export default {
 .detail-text-modern {
   line-height: 1.6;
   color: #4a5568;
+}
+
+/* 数据键值对内容 */
+.data-content-modern {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.data-item {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.data-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.data-title-modern {
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: #2d3748;
+  font-size: 14px;
+}
+
+.data-text-modern {
+  line-height: 1.5;
+  color: #4a5568;
+  font-size: 14px;
 }
 
 /* 步骤内容 */
@@ -1162,20 +1275,21 @@ export default {
 .help-timeout-modern {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 16px 24px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.9) 0%, rgba(255, 152, 0, 0.9) 100%);
-  color: #744210;
-  font-weight: 500;
-  margin-top: 24px;
+  gap: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+  border-radius: 8px;
+  margin-top: 12px;
+  border-left: 4px solid #e53e3e;
+  font-size: 14px;
+  color: #742a2a;
   animation: pulse 2s infinite;
 }
 
 .timeout-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  color: #e53e3e;
   flex-shrink: 0;
 }
 
@@ -1326,17 +1440,29 @@ export default {
   
   .help-content-modern {
     padding: 16px;
-    gap: 16px;
+    gap: 8px;
     max-height: calc(90vh - 70px);
   }
   
   .help-message-modern,
+  .help-image-modern,
+  .help-qrcode-modern,
   .help-details-modern,
   .help-steps-modern,
   .help-faq-modern,
   .help-links-modern,
-  .help-contact-modern {
-    padding: 16px;
+  .help-contact-modern,
+  .help-data-modern {
+    padding: 12px;
+    margin-bottom: 6px;
+  }
+  
+  .section-header {
+    margin-bottom: 8px;
+  }
+  
+  .section-title {
+    font-size: 14px;
   }
   
   .step-card {
@@ -1390,28 +1516,50 @@ export default {
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
   
-  .help-message-modern,
+  .help-message-modern {
+    background: linear-gradient(135deg, rgba(45, 55, 72, 0.95) 0%, rgba(26, 32, 44, 0.95) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .help-image-modern,
+  .help-qrcode-modern,
   .help-details-modern,
   .help-steps-modern,
   .help-faq-modern,
   .help-links-modern,
   .help-contact-modern {
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.1) 100%);
-    color: #e2e8f0;
+    background: rgba(45, 55, 72, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .help-data-modern {
+    background: linear-gradient(135deg, rgba(45, 55, 72, 0.95) 0%, rgba(26, 32, 44, 0.95) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .data-item {
+    background: rgba(26, 32, 44, 0.8);
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .data-item:hover {
+    background: rgba(26, 32, 44, 0.95);
   }
   
   .section-title,
   .question-text-modern,
   .link-text-modern,
-  .message-text-modern,
   .detail-title-modern,
-  .step-title-modern {
+  .step-title-modern,
+  .data-title-modern {
     color: #e2e8f0;
   }
   
+  .message-text-modern,
   .detail-text-modern,
   .step-text-modern,
-  .answer-text-modern {
+  .answer-text-modern,
+  .data-text-modern {
     color: #cbd5e0;
   }
 }
