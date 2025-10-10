@@ -489,7 +489,7 @@ export default {
           timeout: getActionTimeout(),
           headers: {
             'Accept': 'application/json',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json;charset=UTF-8',
           }
         })
         result = response.data
@@ -569,14 +569,48 @@ export default {
                 emit('close')
                 return
                 
+              case '__detail__':
+                // 详情页跳转
+                console.log('详情页跳转:', actionData)
+                await handleDetailAction(actionData)
+                emit('close')
+                return
+                
+              case '__copy__':
+                // 复制到剪贴板
+                await handleCopyAction(actionData, toastData)
+                emit('close')
+                return
+                
+              case '__self_search__':
+                // 源内搜索
+                await handleSelfSearchAction(actionData)
+                emit('close')
+                return
+                
               case '__refresh_list__':
                 // 刷新列表
-                handleRefreshListAction(actionData)
+                await handleRefreshListAction(actionData)
+                emit('close')
+                return
+                
+              case '__ktvplayer__':
+                // KTV播放
+                await handleKtvPlayerAction(actionData)
                 emit('close')
                 return
                 
               default:
-                console.warn('未知的专项动作:', actionData.actionId)
+                // 检查是否为普通动作（包含type字段）
+                if (actionData.type) {
+                  console.log('检测到普通动作，触发新的ActionRenderer:', actionData)
+                  // 通过action事件将新的动作数据传递给ActionRenderer
+                  emit('action', actionData)
+                  // 不要立即关闭弹窗，让ActionRenderer处理新动作配置
+                  return
+                } else {
+                  console.warn('未知的专项动作:', actionData.actionId)
+                }
                 break
             }
           }
@@ -588,6 +622,85 @@ export default {
       }
 
       emit('submit', result)
+    }
+
+    // 处理详情页跳转动作
+    const handleDetailAction = async (actionData) => {
+      try {
+        console.log('执行详情页跳转:', actionData)
+        
+        if (actionData.url) {
+          // 如果有URL，直接跳转
+          await router.push(actionData.url)
+        } else if (actionData.route) {
+          // 如果有路由信息，使用路由跳转
+          await router.push(actionData.route)
+        } else {
+          console.warn('详情页跳转缺少URL或路由信息')
+          showToast('跳转失败：缺少目标地址', 'error')
+        }
+        
+      } catch (error) {
+        console.error('详情页跳转失败:', error)
+        showToast('跳转失败', 'error')
+      }
+    }
+
+    // 处理复制动作
+    const handleCopyAction = async (actionData, toastData) => {
+      try {
+        const copyContent = actionData.content || actionData.text || actionData.value || ''
+        
+        if (!copyContent) {
+          console.warn('复制内容为空')
+          showToast('复制失败：内容为空', 'error')
+          return
+        }
+        
+        await navigator.clipboard.writeText(copyContent)
+        console.log('复制成功:', copyContent)
+        
+        const message = actionData.msg || toastData?.msg || '复制成功'
+        showToast(message, 'success')
+        
+      } catch (error) {
+        console.error('复制失败:', error)
+        showToast('复制失败', 'error')
+      }
+    }
+
+    // 处理源内搜索动作
+    const handleSelfSearchAction = async (actionData) => {
+      try {
+        console.log('执行源内搜索:', actionData)
+        
+        // 构建搜索参数
+        const searchParams = {
+          keyword: actionData.keyword || actionData.query || '',
+          siteKey: actionData.skey || actionData.siteKey || '',
+          ...actionData.params
+        }
+        
+        // 如果指定了站点，先切换站点
+        if (searchParams.siteKey) {
+          // 触发站点切换事件
+          window.dispatchEvent(new CustomEvent('switchSite', {
+            detail: { siteKey: searchParams.siteKey }
+          }))
+        }
+        
+        // 触发搜索事件
+        emit('special-action', {
+          type: 'self-search',
+          data: searchParams
+        })
+        
+        showToast('开始搜索...', 'info')
+        
+      } catch (error) {
+        console.error('源内搜索失败:', error)
+        showToast('搜索失败', 'error')
+      }
     }
 
     // 处理刷新列表动作
@@ -621,6 +734,54 @@ export default {
       } catch (error) {
         console.error('刷新列表失败:', error)
         showToast('刷新列表失败', 'error')
+      }
+    }
+
+    // 处理KTV播放动作
+    const handleKtvPlayerAction = async (actionData) => {
+      try {
+        console.log('执行KTV播放:', actionData)
+        
+        const playUrl = actionData.url || actionData.playUrl || ''
+        const title = actionData.title || actionData.name || 'KTV播放'
+        
+        if (!playUrl) {
+          console.warn('KTV播放缺少播放地址')
+          showToast('播放失败：缺少播放地址', 'error')
+          return
+        }
+        
+        // 构建KTV播放器路由参数
+        const routeParams = {
+          name: 'KtvPlayer',
+          query: {
+            url: playUrl,
+            title: title,
+            ...actionData.params
+          }
+        }
+        
+        // 如果没有KTV播放器路由，使用通用视频播放器
+        try {
+          await router.push(routeParams)
+        } catch (routeError) {
+          console.log('KTV播放器路由不存在，使用通用播放器')
+          await router.push({
+            name: 'VideoPlayer',
+            query: {
+              url: playUrl,
+              title: title,
+              type: 'ktv',
+              ...actionData.params
+            }
+          })
+        }
+        
+        showToast('正在打开KTV播放器...', 'info')
+        
+      } catch (error) {
+        console.error('KTV播放失败:', error)
+        showToast('播放失败', 'error')
       }
     }
 

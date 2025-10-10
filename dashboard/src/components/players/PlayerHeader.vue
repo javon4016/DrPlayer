@@ -17,9 +17,9 @@
           </svg>
           <span class="btn-text">调试</span>
         </div>
-        <!-- 自动连播按钮 -->
+        <!-- 自动连播按钮 - 仅在非直播模式下显示 -->
         <div 
-          v-if="showAutoNext && episodes.length > 1"
+          v-if="!isLiveMode && showAutoNext && episodes.length > 1"
           class="compact-btn" 
           @click="$emit('toggle-auto-next')" 
           :class="{ active: autoNextEnabled }"
@@ -30,8 +30,9 @@
           <span class="btn-text">自动连播</span>
         </div>
 
-        <!-- 循环播放按钮 -->
+        <!-- 循环播放按钮 - 仅在非直播模式下显示 -->
         <div 
+          v-if="!isLiveMode"
           class="compact-btn" 
           @click="$emit('toggle-loop')" 
           :class="{ active: loopEnabled }"
@@ -46,9 +47,9 @@
           <span class="btn-text">循环播放</span>
         </div>
         
-        <!-- 倒计时按钮 -->
+        <!-- 倒计时按钮 - 仅在非直播模式下显示 -->
         <div 
-          v-if="showCountdown && episodes.length > 1"
+          v-if="!isLiveMode && showCountdown && episodes.length > 1"
           class="compact-btn" 
           @click="$emit('toggle-countdown')" 
           :class="{ active: countdownEnabled }"
@@ -146,8 +147,11 @@
           </a-select>
         </div>
 
-        <!-- 播放器切换选择器 -->
-        <div class="compact-btn selector-btn">
+        <!-- 播放器切换选择器 - 仅在非直播模式下显示 -->
+        <div 
+          v-if="!isLiveMode"
+          class="compact-btn selector-btn"
+        >
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
             <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
@@ -164,8 +168,9 @@
           </a-select>
         </div>
         
-        <!-- 片头片尾设置按钮 -->
+        <!-- 片头片尾设置按钮 - 仅在非直播模式下显示 -->
         <div 
+          v-if="!isLiveMode"
           class="compact-btn" 
           :class="{ active: skipEnabled }" 
           @click="$emit('open-skip-settings')"
@@ -260,6 +265,11 @@ const props = defineProps({
   parseData: {
     type: Object,
     default: () => null
+  },
+  // 直播模式标识
+  isLiveMode: {
+    type: Boolean,
+    default: false
   }
 })
 

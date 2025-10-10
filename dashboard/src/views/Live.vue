@@ -157,39 +157,24 @@
             </div>
             
             <div v-else class="player-wrapper">
-              <div class="channel-header">
-                <div class="channel-title">
-                  <h4>{{ selectedChannel.name }}</h4>
-                  <span class="channel-url">{{ getCurrentChannelUrl() }}</span>
-                </div>
-                
-                <!-- 线路切换器 -->
-                <div v-if="selectedChannel.routes && selectedChannel.routes.length > 1" class="route-switcher">
-                  <span class="route-label">线路选择：</span>
-                  <a-radio-group 
-                    v-model:value="currentRouteId" 
-                    @change="switchRoute"
-                    size="small"
-                    class="route-radio-group"
-                    :key="selectedChannel.name + '-routes'"
-                  >
-                    <a-radio 
-                      v-for="route in selectedChannel.routes" 
-                      :key="route.id" 
-                      :value="route.id"
-                      class="route-radio"
-                    >
-                      {{ route.name }}
-                    </a-radio>
-                  </a-radio-group>
-                </div>
-              </div>
+              <!-- 播放器头部组件 -->
+              <PlayerHeader
+                :episode-name="selectedChannel.name"
+                :is-live-mode="true"
+                :show-debug-button="true"
+                :qualities="routeQualities"
+                :current-quality="currentQualityName"
+                @quality-change="handleQualityChange"
+                @proxy-change="handleProxyChange"
+                @toggle-debug="handleToggleDebug"
+                @close="handleClosePlayer"
+              />
               
-              <!-- 简单的视频播放器 -->
+              <!-- 默认播放器 -->
               <div class="video-container">
                 <video
                   ref="videoPlayer"
-                  :src="getCurrentChannelUrl()"
+                  :src="getVideoUrl()"
                   controls
                   preload="metadata"
                   @error="handleVideoError"
@@ -216,6 +201,17 @@
         </div>
       </div>
     </div>
+    
+    <!-- 调试信息弹窗组件 -->
+    <DebugInfoDialog
+      :visible="debugMode"
+      :video-url="getCurrentChannelUrl()"
+      :headers="{}"
+      :player-type="'default'"
+      :detected-format="'m3u8'"
+      :proxy-url="getProxyChannelUrl()"
+      @close="handleToggleDebug"
+    />
   </div>
 </template>
 
@@ -233,6 +229,9 @@ import {
   IconExclamationCircle
 } from '@arco-design/web-vue/es/icon'
 import liveService from '@/api/services/live.js'
+import PlayerHeader from '@/components/players/PlayerHeader.vue'
+import DebugInfoDialog from '@/components/players/DebugInfoDialog.vue'
+import { processVideoUrl } from '@/utils/proxyPlayer'
 
 const router = useRouter()
 
@@ -249,6 +248,22 @@ const currentRouteId = ref(1) // 当前选中的线路ID
 const videoLoading = ref(false)
 const videoError = ref('')
 const videoPlayer = ref(null)
+
+// PlayerHeader相关状态
+const debugMode = ref(false)
+
+// 从addressSettings中读取代理状态
+const getProxyEnabledFromSettings = () => {
+  try {
+    const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+    return savedAddresses.proxyPlayEnabled === true
+  } catch (error) {
+    console.error('读取代理设置失败:', error)
+    return false
+  }
+}
+
+const proxyEnabled = ref(getProxyEnabledFromSettings())
 
 // 计算属性
 const filteredGroups = computed(() => {
@@ -287,6 +302,25 @@ const currentChannels = computed(() => {
   }
   
   return channels
+})
+
+// 将线路转换为画质选择格式
+const routeQualities = computed(() => {
+  if (!selectedChannel.value || !selectedChannel.value.routes) return []
+  
+  return selectedChannel.value.routes.map(route => ({
+    name: route.name,
+    id: route.id,
+    url: route.url
+  }))
+})
+
+// 当前画质名称
+const currentQualityName = computed(() => {
+  if (!selectedChannel.value || !selectedChannel.value.routes) return '默认'
+  
+  const currentRoute = selectedChannel.value.routes.find(route => route.id === currentRouteId.value)
+  return currentRoute ? currentRoute.name : '默认'
 })
 
 // 方法
@@ -344,6 +378,12 @@ const selectChannel = (channel) => {
     }
     // 重置视频播放器
     if (videoPlayer.value) {
+      const newSrc = getVideoUrl()
+      console.log('=== selectChannel 设置视频源 ===')
+      console.log('设置前 videoPlayer.src:', videoPlayer.value.src)
+      console.log('新的 src:', newSrc)
+      videoPlayer.value.src = newSrc
+      console.log('设置后 videoPlayer.src:', videoPlayer.value.src)
       videoPlayer.value.load()
     }
     setupMpegtsPlayer()
@@ -357,8 +397,15 @@ function setupMpegtsPlayer() {
     mpegtsPlayer.destroy()
     mpegtsPlayer = null
   }
-  const url = getCurrentChannelUrl()
+  
+  // 使用getVideoUrl函数获取正确的URL
+  const url = getVideoUrl()
+  console.log('=== setupMpegtsPlayer ===')
+  console.log('mpegts播放器使用的URL:', url)
+  console.log('当前videoPlayer.src:', videoPlayer.value?.src)
+  
   if (!url || !videoPlayer.value) return
+  
   // 判断是否为 mpegts 流（简单判断 .ts 或 mpegts 协议）
   if (url.endsWith('.ts') || url.includes('mpegts') || url.includes('udpxy') || 
       url.includes('/udp/') || url.includes('rtp://') || url.includes('udp://')) {
@@ -379,6 +426,9 @@ onUnmounted(() => {
     mpegtsPlayer.destroy()
     mpegtsPlayer = null
   }
+  
+  // 清理事件监听器
+  window.removeEventListener('addressSettingsChanged', handleAddressSettingsChange)
 })
 const getCurrentChannelUrl = () => {
   if (!selectedChannel.value) return ''
@@ -391,6 +441,31 @@ const getCurrentChannelUrl = () => {
   return selectedChannel.value.url || ''
 }
 
+// 获取代理后的频道URL
+const getProxyChannelUrl = () => {
+  const originalUrl = getCurrentChannelUrl()
+  if (!originalUrl) return ''
+  
+  // 对于直播流，通常不需要特殊的请求头，但可以通过代理播放来处理跨域问题
+  return processVideoUrl(originalUrl, {})
+}
+
+// 获取视频URL（根据代理设置）
+const getVideoUrl = () => {
+  const originalUrl = getCurrentChannelUrl()
+  const proxyUrl = getProxyChannelUrl()
+  const finalUrl = proxyEnabled.value ? proxyUrl : originalUrl
+  
+  console.log('=== getVideoUrl 调试信息 ===')
+  console.log('代理状态:', proxyEnabled.value)
+  console.log('原始URL:', originalUrl)
+  console.log('代理URL:', proxyUrl)
+  console.log('最终URL:', finalUrl)
+  console.log('========================')
+  
+  return finalUrl
+}
+
 // 切换线路
 const switchRoute = (event) => {
   const routeId = Number(event.target ? event.target.value : event)
@@ -401,10 +476,15 @@ const switchRoute = (event) => {
     videoError.value = ''
     nextTick(() => {
       if (videoPlayer.value) {
-        videoPlayer.value.src = route.url
-        videoPlayer.value.load()
-      }
-      setupMpegtsPlayer()
+      const newSrc = getVideoUrl()
+      console.log('=== switchRoute 设置视频源 ===')
+      console.log('设置前 videoPlayer.src:', videoPlayer.value.src)
+      console.log('新的 src:', newSrc)
+      videoPlayer.value.src = newSrc
+      console.log('设置后 videoPlayer.src:', videoPlayer.value.src)
+      videoPlayer.value.load()
+    }
+    setupMpegtsPlayer()
     })
     Message.success(`已切换到${route.name}`)
   }
@@ -473,6 +553,95 @@ const retryVideo = () => {
   }
 }
 
+// PlayerHeader事件处理方法
+const handleQualityChange = (qualityName) => {
+  // 根据画质名称找到对应的线路
+  if (!selectedChannel.value || !selectedChannel.value.routes) return
+  
+  const route = selectedChannel.value.routes.find(r => r.name === qualityName)
+  if (route) {
+    switchRoute(route.id)
+  }
+}
+
+const handleProxyChange = (proxyUrl) => {
+  console.log('=== 代理播放地址变更 ===')
+  console.log('新代理URL:', proxyUrl)
+  console.log('变更前代理状态:', proxyEnabled.value)
+  
+  try {
+    // 获取现有的地址设置
+    const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
+    
+    // 保存代理设置到addressSettings（与PlayerHeader保持一致）
+    if (proxyUrl === 'disabled') {
+      savedAddresses.proxyPlayEnabled = false
+      // 不清除proxyPlay地址，保留用户配置
+      proxyEnabled.value = false
+    } else {
+      savedAddresses.proxyPlayEnabled = true
+      savedAddresses.proxyPlay = proxyUrl
+      proxyEnabled.value = true
+    }
+    
+    // 保存到localStorage
+    localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
+    
+    // 触发自定义事件，通知其他组件设置已变化
+    window.dispatchEvent(new CustomEvent('addressSettingsChanged'))
+    
+    console.log('变更后代理状态:', proxyEnabled.value)
+    console.log('保存的addressSettings:', savedAddresses)
+  } catch (error) {
+    console.error('保存代理播放设置失败:', error)
+  }
+  
+  // 如果当前有选中的频道，重新加载视频以应用代理设置
+  if (selectedChannel.value) {
+    // 销毁当前播放器
+    if (mpegtsPlayer) {
+      mpegtsPlayer.destroy()
+      mpegtsPlayer = null
+    }
+    
+    // 重新设置视频源
+    if (videoPlayer.value) {
+      videoError.value = ''
+      videoLoading.value = true
+      
+      // 使用getVideoUrl函数获取正确的URL
+      const newUrl = getVideoUrl()
+      videoPlayer.value.src = newUrl
+      videoPlayer.value.load()
+      
+      // 重新设置mpegts播放器
+      nextTick(() => {
+        setupMpegtsPlayer()
+      })
+    }
+  }
+  
+  Message.success(`代理播放设置: ${proxyUrl === 'disabled' ? '已关闭' : '已启用'}`)
+}
+
+const handleToggleDebug = () => {
+  debugMode.value = !debugMode.value
+  console.log('调试模式:', debugMode.value ? '开启' : '关闭')
+  Message.info(`调试模式${debugMode.value ? '已开启' : '已关闭'}`)
+}
+
+
+
+const handleClosePlayer = () => {
+  selectedChannel.value = null
+  currentRouteId.value = 1
+  videoError.value = ''
+  if (mpegtsPlayer) {
+    mpegtsPlayer.destroy()
+    mpegtsPlayer = null
+  }
+}
+
 // 监听选中频道变化
 watch(selectedChannel, (newChannel) => {
   if (newChannel) {
@@ -505,15 +674,27 @@ const testLocalM3U = async () => {
       }
     }
 
+// 监听地址设置变化
+const handleAddressSettingsChange = () => {
+  const newProxyEnabled = getProxyEnabledFromSettings()
+  if (proxyEnabled.value !== newProxyEnabled) {
+    proxyEnabled.value = newProxyEnabled
+    console.log('代理状态已同步更新:', newProxyEnabled)
+  }
+}
+
 // 组件挂载时加载数据
-onMounted(() => {
-  // 先尝试正常加载，如果失败则测试本地M3U
-  loadLiveData().then(() => {
-    if (!liveData.value) {
-      console.log('正常加载失败，尝试测试本地M3U文件')
-      testLocalM3U()
-    }
-  })
+onMounted(async () => {
+  try {
+    await loadLiveData()
+  } catch (error) {
+    console.error('加载直播数据失败:', error)
+    // 如果加载失败，尝试测试本地M3U
+    testLocalM3U()
+  }
+  
+  // 监听地址设置变化事件
+  window.addEventListener('addressSettingsChanged', handleAddressSettingsChange)
 })
 </script>
 
@@ -751,48 +932,7 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.channel-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--color-border-2);
-  background: var(--color-bg-3);
-}
 
-.channel-title h4 {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  color: var(--color-text-1);
-}
-
-.channel-url {
-  font-size: 12px;
-  color: var(--color-text-3);
-  word-break: break-all;
-}
-
-.route-switcher {
-  margin-top: 12px;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.route-label {
-  font-size: 12px;
-  color: var(--color-text-2);
-  white-space: nowrap;
-  margin-top: 4px;
-}
-
-.route-radio-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.route-radio {
-  margin-right: 0 !important;
-}
 
 .video-container {
   flex: 1;

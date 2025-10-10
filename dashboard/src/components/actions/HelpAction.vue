@@ -424,7 +424,7 @@ export default {
       default: ''
     }
   },
-  emits: ['close', 'link-click', 'toast', 'reset'],
+  emits: ['close', 'link-click', 'toast', 'reset', 'special-action'],
   setup(props, { emit }) {
     const imageError = ref(false)
     const qrError = ref(false)

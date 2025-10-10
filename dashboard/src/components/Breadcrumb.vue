@@ -88,11 +88,19 @@
       </div>
     </div>
   </a-modal>
+
+  <!-- 全局动作弹窗 -->
+  <GlobalActionDialog
+    v-model:visible="showGlobalActionDialog"
+    :sites="sites"
+    @action-executed="handleActionExecuted"
+  />
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import GlobalActionDialog from './GlobalActionDialog.vue'
 
 const props = defineProps({
   navigation_title: {
@@ -101,6 +109,12 @@ const props = defineProps({
   },
 
   now_site_title: String,
+  
+  // 站源配置数据
+  sites: {
+    type: Array,
+    default: () => []
+  }
 });
 const emit = defineEmits([
   "handleOpenForm",
@@ -110,11 +124,13 @@ const emit = defineEmits([
   "minimize",
   "maximize", 
   "closeWindow",
+  "actionExecuted"
 ]);
 
 const searchValue = ref('')
 const showPushModal = ref(false)
 const pushContent = ref('')
+const showGlobalActionDialog = ref(false)
 
 const handleOpenForm = () => {
   emit("handleOpenForm");
@@ -138,10 +154,51 @@ const handlePush = () => {
 
 // 全局动作按钮点击事件
 const handleGlobalAction = () => {
-  Message.info({
-    content: '全局动作功能开发中，敬请期待！',
-    duration: 3000
-  })
+  if (!props.sites || props.sites.length === 0) {
+    Message.warning('当前没有可用的站源配置');
+    return;
+  }
+
+  console.log(props.sites);
+  
+  // 检查是否有站源包含动作
+  const sitesWithActions = props.sites.filter(site => 
+    site.more && 
+    site.more.actions && 
+    Array.isArray(site.more.actions) && 
+    site.more.actions.length > 0
+  );
+  
+  if (sitesWithActions.length === 0) {
+    Message.info('当前站源配置中没有可用的全局动作');
+    return;
+  }
+  
+  showGlobalActionDialog.value = true;
+};
+
+// 处理动作执行完成事件
+const handleActionExecuted = (event) => {
+  console.log('全局动作执行完成:', event);
+  
+  // 向父组件发送动作执行事件
+  emit('actionExecuted', event);
+  
+  // 添加安全检查，防止null引用错误
+  if (!event || typeof event !== 'object') {
+    console.warn('Invalid event object received in handleActionExecuted');
+    return;
+  }
+  
+  const actionName = event.action?.name || '未知动作';
+  
+  if (event.success) {
+    Message.success(`动作 "${actionName}" 执行成功`);
+  } else {
+    if (event.error !== 'cancel') {
+      Message.error(`动作 "${actionName}" 执行失败: ${event.error || '未知错误'}`);
+    }
+  }
 };
 
 // 确认推送

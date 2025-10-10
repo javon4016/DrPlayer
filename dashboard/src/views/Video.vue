@@ -7,7 +7,9 @@
     @closeWindow="closeWindow"
     @onSearch="onSearch"
     @handlePush="handlePush"
+    @actionExecuted="handleActionExecuted"
     :now_site_title="form.now_site_title"
+    :sites="form.sites"
   >
     <!-- 默认插槽的内容放这里 -->
     <div class="current-time">
@@ -245,9 +247,11 @@ const checkNowSite = () => {
     } else if (form.sites.length > 0) {
       // 如果没有当前源，设置第一个可用源
       const firstSite = form.sites.find(site => site.type === 4) || form.sites[0];
-      form.now_site = firstSite;
-      form.now_site_title = firstSite.name;
-      siteService.setCurrentSite(firstSite.key);
+      if (firstSite) {
+        form.now_site = firstSite;
+        form.now_site_title = firstSite.name;
+        siteService.setCurrentSite(firstSite.key);
+      }
     }
   } else {
     // 检查当前源是否在站点列表中
@@ -255,9 +259,11 @@ const checkNowSite = () => {
     if (!siteExists && form.sites.length > 0) {
       // 如果当前源不在列表中，设置第一个可用源
       const firstSite = form.sites.find(site => site.type === 4) || form.sites[0];
-      form.now_site = firstSite;
-      form.now_site_title = firstSite.name;
-      siteService.setCurrentSite(firstSite.key);
+      if (firstSite) {
+        form.now_site = firstSite;
+        form.now_site_title = firstSite.name;
+        siteService.setCurrentSite(firstSite.key);
+      }
     }
   }
   
@@ -868,6 +874,38 @@ const handlePush = async (vodId) => {
   } catch (error) {
     console.error("推送失败:", error);
     Message.error("推送失败，请重试");
+  }
+};
+
+// 处理全局动作执行完成事件
+const handleActionExecuted = (event) => {
+  console.log('全局动作执行完成:', event);
+  
+  // 添加安全检查，防止null引用错误
+  if (!event || typeof event !== 'object') {
+    console.warn('Invalid event object received in handleActionExecuted');
+    return;
+  }
+  
+  const actionName = event.action?.name || '未知动作';
+  
+  if (event.success) {
+    // 动作执行成功，可以根据需要进行后续处理
+    console.log('动作执行成功:', actionName, event.result);
+    
+    // 如果动作返回了特殊结果，可以在这里处理
+    if (event.result && event.result.refresh) {
+      // 如果动作要求刷新页面
+      refreshPage();
+    }
+    
+    if (event.result && event.result.navigate) {
+      // 如果动作要求导航到其他页面
+      router.push(event.result.navigate);
+    }
+  } else {
+    // 动作执行失败
+    console.error('动作执行失败:', actionName, event.error);
   }
 };
 

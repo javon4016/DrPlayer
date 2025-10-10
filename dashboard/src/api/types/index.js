@@ -183,7 +183,8 @@ export const createSiteInfo = () => ({
   quickSearch: 1,          // 是否支持快速搜索
   filterable: 1,           // 是否可筛选
   order: 0,                // 排序
-  ext: ''                  // 扩展参数
+  ext: '',                 // 扩展参数
+  more: null               // 额外配置信息（包含actions等）
 })
 
 /**

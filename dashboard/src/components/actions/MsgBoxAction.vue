@@ -241,7 +241,7 @@ export default {
       default: ''
     }
   },
-  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset'],
+  emits: ['submit', 'cancel', 'close', 'action', 'toast', 'reset', 'special-action'],
   setup(props, { emit }) {
     const timeLeft = ref(0)
     const timer = ref(null)
