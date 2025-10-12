@@ -41,6 +41,12 @@
               </template>
               导出收藏
             </a-doption>
+            <a-doption value="download-manager">
+              <template #icon>
+                <icon-download />
+              </template>
+              下载管理
+            </a-doption>
             <a-doption value="manage-api">
               <template #icon>
                 <icon-settings />
@@ -58,32 +64,72 @@
       </div>
     </div>
 
-    <!-- 分类筛选 -->
+    <!-- 分类筛选和储存空间统计 -->
     <div class="filter-section" v-if="bookGalleryCount > 0">
-      <div class="filter-tabs">
-        <a-button
-          :type="selectedCategory === 'all' ? 'primary' : 'outline'"
-          @click="selectedCategory = 'all'"
-          size="small"
-        >
-          全部 ({{ bookGalleryCount }})
-        </a-button>
-        <a-button
-          :type="selectedCategory === '小说' ? 'primary' : 'outline'"
-          @click="selectedCategory = '小说'"
-          size="small"
-          v-if="novelCount > 0"
-        >
-          我的书架 ({{ novelCount }})
-        </a-button>
-        <a-button
-          :type="selectedCategory === '漫画' ? 'primary' : 'outline'"
-          @click="selectedCategory = '漫画'"
-          size="small"
-          v-if="comicCount > 0"
-        >
-          我的漫画柜 ({{ comicCount }})
-        </a-button>
+      <div class="filter-container">
+        <!-- 分类按钮 -->
+        <div class="filter-tabs">
+          <a-button
+            :type="selectedCategory === 'all' ? 'primary' : 'outline'"
+            @click="selectedCategory = 'all'"
+            size="small"
+          >
+            全部 ({{ bookGalleryCount }})
+          </a-button>
+          <a-button
+            :type="selectedCategory === '小说' ? 'primary' : 'outline'"
+            @click="selectedCategory = '小说'"
+            size="small"
+            v-if="novelCount > 0"
+          >
+            我的书架 ({{ novelCount }})
+          </a-button>
+          <a-button
+            :type="selectedCategory === '本地图书' ? 'primary' : 'outline'"
+            @click="selectedCategory = '本地图书'"
+            size="small"
+            v-if="localBookCount > 0"
+          >
+            本地图书 ({{ localBookCount }})
+          </a-button>
+          <a-button
+            :type="selectedCategory === '漫画' ? 'primary' : 'outline'"
+            @click="selectedCategory = '漫画'"
+            size="small"
+            v-if="comicCount > 0"
+          >
+            我的漫画柜 ({{ comicCount }})
+          </a-button>
+        </div>
+
+        <!-- 储存空间统计 -->
+        <div class="storage-stats" v-if="localBookCount > 0">
+          <div class="storage-info">
+            <div class="storage-header">
+               <icon-book class="storage-icon" />
+               <span class="storage-title">本地储存空间</span>
+              <a-tag 
+                :color="storageStats.isOverLimit ? 'red' : storageStats.isNearLimit ? 'orange' : 'green'"
+                size="small"
+              >
+                {{ Math.round(storageStats.usagePercentage) }}%
+              </a-tag>
+            </div>
+            <div class="storage-progress">
+              <a-progress 
+                :percent="storageStats.usagePercentage" 
+                :color="storageStats.isOverLimit ? '#f53f3f' : storageStats.isNearLimit ? '#ff7d00' : '#00b42a'"
+                :show-text="false"
+                size="small"
+              />
+            </div>
+            <div class="storage-details">
+              <span class="storage-used">已用: {{ storageStats.formattedUsed }}</span>
+              <span class="storage-available">可用: {{ storageStats.formattedAvailable }}</span>
+              <span class="storage-total">总计: {{ storageStats.formattedTotal }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -128,6 +174,15 @@
       @change="handleFileImport"
     />
 
+    <!-- 本地图书文件输入 -->
+    <input
+      ref="localFileInput"
+      type="file"
+      accept=".txt"
+      style="display: none"
+      @change="handleLocalFileSelect"
+    />
+
     <!-- v-viewer 图片查看器 -->
     <div v-viewer="viewerOptions" class="viewer" v-show="false">
       <img 
@@ -143,13 +198,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useFavoriteStore } from '@/stores/favoriteStore'
 import { useSiteStore } from '@/stores/siteStore'
 import VideoCard from '@/components/VideoCard.vue'
 import ApiUrlManager from '@/components/ApiUrlManager.vue'
+import localBookService from '@/services/localBookService'
 import {
   IconBook,
   IconPlayArrow,
@@ -160,7 +216,8 @@ import {
   IconSettings,
   IconDelete,
   IconLink,
-  IconEye
+  IconEye,
+  IconDownload
 } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
@@ -171,9 +228,12 @@ const siteStore = useSiteStore()
 const searchKeyword = ref('')
 const selectedCategory = ref('all')
 const fileInput = ref(null)
+const localFileInput = ref(null) // 本地图书文件输入
 const showApiManager = ref(false)
 const viewerImages = ref([])
 const viewerImageData = ref([])
+const localBooks = ref([]) // 本地图书列表
+const storageStats = ref({}) // 储存空间统计
 
 // v-viewer 配置选项
 const viewerOptions = ref({
@@ -208,25 +268,57 @@ const viewerOptions = ref({
   backdrop: true,
 })
 
-// 计算属性 - 只获取小说和漫画分类的收藏
-const bookGalleryItems = computed(() => {
+// 计算属性 - 获取在线收藏的小说和漫画
+const onlineBookItems = computed(() => {
   return favoriteStore.favorites.filter(item => {
     const siteName = item.api_info?.site_name || ''
     return siteName.includes('[书]') || siteName.includes('[画]')
   })
 })
 
+// 计算属性 - 合并在线收藏和本地图书
+const bookGalleryItems = computed(() => {
+  // 将本地图书转换为与在线收藏相同的格式
+  const localBooksFormatted = localBooks.value.map(book => ({
+    id: book.id,
+    name: book.title,
+    pic: book.cover || '/default-book-cover.svg',
+    year: '',
+    area: '',
+    type: book.category,
+    type_name: book.category,
+    remarks: `本地图书 · ${book.author}`,
+    director: book.author,
+    actor: book.author,
+    content: book.description,
+    // 标识为本地图书
+    isLocalBook: true,
+    localBookData: book,
+    api_info: {
+      site_name: '[本地图书]',
+      api_url: 'local',
+      module: 'local'
+    },
+    created_at: new Date(book.addedAt).toISOString()
+  }))
+  
+  return [...localBooksFormatted, ...onlineBookItems.value]
+})
+
 const bookGalleryCount = computed(() => bookGalleryItems.value.length)
 
+const localBookCount = computed(() => localBooks.value.length)
+
 const novelCount = computed(() => {
-  return bookGalleryItems.value.filter(item => {
+  const onlineNovels = onlineBookItems.value.filter(item => {
     const siteName = item.api_info?.site_name || ''
     return siteName.includes('[书]')
   }).length
+  return localBookCount.value + onlineNovels
 })
 
 const comicCount = computed(() => {
-  return bookGalleryItems.value.filter(item => {
+  return onlineBookItems.value.filter(item => {
     const siteName = item.api_info?.site_name || ''
     return siteName.includes('[画]')
   }).length
@@ -241,7 +333,9 @@ const filteredBooks = computed(() => {
       const siteName = item.api_info?.site_name || ''
       let type = ''
       
-      if (siteName.includes('[书]')) {
+      if (item.isLocalBook) {
+        type = '本地图书'
+      } else if (siteName.includes('[书]')) {
         type = '小说'
       } else if (siteName.includes('[画]')) {
         type = '漫画'
@@ -297,6 +391,9 @@ const handleAction = (value) => {
     case 'export':
       exportFavorites()
       break
+    case 'download-manager':
+      openDownloadManager()
+      break
     case 'manage-api':
       showApiManager.value = true
       break
@@ -307,8 +404,24 @@ const handleAction = (value) => {
 }
 
 const addLocalBook = () => {
-  Message.info('添加本地图书功能开发中...')
-  // TODO: 实现添加本地图书功能
+  localFileInput.value?.click()
+}
+
+// 处理本地图书文件选择
+const handleLocalFileSelect = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  try {
+    const book = await localBookService.handleFileUpload(file)
+    loadLocalBooks() // 重新加载本地图书列表
+    Message.success(`成功添加本地图书：${book.title}`)
+  } catch (error) {
+    Message.error(`添加本地图书失败：${error.message}`)
+  }
+
+  // 清空文件输入
+  event.target.value = ''
 }
 
 const importFavorites = () => {
@@ -360,6 +473,21 @@ const exportFavorites = () => {
   }
 }
 
+const openDownloadManager = () => {
+  router.push('/download-manager')
+}
+
+// 更新储存空间统计
+const updateStorageStats = () => {
+  storageStats.value = localBookService.getStorageStats()
+}
+
+// 加载本地图书
+const loadLocalBooks = () => {
+  localBooks.value = [...localBookService.getAllBooks()]
+  updateStorageStats() // 同时更新储存空间统计
+}
+
 const clearAllBooks = () => {
   Modal.confirm({
     title: '确认清空书画柜',
@@ -368,16 +496,26 @@ const clearAllBooks = () => {
     cancelText: '取消',
     okButtonProps: { status: 'danger' },
     onOk: () => {
-      // 只清空书画相关的收藏
-      bookGalleryItems.value.forEach(item => {
+      // 清空在线收藏的书画
+      onlineBookItems.value.forEach(item => {
         favoriteStore.removeFavorite(item.id, item.api_info.api_url)
       })
+      // 清空本地图书
+      localBookService.clearAllBooks()
+      loadLocalBooks()
       Message.success('已清空书画柜')
     }
   })
 }
 
 const removeFavorite = (item) => {
+  // 如果是本地图书，调用删除本地图书的方法
+  if (item.isLocalBook) {
+    deleteLocalBook(item)
+    return
+  }
+  
+  // 在线图书的取消收藏逻辑
   Modal.confirm({
     title: '取消收藏',
     content: `确定要取消收藏《${item.name}》吗？`,
@@ -393,8 +531,43 @@ const removeFavorite = (item) => {
   })
 }
 
+// 删除本地图书的方法
+const deleteLocalBook = (item) => {
+  Modal.confirm({
+    title: '删除本地图书',
+    content: `确定要删除《${item.name}》吗？删除后将无法恢复。`,
+    okText: '确认删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: () => {
+      try {
+        const result = localBookService.deleteLocalBook(item.localBookData.id)
+        if (result.success) {
+          Message.success('图书删除成功')
+          // 强制重新获取本地图书列表，确保响应式更新
+          nextTick(() => {
+            localBooks.value = [...localBookService.getAllBooks()]
+            updateStorageStats()
+          })
+        } else {
+          Message.error('删除失败: ' + (result.error || '未知错误'))
+        }
+      } catch (error) {
+        console.error('删除本地图书失败:', error)
+        Message.error('删除失败: ' + error.message)
+      }
+    }
+  })
+}
+
 const goToDetail = async (item) => {
   try {
+    // 如果是本地图书，直接打开阅读界面
+    if (item.isLocalBook) {
+      openLocalBookReader(item.localBookData)
+      return
+    }
+
     // 不再切换全局站源，而是通过路由参数传递站源信息
     const siteInfo = {
       name: item.api_info.site_name,
@@ -442,6 +615,19 @@ const goToDetail = async (item) => {
   }
 }
 
+// 打开本地图书阅读器
+const openLocalBookReader = (book) => {
+  // 跳转到本地图书阅读页面
+  router.push({
+    name: 'LocalBookReader',
+    params: { bookId: book.id },
+    query: {
+      title: book.title,
+      author: book.author
+    }
+  })
+}
+
 const goToVideo = () => {
   router.push('/video')
 }
@@ -473,9 +659,26 @@ const formatDate = (dateString) => {
   })
 }
 
+// 本地图书事件监听器
+const handleLocalBookEvent = (eventType, data) => {
+  if (eventType === 'bookAdded') {
+    // 重新加载本地图书列表
+    loadLocalBooks()
+  }
+}
+
 // 组件挂载时加载收藏数据
 onMounted(() => {
   favoriteStore.loadFavorites()
+  loadLocalBooks() // 加载本地图书数据
+  
+  // 添加事件监听器
+  localBookService.addEventListener(handleLocalBookEvent)
+})
+
+// 组件卸载时清理事件监听器
+onUnmounted(() => {
+  localBookService.removeEventListener(handleLocalBookEvent)
 })
 </script>
 
@@ -525,6 +728,13 @@ onMounted(() => {
   border-bottom: 1px solid var(--color-border-2);
 }
 
+.filter-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
 .filter-tabs {
   display: flex;
   gap: 8px;
@@ -554,6 +764,57 @@ onMounted(() => {
   color: var(--color-danger-6);
 }
 
+/* 储存空间统计样式 */
+.storage-stats {
+  flex-shrink: 0;
+}
+
+.storage-info {
+  max-width: 300px;
+  min-width: 250px;
+}
+
+.storage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.storage-icon {
+  font-size: 16px;
+  color: var(--color-text-2);
+}
+
+.storage-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.storage-progress {
+  margin-bottom: 8px;
+}
+
+.storage-details {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-text-3);
+}
+
+.storage-used {
+  color: var(--color-text-2);
+}
+
+.storage-available {
+  color: var(--color-success-6);
+}
+
+.storage-total {
+  color: var(--color-text-3);
+}
+
 /* 响应式设计 */
 @media (max-width: 1200px) {
   .books-grid {
@@ -580,6 +841,16 @@ onMounted(() => {
   
   .filter-section {
     padding: 12px 16px;
+  }
+  
+  .filter-container {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .storage-info {
+    max-width: none;
+    min-width: auto;
   }
   
   .book-gallery-content {

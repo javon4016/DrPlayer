@@ -32,7 +32,8 @@ const DEFAULT_CONFIGS = {
     autoLive: false,
     secureDns: false,
     cspBypass: true,
-    referrerPolicy: 'no-referrer'
+    referrerPolicy: 'no-referrer',
+    searchAggregation: false // 聚合搜索功能默认关闭
   },
   
   // CSP配置默认值
@@ -50,6 +51,11 @@ const DEFAULT_CONFIGS = {
   // 页面状态默认值
   pageState: {},
   
+  // 聚合搜索设置默认值
+  searchAggregationSettings: {
+    selectedSources: [] // 默认没有选中任何搜索源
+  },
+  
   // 侧边栏状态默认值
   sidebarCollapsed: false
 }
@@ -63,6 +69,11 @@ const CLEAR_DATA_KEYS = [
   'drplayer_daily_stats',         // 每日统计
   'drplayer_weekly_stats',        // 周统计
   'drplayer_parsers',             // 解析器数据
+  
+  // 聚合搜索相关
+  'searchAggregationSettings',    // 聚合搜索源选择设置
+  'pageState_searchAggregation',  // 聚合搜索页面状态
+  'drplayer_search_history',      // 搜索历史记录
   
   // 站点数据
   'siteStore',                    // 站点存储

@@ -29,6 +29,11 @@ const BACKUP_KEYS = {
   LIVE_CONFIG_URL: 'drplayer_live_config_url',
   CURRENT_SITE: 'drplayer_current_site',
   
+  // 聚合搜索相关
+  SEARCH_AGGREGATION_SETTINGS: 'searchAggregationSettings', // 聚合搜索源选择设置
+  SEARCH_AGGREGATION_PAGE_STATE: 'pageState_searchAggregation', // 聚合搜索页面状态
+  SEARCH_HISTORY: 'drplayer_search_history', // 搜索历史记录
+  
   // 其他功能设置
   SKIP_SETTINGS: 'skipSettings',
   PARSER_CONFIG: 'parserConfig',
@@ -146,6 +151,8 @@ export const collectBackupData = () => {
       parserConfig: getLocalStorageData(BACKUP_KEYS.PARSER_CONFIG, {}),
       // 解析器数据
       parsers: getLocalStorageData(BACKUP_KEYS.PARSERS, []),
+      // 聚合搜索设置
+      searchAggregationSettings: getLocalStorageData(BACKUP_KEYS.SEARCH_AGGREGATION_SETTINGS, {}),
       // 侧边栏状态
       sidebarCollapsed: getLocalStorageData(BACKUP_KEYS.SIDEBAR_COLLAPSED, false),
       // 页面状态
@@ -160,6 +167,10 @@ export const collectBackupData = () => {
       watchHistory: getLocalStorageData(BACKUP_KEYS.WATCH_HISTORY, []),
       // 历史页面数据（historyStore使用）
       histories: getLocalStorageData(BACKUP_KEYS.HISTORIES, []),
+      // 搜索历史记录
+      searchHistory: getLocalStorageData(BACKUP_KEYS.SEARCH_HISTORY, []),
+      // 聚合搜索页面状态
+      searchAggregationPageState: getLocalStorageData(BACKUP_KEYS.SEARCH_AGGREGATION_PAGE_STATE, {}),
       // 每日统计
       dailyStats: getLocalStorageData(BACKUP_KEYS.DAILY_STATS, {}),
       // 周统计
@@ -283,6 +294,14 @@ export const restoreBackupData = (backupData) => {
             failedCount++
             errors.push(`解析器数据`)
           }
+        } else if (key === 'searchAggregationSettings') {
+          // 特殊处理聚合搜索设置
+          if (setLocalStorageData(BACKUP_KEYS.SEARCH_AGGREGATION_SETTINGS, value)) {
+            restoredCount++
+          } else {
+            failedCount++
+            errors.push(`聚合搜索设置`)
+          }
         } else {
           const storageKey = Object.values(BACKUP_KEYS).find(k => k.includes(key) || key.includes(k.split('_').pop()))
           if (storageKey) {
@@ -312,7 +331,9 @@ export const restoreBackupData = (backupData) => {
         watchHistory: BACKUP_KEYS.WATCH_HISTORY,
         dailyStats: BACKUP_KEYS.DAILY_STATS,
         weeklyStats: BACKUP_KEYS.WEEKLY_STATS,
-        histories: BACKUP_KEYS.HISTORIES // 历史页面数据
+        histories: BACKUP_KEYS.HISTORIES, // 历史页面数据
+        searchHistory: BACKUP_KEYS.SEARCH_HISTORY, // 搜索历史记录
+        searchAggregationPageState: BACKUP_KEYS.SEARCH_AGGREGATION_PAGE_STATE // 聚合搜索页面状态
       }
       
       for (const [key, value] of Object.entries(backupData.userData)) {

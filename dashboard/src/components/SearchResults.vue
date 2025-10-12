@@ -22,97 +22,20 @@
 
     <!-- 搜索结果网格 -->
     <div class="search-grid-container" ref="containerRef">
-      <a-scrollbar
+      <SearchVideoGrid
         ref="scrollbarRef"
+        :videos="processedVideos"
+        :loading="loading"
+        :error="error"
+        :has-more="hasMore"
+        :scroll-height="`${scrollAreaHeight}px`"
+        variant="search-results"
+        default-poster="/default-poster.svg"
+        @video-click="handleVideoClick"
+        @load-more="handleLoadMore"
+        @retry="handleRetry"
         @scroll="handleScroll"
-        class="search-scroll-container"
-        :style="'height:' + scrollAreaHeight + 'px; overflow: auto;'"
-      >
-        <!-- 错误状态 -->
-        <div v-if="error" class="error-container">
-          <icon-exclamation-circle class="error-icon" />
-          <p class="error-text">{{ error }}</p>
-        </div>
-
-        <!-- 加载状态 -->
-        <div v-else-if="loading && videos.length === 0" class="loading-container">
-          <a-spin :size="32" />
-          <p class="loading-text">正在搜索...</p>
-        </div>
-
-        <!-- 搜索结果网格 -->
-        <a-grid 
-          v-else-if="videos.length > 0"
-          :cols="{ xs: 2, sm: 3, md: 4, lg: 5, xl: 6, xxl: 8 }" 
-          :rowGap="16" 
-          :colGap="12"
-        >
-          <a-grid-item 
-            v-for="video in videos" 
-            :key="video.vod_id"
-            class="video_list_hover"
-          >
-            <div class="video_list_item" @click="handleVideoClick(video)">
-              <div class="video_list_item_img">
-                <!-- 优先显示vod_pic图片，如果有值的话 -->
-                <a-image
-                  v-if="video.vod_pic && video.vod_pic.trim() !== ''"
-                  :preview="false"
-                  class="video_list_item_img_cover"
-                  fit="cover"
-                  :src="video.vod_pic"
-                />
-                <!-- 文件夹图标 (当vod_pic为空且是文件夹时) -->
-                <div v-else-if="isFolder(video)" class="folder-icon-container">
-                  <i class="iconfont icon-wenjianjia folder-icon"></i>
-                </div>
-                <!-- 文件类型图标 (当vod_pic为空且是目录模式下的非文件夹项目时) -->
-                <div v-else-if="isDirectoryFile(video)" class="file-icon-container">
-<!--                  <i class="iconfont file-type-icon" :class="getFileTypeIcon(video.vod_name)"></i>-->
-                  <svg style="width:30%">
-                    <use :href="`#${getFileTypeIcon(video.vod_name)}`"></use>
-                  </svg>
-                </div>
-                <!-- 默认图片 (当vod_pic为空且没有特殊标识时) -->
-                <a-image
-                  v-else
-                  :preview="false"
-                  class="video_list_item_img_cover"
-                  fit="cover"
-                  :src="video.vod_pic || '/default-poster.svg'"
-                />
-                <!-- vod_remarks 浮层 -->
-                <div v-if="video.vod_remarks" class="video_remarks_overlay" v-html="video.vod_remarks">
-                </div>
-              </div>
-              <div class="video_list_item_title">
-                <span class="title-text">{{ video.vod_name }}</span>
-              </div>
-            </div>
-          </a-grid-item>
-        </a-grid>
-
-        <!-- 空状态 -->
-        <div v-else-if="!loading && !error && keyword" class="empty-state">
-          <icon-search class="empty-icon" />
-          <p class="empty-text">没有找到相关内容</p>
-          <p class="empty-desc">尝试使用其他关键词搜索</p>
-        </div>
-
-        <!-- 加载更多 -->
-        <div v-if="loading && videos.length > 0" class="loading-container">
-          <a-spin />
-          <div class="loading-text">加载更多...</div>
-        </div>
-        
-        <!-- 没有更多数据提示 -->
-        <div v-else-if="!hasMore && videos.length > 0" class="no-more-data">
-          没有更多数据了
-        </div>
-
-        <!-- 底部间距 -->
-        <div class="bottom-spacer"></div>
-      </a-scrollbar>
+      />
     </div>
 
     <!-- ActionRenderer组件 -->
@@ -131,13 +54,14 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, nextTick, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { usePaginationStore } from '@/stores/paginationStore'
 import { usePageStateStore } from '@/stores/pageStateStore'
 import { useVisitedStore } from '@/stores/visitedStore'
 import ActionRenderer from '@/components/actions/ActionRenderer.vue'
+import SearchVideoGrid from '@/components/SearchVideoGrid.vue'
 import { getFileTypeIcon, isFolder, isDirectoryFile } from '@/utils/fileTypeUtils'
 
 const router = useRouter()
@@ -192,7 +116,7 @@ const props = defineProps({
   },
   // 扩展参数，用于T4接口调用
   extend: {
-    type: String,
+    type: [Object, String],
     default: ''
   },
   // API URL，用于直接调用站点API
@@ -208,6 +132,14 @@ const emit = defineEmits(['video-click', 'exit-search', 'load-more', 'refresh-li
 const containerRef = ref(null)
 const scrollbarRef = ref(null)
 const scrollAreaHeight = ref(0)
+
+// 处理视频数据，添加文件类型信息
+const processedVideos = computed(() => {
+  return props.videos.map(video => ({
+    ...video,
+    type_name: isFolder(video) ? 'folder' : (isDirectoryFile(video) ? getFileTypeIcon(video.vod_name) : null)
+  }))
+})
 
 // ActionRenderer相关
 const actionRendererRef = ref(null)
@@ -250,43 +182,11 @@ const updateScrollAreaHeight = () => {
       const searchHeader = document.querySelector('.search-header');
       const headerHeight = searchHeader ? searchHeader.offsetHeight : 60;
 
-      // 改进的高度计算逻辑：
-      // 1. 正确计算网格列数（基于容器宽度）
-      // 2. 估算内容实际需要的高度
-      // 3. 智能调整容器高度以确保滚动翻页正常工作
-      
-      const videoCount = props.videos ? props.videos.length : 0;
-      
-      // 获取容器宽度来计算列数
-      const containerWidth = container.offsetWidth || Math.max(window.innerWidth - 240, 800); // 减去侧边栏宽度
-      const itemWidth = 200; // 每个搜索结果项的估算宽度
-      const gridCols = Math.min(Math.floor(containerWidth / itemWidth), 8); // 基于宽度计算列数，最多8列
-      
-      const estimatedItemHeight = 328; // 根据F12实际测量的高度（图片+文字）
-      const estimatedRows = videoCount > 0 ? Math.ceil(videoCount / Math.max(gridCols, 1)) : 0;
-      const estimatedContentHeight = estimatedRows * estimatedItemHeight + 80; // 减少padding估算
-      
-      // 智能高度调整策略
-      let heightReduction = 4; // 默认只减去少量padding
+      // 简化的高度计算逻辑：直接使用可用高度减去固定的边距
       const availableHeight = containerHeight - headerHeight;
+      const newHeight = Math.max(availableHeight - 20, 300); // 减去20px的边距，最小高度300px
       
-      // 如果没有搜索结果数据，使用保守的高度减值
-      if (videoCount === 0) {
-        heightReduction = Math.min(availableHeight * 0.3, 200); // 减去30%或200px，取较小值
-        console.log(`无搜索结果数据，使用保守高度减值: ${heightReduction}px`);
-      } else if (estimatedContentHeight < availableHeight) {
-        // 有数据但内容不足时，需要减少容器高度以触发滚动
-        // 策略：容器高度 = 内容高度 - 120px（确保有足够滚动空间）
-        // 但如果这样会遮挡太多内容，则至少显示1.5行的高度
-        const minDisplayHeight = Math.floor(estimatedItemHeight * 1.5) + 80; // 至少显示1.5行
-        const idealHeight = estimatedContentHeight - 120; // 理想的滚动高度
-        const targetHeight = Math.max(idealHeight, minDisplayHeight, availableHeight * 0.4); // 取最大值确保不会太小
-        heightReduction = Math.max(availableHeight - targetHeight, 80); // 最少减去80px
-        console.log(`搜索内容高度不足，估算内容高度: ${estimatedContentHeight}px, 理想高度: ${idealHeight}px, 最小显示高度: ${minDisplayHeight}px, 可用高度: ${availableHeight}px, 调整高度减值: ${heightReduction}px`);
-      }
-      
-      const newHeight = Math.max(containerHeight - headerHeight - heightReduction, 300);
-      console.log(`搜索结果数量: ${videoCount}, 估算行数: ${estimatedRows}, 列数: ${gridCols}, 容器宽度: ${containerWidth}px, 最终高度: ${newHeight}px`);
+      console.log(`搜索结果容器高度计算: 容器高度=${containerHeight}px, 标题高度=${headerHeight}px, 最终高度=${newHeight}px`);
       scrollAreaHeight.value = newHeight;
     }, 100); // 延迟确保DOM完全渲染
   });
@@ -376,8 +276,7 @@ const handleVideoClick = (video) => {
     // 保存当前搜索状态
     if (props.keyword) {
       // 正确获取滚动位置
-      const scrollContainer = scrollbarRef.value?.$el?.querySelector('.arco-scrollbar-container');
-      const currentScrollPosition = scrollContainer?.scrollTop || 0;
+      const currentScrollPosition = scrollbarRef.value?.getScrollTop() || 0;
       
       pageStateStore.saveSearchState(
         props.keyword,
@@ -427,6 +326,16 @@ const exitSearch = () => {
   emit('exit-search')
 }
 
+// 处理加载更多
+const handleLoadMore = () => {
+  emit('load-more')
+}
+
+// 处理重试
+const handleRetry = () => {
+  emit('refresh-list')
+}
+
 onMounted(() => {
   checkTextOverflow()
   updateScrollAreaHeight()
@@ -438,10 +347,9 @@ onMounted(() => {
     nextTick(() => {
       // 使用requestAnimationFrame确保DOM已渲染
       requestAnimationFrame(() => {
-        const scrollContainer = scrollbarRef.value?.$el?.querySelector('.arco-scrollbar-container');
-        if (scrollContainer) {
+        if (scrollbarRef.value) {
           // 使用平滑滚动
-          scrollContainer.scrollTo({
+          scrollbarRef.value.scrollTo({
             top: props.scrollPosition,
             behavior: 'smooth'
           });
@@ -557,272 +465,5 @@ const handleSpecialAction = (actionType, actionData) => {
   flex-direction: column;
 }
 
-.search-scroll-container {
-  width: 100%;
-  flex: 1;
-  padding: 16px 20px 8px 16px;
-}
 
-/* 视频列表项样式 - 与VideoGrid保持一致 */
-.video_list_hover {
-  transition: all 0.3s ease;
-}
-
-.video_list_hover:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
-}
-
-.video_list_item {
-  cursor: pointer;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--color-bg-2);
-  transition: all 0.3s ease;
-}
-
-.video_list_item_img {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-  background: #f5f5f5;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-}
-
-.video_list_item_img_cover {
-  width: 100%;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-  overflow: hidden;
-  vertical-align: top;
-  display: block;
-}
-
-.video_list_item::v-deep(.arco-image-img) {
-  width: 100%;
-  height: 300px;
-  object-fit: cover;
-}
-
-.video_list_item:hover .video_list_item_img_cover {
-  transform: scale(1.05);
-}
-
-/* 文件夹图标样式 */
-.folder-icon-container {
-  width: 100%;
-  height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-}
-
-.folder-icon {
-  font-size: 60px;
-  color: #ffa940;
-  transition: all 0.3s ease;
-}
-
-.video_list_item:hover .folder-icon {
-  color: #ff7a00;
-  transform: scale(1.1);
-}
-
-/* 文件类型图标样式 */
-.file-icon-container {
-  width: 100%;
-  height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-}
-
-.file-type-icon {
-  font-size: 60px;
-  color: #6c757d;
-  transition: all 0.3s ease;
-}
-
-.video_list_item:hover .file-type-icon {
-  color: #495057;
-  transform: scale(1.1);
-}
-
-.video_remarks_overlay {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 500;
-  max-width: 60%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(4px);
-}
-
-.video_list_item_title {
-  padding: 6px 8px;
-  background: white;
-  flex-shrink: 0;
-  height: auto;
-  min-height: 16px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  position: relative;
-}
-
-.title-text {
-  font-size: 12px;
-  font-weight: 500;
-  color: #2c2c2c;
-  line-height: 1;
-  white-space: nowrap;
-  transition: color 0.2s ease;
-  margin: 0;
-  width: 100%;
-  display: block;
-}
-
-/* 普通状态下隐藏溢出文本 */
-.title-text:not([data-overflow="true"]) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 跑马灯效果 - 电子公告屏幕样式 */
-.title-text[data-overflow="true"] {
-  animation: marquee 10s linear infinite;
-  animation-delay: 1s;
-  width: max-content;
-  min-width: 100%;
-}
-
-.title-text[data-overflow="true"]:hover {
-  animation-play-state: paused;
-  color: #1890ff;
-}
-
-@keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  15% {
-    transform: translateX(0);
-  }
-  85% {
-    transform: translateX(calc(-100% + 100px));
-  }
-  100% {
-    transform: translateX(calc(-100% + 100px));
-  }
-}
-
-/* 状态样式 */
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  gap: 16px;
-}
-
-.loading-text {
-  color: var(--color-text-3);
-  font-size: 14px;
-  margin: 0;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  color: var(--color-text-4);
-  margin-bottom: 16px;
-}
-
-.empty-text {
-  font-size: 16px;
-  color: var(--color-text-2);
-  margin: 0 0 8px 0;
-}
-
-.empty-desc {
-  font-size: 14px;
-  color: var(--color-text-3);
-  margin: 0;
-}
-
-.loading-more {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  gap: 8px;
-}
-
-.no-more-data {
-  text-align: center;
-  padding: 20px;
-  color: var(--color-text-3);
-  font-size: 14px;
-}
-
-.bottom-spacer {
-  height: 20px;
-}
-
-
-
-/* 错误状态样式 */
-.error-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.error-icon {
-  font-size: 48px;
-  color: var(--color-danger-6);
-  margin-bottom: 16px;
-}
-
-.error-text {
-  font-size: 16px;
-  color: var(--color-text-2);
-  margin: 0;
-}
-
-/* 分页样式 */
-.pagination-container {
-  display: flex;
-  justify-content: center;
-  padding: 24px 0;
-  border-top: 1px solid var(--color-border-2);
-  margin-top: 16px;
-}
 </style>

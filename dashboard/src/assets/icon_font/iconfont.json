@@ -6,6 +6,20 @@
   "description": "",
   "glyphs": [
     {
+      "icon_id": "24473120",
+      "name": "下载",
+      "font_class": "xiazai",
+      "unicode": "fcb9",
+      "unicode_decimal": 64697
+    },
+    {
+      "icon_id": "25677250",
+      "name": "夸克",
+      "font_class": "kuake",
+      "unicode": "e67d",
+      "unicode_decimal": 59005
+    },
+    {
       "icon_id": "5328033",
       "name": "folder",
       "font_class": "folder",

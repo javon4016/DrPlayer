@@ -57,7 +57,7 @@
 
       <!-- 主内容区域 -->
       <div class="main-content" :class="{ 'sider-collapsed': siderCollapsed }">
-        <div class="content-wrapper">
+        <div class="content-wrapper" :class="{ 'search-page': isSearchPage, 'download-manager-page': isDownloadManagerPage }">
           <slot></slot> <!-- 插槽，用于插入页面内容 -->
         </div>
         
@@ -71,7 +71,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, watch } from 'vue';
+import { defineComponent, ref, watch, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { Message } from '@arco-design/web-vue';
 import {
@@ -99,6 +99,16 @@ export default defineComponent({
     const route = useRoute();
     const paginationStore = usePaginationStore();
     
+    // 检测是否为搜索页面
+    const isSearchPage = computed(() => {
+      return route.path === '/search' || route.name === 'SearchAggregation';
+    });
+    
+    // 检测是否为下载管理页面
+    const isDownloadManagerPage = computed(() => {
+      return route.path === '/download-manager' || route.name === 'DownloadManager';
+    });
+    
     const siderCollapsed = ref(false);
     const menuItems = ref([
       {id: 1, name: '主页', icon: 'icon-zhuye', route: '/'},
@@ -108,6 +118,7 @@ export default defineComponent({
       {id: 6, name: '解析', icon: 'icon-jiexi', route: '/parser'},
       {id: 7, name: '收藏', icon: 'icon-shoucang', route: '/collection'},
       {id: 8, name: '历史', icon: 'icon-lishi', route: '/history'},
+      {id: 11, name: '下载', icon: 'icon-xiazai', route: '/download-manager'},
       {id: 10, name: '测试', icon: 'icon-ceshi', route: '/action-test'},
       {id: 9, name: '设置', icon: 'icon-shezhi', route: '/settings'}
     ]);
@@ -137,7 +148,9 @@ export default defineComponent({
       logoSrc,
       logoDesc,
       onClickMenuItem,
-      onSiderCollapse
+      onSiderCollapse,
+      isSearchPage,
+      isDownloadManagerPage
     };
   }
 });
@@ -209,6 +222,18 @@ export default defineComponent({
   overflow-x: hidden;
   padding: 0 24px 16px 24px; /* 上右下左：减少下padding */
   background: var(--color-bg-3);
+}
+
+/* 搜索页面的内容包装器 - 移除滚动，让内部组件自己控制 */
+.content-wrapper.search-page {
+  overflow: hidden;
+  padding: 0; /* 移除padding，让搜索页面完全控制布局 */
+}
+
+/* 下载管理页面的内容包装器 - 移除滚动和padding，让组件自己控制布局 */
+.content-wrapper.download-manager-page {
+  overflow: hidden;
+  padding: 0; /* 移除padding，让下载管理页面完全控制布局 */
 }
 
 /* 固定的底部 */

@@ -171,12 +171,21 @@ const isRetrying = ref(false) // 是否正在重连
 const dynamicHeight = ref(450) // 动态计算的高度
 
 // 自动下一集功能相关数据
-const autoNextEnabled = ref(true) // 自动下一集开关，默认关闭
-const loopEnabled = ref(JSON.parse(localStorage.getItem('loopEnabled') || 'false')) // 循环播放开关，从本地存储读取
+// 初始化互斥逻辑：自动连播和循环播放不能同时开启
+const savedLoopEnabled = JSON.parse(localStorage.getItem('loopEnabled') || 'false')
+const savedAutoNextEnabled = JSON.parse(localStorage.getItem('autoNextEnabled') || 'true')
+
+// 确保互斥：如果循环播放开启，则关闭自动连播
+const autoNextEnabled = ref(savedLoopEnabled ? false : savedAutoNextEnabled)
+const loopEnabled = ref(savedLoopEnabled)
 const autoNextCountdown = ref(0) // 自动下一集倒计时
 const autoNextTimer = ref(null) // 自动下一集定时器
 const showAutoNextDialog = ref(false) // 显示自动下一集对话框
 const countdownEnabled = ref(false) // 倒计时开关，默认关闭
+
+// 防抖标志，防止重复触发
+const isProcessingAutoNext = ref(false) // 防止自动下一集重复触发
+const isProcessingLoop = ref(false) // 防止循环播放重复触发
 
 // 调试相关
 const showDebugDialog = ref(false)
@@ -323,6 +332,9 @@ const initArtPlayer = async (url) => {
   
   // 重置片头片尾状态
   resetSkipState()
+  
+  // 重置防抖标志
+  resetDebounceFlags()
   
   // 等待 DOM 更新后计算动态高度
   await nextTick()
@@ -620,6 +632,9 @@ const initArtPlayer = async (url) => {
       // 视频开始播放时，重置重连计数器
       resetRetryState()
       
+      // 重置防抖标志，确保新的播放周期可以正常处理自动下一集和循环播放
+      resetDebounceFlags()
+      
       // 立即尝试片头跳过（针对视频刚开始播放的情况）
       const immediateSkipped = applyIntroSkipImmediate()
       
@@ -665,9 +680,17 @@ const initArtPlayer = async (url) => {
       try {
         console.log('视频播放结束')
         
+        // 防抖检查：如果正在处理自动下一集或循环播放，则忽略
+        if (isProcessingAutoNext.value || isProcessingLoop.value) {
+          console.log('正在处理中，忽略重复的视频结束事件')
+          return
+        }
+        
         // 优先处理循环播放
         if (loopEnabled.value) {
           console.log('循环播放：重新播放当前选集')
+          isProcessingLoop.value = true // 设置防抖标志
+          
           // 重新执行当前选集的播放逻辑
           setTimeout(() => {
             try {
@@ -676,6 +699,7 @@ const initArtPlayer = async (url) => {
             } catch (error) {
               console.error('循环播放触发选集事件失败:', error)
               Message.error('循环播放失败，请重试')
+              isProcessingLoop.value = false // 出错时重置标志
             }
           }, 1000)
           return
@@ -683,6 +707,7 @@ const initArtPlayer = async (url) => {
         
         // 视频结束时启动自动下一集
         if (autoNextEnabled.value && hasNextEpisode()) {
+          isProcessingAutoNext.value = true // 设置防抖标志
           startAutoNextCountdown()
         } else if (!hasNextEpisode()) {
           Message.info('全部播放完毕')
@@ -690,6 +715,9 @@ const initArtPlayer = async (url) => {
       } catch (error) {
         console.error('视频结束事件处理失败:', error)
         Message.error('视频结束处理失败')
+        // 出错时重置防抖标志
+        isProcessingAutoNext.value = false
+        isProcessingLoop.value = false
       }
     })
 
@@ -908,7 +936,7 @@ const saveSkipSettings = (settings) => {
 }
 
 // 处理重连逻辑
-const handleRetry = (url) => {
+const handleRetry = (originalUrl) => {
   if (isRetrying.value) {
     return // 如果正在重连，避免重复触发
   }
@@ -924,13 +952,22 @@ const handleRetry = (url) => {
     setTimeout(() => {
       if (artPlayerInstance.value) {
         try {
+          // 重连时也要使用代理处理后的URL，确保代理设置生效
+          const headers = props.headers || {}
+          const processedUrl = processVideoUrl(originalUrl, headers)
+          
+          console.log('重连使用URL:', processedUrl)
+          if (processedUrl !== originalUrl) {
+            console.log('🔄 [代理播放] 重连时使用代理地址')
+          }
+          
           // 重新加载视频
-          artPlayerInstance.value.switchUrl(url)
+          artPlayerInstance.value.switchUrl(processedUrl)
           isRetrying.value = false
         } catch (error) {
           console.error('重连时出错:', error)
           isRetrying.value = false
-          handleRetry(url) // 递归重试
+          handleRetry(originalUrl) // 递归重试
         }
       }
     }, 2000 * retryCount.value) // 递增延迟：2秒、4秒、6秒
@@ -971,6 +1008,12 @@ const calculateDynamicHeight = () => {
   
   console.log(`容器宽度: ${containerWidth}px, 计算高度: ${calculatedHeight}px`)
   return Math.round(calculatedHeight)
+}
+
+// 防抖标志重置函数
+const resetDebounceFlags = () => {
+  isProcessingAutoNext.value = false
+  isProcessingLoop.value = false
 }
 
 // 自动下一集功能相关函数
@@ -1021,6 +1064,10 @@ const cancelAutoNext = () => {
   }
   autoNextCountdown.value = 0
   showAutoNextDialog.value = false
+  
+  // 重置防抖标志
+  resetDebounceFlags()
+  
   console.log('用户取消自动下一集')
 }
 
@@ -1028,6 +1075,7 @@ const cancelAutoNext = () => {
 const playNextEpisode = () => {
   if (!hasNextEpisode()) {
     Message.info('已经是最后一集了')
+    resetDebounceFlags() // 重置防抖标志
     return
   }
   
@@ -1035,6 +1083,9 @@ const playNextEpisode = () => {
   
   // 清理倒计时
   cancelAutoNext()
+  
+  // 重置防抖标志
+  resetDebounceFlags()
   
   // 通知父组件切换到下一集
   emit('next-episode', props.currentEpisodeIndex + 1)
@@ -1046,6 +1097,8 @@ const playNextEpisode = () => {
 // 切换自动下一集开关
 const toggleAutoNext = () => {
   autoNextEnabled.value = !autoNextEnabled.value
+  // 保存自动连播状态到本地存储
+  localStorage.setItem('autoNextEnabled', JSON.stringify(autoNextEnabled.value))
   
   // 如果开启自动连播，则关闭循环播放
   if (autoNextEnabled.value) {
@@ -1068,6 +1121,7 @@ const toggleLoop = () => {
   // 如果开启循环播放，则关闭自动连播
   if (loopEnabled.value) {
     autoNextEnabled.value = false
+    localStorage.setItem('autoNextEnabled', 'false')
     cancelAutoNext()
   }
   
@@ -1498,11 +1552,23 @@ const handleResize = () => {
   }
 }
 
+// 处理代理设置变化
+const handleAddressSettingsChange = () => {
+  console.log('检测到代理设置变化，重新初始化播放器')
+  if (props.videoUrl && props.visible) {
+    nextTick(() => {
+      initArtPlayer(props.videoUrl)
+    })
+  }
+}
+
 // 组件挂载时的初始化
 onMounted(() => {
   console.log('ArtVideoPlayer 组件已挂载 - 动态高度版本')
   // 添加窗口大小变化监听
   window.addEventListener('resize', handleResize)
+  // 添加代理设置变化监听
+  window.addEventListener('addressSettingsChanged', handleAddressSettingsChange)
   // 初始化片头片尾设置
   initSkipSettings()
   // 初始化画质数据
@@ -1515,6 +1581,8 @@ onUnmounted(() => {
   
   // 移除窗口大小变化监听器
   window.removeEventListener('resize', handleResize)
+  // 移除代理设置变化监听器
+  window.removeEventListener('addressSettingsChanged', handleAddressSettingsChange)
   
   // 清理自动下一集相关资源
   cancelAutoNext()

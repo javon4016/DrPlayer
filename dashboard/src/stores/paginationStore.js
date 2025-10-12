@@ -20,14 +20,14 @@ export const usePaginationStore = defineStore('pagination', {
         // 设置当前路由
         setCurrentRoute(route) {
             this.currentRoute = route;
-            // 如果不是点播页面，清除统计信息
-            if (route !== '/video') {
+            // 如果不是点播页面或搜索页面，清除统计信息
+            if (route !== '/video' && route !== '/search') {
                 this.clearStats();
             }
         }
     },
     getters: {
-        // 是否应该显示统计信息（在点播页面且有统计文本）
-        shouldShow: (state) => state.isVisible && state.currentRoute === '/video'
+        // 是否应该显示统计信息（在点播页面或搜索页面且有统计文本）
+        shouldShow: (state) => state.isVisible && (state.currentRoute === '/video' || state.currentRoute === '/search')
     }
 });

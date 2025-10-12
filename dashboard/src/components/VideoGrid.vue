@@ -8,8 +8,8 @@
     >
       <a-grid :cols="{ xs: 2, sm: 3, md: 4, lg: 5, xl: 6, xxl: 8 }" :rowGap="16" :colGap="12">
         <a-grid-item
-          v-for="video in videos"
-          :key="video.vod_id"
+          v-for="(video, index) in videos"
+          :key="`${video.vod_id}_${index}_${video.vod_name || ''}`"
           class="video_list_hover"
         >
           <div class="video_list_item" @click="handleVideoClick(video)">
@@ -276,9 +276,31 @@ const checkAutoLoadMore = () => {
   }
 };
 
+// 添加防止递归更新的变量
+let lastHeightRestoreTime = 0;
+let heightRestoreCount = 0;
+const HEIGHT_RESTORE_COOLDOWN = 1000; // 1秒冷却时间
+const MAX_HEIGHT_RESTORE_PER_MINUTE = 5; // 每分钟最多5次
+
 // 检查并恢复容器高度到理想状态
 const checkHeightRestore = () => {
   if (isProcessing) return;
+  
+  // 防止递归更新的严格检查
+  const now = Date.now();
+  if (now - lastHeightRestoreTime < HEIGHT_RESTORE_COOLDOWN) {
+    return; // 冷却时间内不执行
+  }
+  
+  // 重置计数器（每分钟）
+  if (now - lastHeightRestoreTime > 60000) {
+    heightRestoreCount = 0;
+  }
+  
+  if (heightRestoreCount >= MAX_HEIGHT_RESTORE_PER_MINUTE) {
+    console.warn('[VideoGrid] 高度恢复操作过于频繁，已暂停');
+    return;
+  }
   
   try {
     const container = containerRef.value;
@@ -296,15 +318,25 @@ const checkHeightRestore = () => {
     
     // 如果内容足够多且当前容器高度小于理想高度，则恢复
     if (contentHeight > idealHeight * 0.8 && containerHeight < idealHeight) {
+      const oldHeight = containerHeight;
       containerHeight = idealHeight;
-      containerHeightTrigger.value++;
       
-      console.log('[DEBUG] 主动恢复容器高度:', {
-        contentHeight,
-        clientHeight,
-        idealHeight,
-        oldContainerHeight: containerHeight,
-        newContainerHeight: idealHeight
+      // 使用nextTick延迟触发更新，避免同步递归
+      nextTick(() => {
+        if (!isProcessing) { // 再次检查处理状态
+          containerHeightTrigger.value++;
+          heightRestoreCount++;
+          lastHeightRestoreTime = now;
+          
+          console.log('[DEBUG] 主动恢复容器高度:', {
+            contentHeight,
+            clientHeight,
+            idealHeight,
+            oldContainerHeight: oldHeight,
+            newContainerHeight: idealHeight,
+            restoreCount: heightRestoreCount
+          });
+        }
       });
     }
   } catch (error) {

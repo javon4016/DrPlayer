@@ -176,9 +176,15 @@
             </div>
           </div>
           <div class="video-actions">
-            <!-- 播放按钮区域 -->
-            <div v-if="currentEpisodeUrl" class="play-actions">
-              <a-button type="primary" size="large" @click="playVideo" class="play-btn">
+            <!-- 第一行按钮：播放和复制 -->
+            <div v-if="currentEpisodeUrl" class="action-buttons-row">
+              <!-- 播放/阅读按钮 -->
+              <a-button 
+                type="primary" 
+                size="large" 
+                @click="playVideo" 
+                class="play-btn"
+              >
                 <template #icon>
                   <icon-play-arrow v-if="smartPlayButton.icon === 'icon-play-arrow'" />
                   <icon-book v-else-if="smartPlayButton.icon === 'icon-book'" />
@@ -187,11 +193,33 @@
                 </template>
                 {{ smartPlayButton.text }}
               </a-button>
-              <a-button @click="copyPlayUrl" class="copy-btn">
+              
+              <!-- 复制链接按钮 -->
+              <a-button 
+                @click="copyPlayUrl" 
+                class="copy-btn"
+                size="large"
+              >
                 <template #icon>
                   <icon-copy />
                 </template>
                 复制链接
+              </a-button>
+            </div>
+            
+            <!-- 第二行按钮：下载 -->
+            <div v-if="isNovelType" class="action-buttons-row download-row">
+              <a-button 
+                @click="showDownloadDialog" 
+                class="download-btn"
+                type="primary"
+                status="success"
+                size="large"
+              >
+                <template #icon>
+                  <icon-download />
+                </template>
+                下载小说
               </a-button>
             </div>
           </div>
@@ -291,6 +319,16 @@
         </div>
       </template>
     </ActionDialog>
+
+    <!-- 下载任务对话框 -->
+    <AddDownloadTaskDialog
+      :visible="showDownloadTaskDialog"
+      :novel-detail="videoDetail"
+      :chapters="currentRouteEpisodes"
+      :source-name="currentSiteInfo?.name || ''"
+      @close="showDownloadTaskDialog = false"
+      @confirm="handleDownloadConfirm"
+    />
   </div>
 </template>
 
@@ -313,6 +351,8 @@ import EpisodeSelector from '@/components/players/EpisodeSelector.vue'
 import BookReader from '@/components/readers/BookReader.vue'
 import ComicReader from '@/components/readers/ComicReader.vue'
 import ActionDialog from '@/components/actions/ActionDialog.vue'
+import AddDownloadTaskDialog from '@/components/downloader/AddDownloadTaskDialog.vue'
+import downloadService from '@/services/downloadService'
 import { 
   IconLeft, 
   IconPlayArrow, 
@@ -323,7 +363,8 @@ import {
   IconBook,
   IconImage,
   IconRefresh,
-  IconSound
+  IconSound,
+  IconDownload
 } from '@arco-design/web-vue/es/icon'
 
 const route = useRoute()
@@ -393,6 +434,9 @@ const initialQuality = ref('')
 const needsParsing = ref(false)
 const parseData = ref(null)
 const selectedParser = ref(null)
+
+// 下载相关数据
+const showDownloadTaskDialog = ref(false)
 const availableParsers = ref([])
 
 // 小说阅读器相关
@@ -557,6 +601,13 @@ const isCurrentFavorited = computed(() => {
 // 判断当前内容是否为小说
 const isNovelContent = computed(() => {
   return parsedNovelContent.value !== null
+})
+
+// 判断当前类型是否为小说（用于下载按钮显示）
+const isNovelType = computed(() => {
+  const siteName = currentSiteInfo.value?.name || ''
+  // 通过站源名称标识判断，或者通过内容判断
+  return siteName.includes('[书]') || isNovelContent.value
 })
 
 // 判断当前内容是否为漫画
@@ -945,6 +996,15 @@ const goBack = () => {
           if (savedVideoState && !pageStateStore.isStateExpired('video')) {
             console.log('发现保存的Video页面状态，将恢复状态而非重新加载');
           }
+        }
+      } else if (sourceRouteName === 'SearchAggregation') {
+        // 返回聚合搜索页面，添加返回标识
+        console.log('从聚合搜索页面返回，添加返回标识');
+        query._returnFromDetail = 'true';
+        // 清除时间戳参数，避免触发重新搜索
+        if (query._t) {
+          delete query._t;
+          console.log('清除时间戳参数 _t，避免触发重新搜索');
         }
       } else if (sourceRouteName === 'Home') {
         // 返回Home页面，检查搜索状态
@@ -2077,6 +2137,68 @@ const copyPlayUrl = async () => {
   }
 }
 
+// 显示下载对话框
+const showDownloadDialog = () => {
+  showDownloadTaskDialog.value = true
+}
+
+// 关闭下载对话框
+const closeDownloadDialog = () => {
+  showDownloadTaskDialog.value = false
+}
+
+// 确认下载任务
+const handleDownloadConfirm = async (taskData) => {
+  try {
+    console.log('确认下载任务:', taskData)
+    
+    // 准备小说信息
+    const novelInfo = {
+      title: taskData.novelDetail.vod_name,
+      id: taskData.novelDetail.vod_id,
+      url: currentEpisodeUrl.value || '',
+      author: taskData.novelDetail.vod_actor || '未知',
+      description: taskData.novelDetail.vod_content || '',
+      cover: taskData.novelDetail.vod_pic || '' // 添加封面图片
+    }
+    
+    // 准备选中的章节信息
+    const selectedChapters = taskData.selectedChapters.map(index => {
+      const chapter = taskData.chapters[index]
+      return {
+        name: chapter.name || `第${index + 1}章`,
+        url: chapter.url || chapter.vod_play_url || '',
+        index: index
+      }
+    })
+    
+    // 准备下载设置，包含必要的站点信息
+    const downloadSettings = {
+      ...taskData.settings,
+      module: currentActiveSiteInfo.value?.key || '',
+      apiUrl: currentActiveSiteInfo.value?.api || '',
+      extend: currentActiveSiteInfo.value?.ext || '',
+      flag: playRoutes.value[currentRoute.value]?.name || ''
+    }
+    
+    console.log('下载设置:', downloadSettings)
+    console.log('当前站点信息:', currentActiveSiteInfo.value)
+    
+    // 创建下载任务
+    const task = downloadService.createTask(novelInfo, selectedChapters, downloadSettings)
+    
+    // 开始下载任务
+    await downloadService.startTask(task.id)
+    
+    Message.success(`下载任务已创建：${taskData.novelDetail.vod_name}`)
+    closeDownloadDialog()
+    
+  } catch (error) {
+    console.error('创建下载任务失败:', error)
+    Message.error('创建下载任务失败：' + error.message)
+  }
+}
+
 // 监听路由变化（包括参数和查询参数）
 watch(() => [route.params.id, route.query], () => {
   if (route.params.id) {
@@ -2639,12 +2761,19 @@ onUnmounted(() => {
   border: 1px solid #dee2e6;
 }
 
-.play-actions {
+.play-actions,
+.action-buttons,
+.action-buttons-row {
   display: flex;
   gap: 16px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.download-row {
+  margin-top: 16px;
+  justify-content: flex-start !important;
 }
 
 .play-btn {
@@ -2671,6 +2800,21 @@ onUnmounted(() => {
 
 .copy-btn:hover {
   transform: translateY(-1px);
+}
+
+.download-btn {
+  min-width: 140px;
+  height: 44px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 16px;
+  box-shadow: 0 4px 12px rgba(0, 180, 42, 0.3);
+  transition: all 0.2s ease;
+}
+
+.download-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 180, 42, 0.4);
 }
 
 .no-play-section {

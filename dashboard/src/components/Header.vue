@@ -2,30 +2,71 @@
   <a-layout-header class="header">
     <!-- 左侧控制按钮 -->
     <div class="header-left">
-      <a-button shape="circle" @click="goBack">
-        <template #icon>
-          <icon-left/>
-        </template>
-      </a-button>
-      <a-button shape="circle" @click="goForward">
-        <template #icon>
-          <icon-right/>
-        </template>
-      </a-button>
-      <a-button shape="circle" @click="refreshPage">
-        <template #icon>
-          <icon-refresh/>
-        </template>
-      </a-button>
+      <!-- 聚合搜索页面模式 -->
+      <template v-if="isSearchAggregationPage">
+        <a-button shape="circle" @click="goBackFromSearch">
+          <template #icon>
+            <icon-left/>
+          </template>
+        </a-button>
+        <span class="search-page-title">聚合搜索</span>
+      </template>
+      <!-- 普通页面模式 -->
+      <template v-else>
+        <a-button shape="circle" @click="goBack">
+          <template #icon>
+            <icon-left/>
+          </template>
+        </a-button>
+        <a-button shape="circle" @click="goForward">
+          <template #icon>
+            <icon-right/>
+          </template>
+        </a-button>
+        <a-button shape="circle" @click="refreshPage">
+          <template #icon>
+            <icon-refresh/>
+          </template>
+        </a-button>
+      </template>
     </div>
 
     <!-- 中间搜索框 -->
-    <div class="header-center" v-if="searchAggregationEnabled">
-      <a-input-search
-          placeholder="搜索内容..."
-          enter-button="搜索"
-          @search="onSearch"
-      />
+    <div class="header-center" :class="{ 'search-page-mode': isSearchAggregationPage }" v-if="searchAggregationEnabled">
+      <div class="search-container">
+        <a-input-search
+            v-model="searchValue"
+            placeholder="搜索内容..."
+            enter-button="搜索"
+            allow-clear
+            @search="onSearch"
+            @keyup.enter="onSearch(searchValue)"
+            @click="handleSearchClick"
+            @input="handleSearchInput"
+            @clear="handleSearchClear"
+        />
+        <a-button 
+            class="search-settings-btn" 
+            shape="circle" 
+            @click="openSearchSettings"
+            :title="'搜索设置'"
+        >
+          <template #icon>
+            <icon-settings/>
+          </template>
+        </a-button>
+        <a-button 
+            v-if="hasSearchResults"
+            class="close-search-btn" 
+            shape="circle" 
+            @click="closeSearchResults"
+            :title="'关闭搜索结果'"
+        >
+          <template #icon>
+            <icon-close/>
+          </template>
+        </a-button>
+      </div>
     </div>
 
     <!-- 右侧控制按钮 -->
@@ -62,23 +103,72 @@
           <a-button class="cancel-btn" @click="hideCloseConfirm">
             取消
           </a-button>
+          <a-button type="primary" status="warning" class="clear-cache-btn" @click="clearSessionStorage">
+            仅清缓存
+          </a-button>
           <a-button type="primary" status="danger" class="confirm-btn" @click="confirmClose">
             确认关闭
           </a-button>
         </div>
       </div>
     </div>
+
+    <!-- 搜索设置弹窗 -->
+    <SearchSettingsModal 
+      v-model:visible="showSearchSettings" 
+      @confirm="onSearchSettingsConfirm"
+    />
   </a-layout-header>
 </template>
 
 <script>
-import {defineComponent, ref, computed} from 'vue';
+import {defineComponent, ref, computed, watch} from 'vue';
+import {useRoute, useRouter} from 'vue-router';
 import {Message} from '@arco-design/web-vue';
+import SearchSettingsModal from './SearchSettingsModal.vue';
 
 export default defineComponent({
-  components: {},
+  components: {
+    SearchSettingsModal
+  },
   setup() {
+    const route = useRoute();
+    const router = useRouter();
     const showConfirmModal = ref(false);
+    const searchValue = ref('');
+    
+    // 检测是否在聚合搜索页面
+    const isSearchAggregationPage = computed(() => {
+      return route.name === 'SearchAggregation';
+    });
+    
+    // 检测是否有搜索结果（当在搜索页面且有搜索关键词或保存的搜索状态时）
+    const hasSearchResults = computed(() => {
+      // 依赖forceUpdate来触发重新计算
+      forceUpdate.value;
+      
+      if (!isSearchAggregationPage.value) {
+        return false;
+      }
+      
+      // 检查URL参数
+      if (route.query.keyword) {
+        return true;
+      }
+      
+      // 检查是否有保存的搜索状态
+      try {
+        const savedState = localStorage.getItem('pageState_searchAggregation');
+        if (savedState) {
+          const state = JSON.parse(savedState);
+          return state.hasSearched && state.searchKeyword;
+        }
+      } catch (error) {
+        console.error('检查搜索状态失败:', error);
+      }
+      
+      return false;
+    });
     
     // 从localStorage获取聚搜功能状态
     const getSearchAggregationStatus = () => {
@@ -97,9 +187,14 @@ export default defineComponent({
     // 响应式的聚搜状态
     const searchAggregationEnabled = ref(getSearchAggregationStatus());
     
+    // 用于强制更新hasSearchResults计算属性的响应式变量
+    const forceUpdate = ref(0);
+    
     // 监听localStorage变化
     const updateSearchAggregationStatus = () => {
       searchAggregationEnabled.value = getSearchAggregationStatus();
+      // 强制更新hasSearchResults计算属性
+      forceUpdate.value++;
     };
     
     // 监听storage事件
@@ -108,15 +203,44 @@ export default defineComponent({
     // 定期检查状态变化（用于同一页面内的状态更新）
     const checkInterval = setInterval(updateSearchAggregationStatus, 1000);
     
+    // 监听路由变化，同步搜索关键词
+    watch(() => route.query.keyword, (keyword) => {
+      if (keyword && isSearchAggregationPage.value) {
+        searchValue.value = keyword;
+      }
+    }, { immediate: true });
+    
+    // 监听路由变化，清空搜索框（当离开搜索页面时）
+    watch(() => route.name, (routeName) => {
+      if (routeName !== 'SearchAggregation') {
+        searchValue.value = '';
+      }
+    });
+    
     return {
       showConfirmModal,
-      searchAggregationEnabled
+      searchAggregationEnabled,
+      searchValue,
+      showSearchSettings: ref(false),
+      isSearchAggregationPage,
+      hasSearchResults,
+      router
     };
   },
   methods: {
     goBack() {
       Message.info("前进按钮");
       // 执行前进逻辑
+    },
+    goBackFromSearch() {
+      // 从聚合搜索页面返回到上一页
+      // 检查是否有历史记录可以返回
+      if (window.history.length > 1) {
+        this.$router.back();
+      } else {
+        // 如果没有历史记录，返回到首页
+        this.$router.push({ name: 'Home' });
+      }
     },
     goForward() {
       Message.info("后退按钮");
@@ -128,8 +252,86 @@ export default defineComponent({
       window.location.reload();
     },
     onSearch(value) {
-      Message.info(`搜索内容: ${value}`);
-      // 执行搜索逻辑
+      console.log('🔍 [Header] onSearch被触发:', { value, isSearchPage: this.isSearchAggregationPage });
+      
+      if (!value || !value.trim()) {
+        Message.warning('请输入搜索内容');
+        return;
+      }
+      
+      const keyword = value.trim();
+      console.log('🔍 [Header] 准备执行搜索:', { keyword, currentRoute: this.$route.name });
+      
+      if (this.isSearchAggregationPage) {
+        // 如果已经在搜索页面，直接更新查询参数
+        console.log('🔍 [Header] 在搜索页面，更新查询参数');
+        // 添加时间戳参数强制触发路由变化，确保即使相同关键词也能重新搜索
+        this.$router.push({
+          name: 'SearchAggregation',
+          query: { 
+            keyword,
+            _t: Date.now() // 时间戳参数强制路由更新
+          }
+        });
+      } else {
+        // 如果不在搜索页面，跳转到聚合搜索页面并执行搜索
+        console.log('🔍 [Header] 不在搜索页面，跳转到搜索页面');
+        this.$router.push({
+          name: 'SearchAggregation',
+          query: { keyword }
+        });
+      }
+    },
+    handleSearchClick() {
+      // 点击搜索框时的处理
+      if (!this.isSearchAggregationPage) {
+        // 如果不在搜索页面，跳转到搜索页面
+        this.$router.push({ name: 'SearchAggregation' });
+      }
+    },
+    handleSearchInput(value) {
+      // 搜索输入时的处理：在聚合搜索页写入草稿以生成建议
+      if (this.isSearchAggregationPage) {
+        const query = { ...this.$route.query, keywordDraft: value };
+        this.$router.push({ name: 'SearchAggregation', query });
+      }
+    },
+    handleSearchClear() {
+      // 清除输入内容，同时清空聚搜页的草稿
+      if (this.isSearchAggregationPage) {
+        const query = { ...this.$route.query };
+        delete query.keywordDraft;
+        this.$router.push({ name: 'SearchAggregation', query });
+      }
+    },
+    openSearchSettings() {
+      // 打开搜索设置弹窗
+      this.showSearchSettings = true;
+    },
+    onSearchSettingsConfirm(settings) {
+      // 处理搜索设置确认
+      const selectedCount = settings.selectedSources ? settings.selectedSources.length : 0;
+      Message.success(`已选择 ${selectedCount} 个搜索源`);
+      this.showSearchSettings = false;
+      
+      // 触发自定义事件通知搜索源变更
+      window.dispatchEvent(new CustomEvent('searchSettingsChanged', {
+        detail: settings
+      }));
+    },
+    closeSearchResults() {
+      // 关闭搜索结果，回到搜索页面的初始状态
+      this.searchValue = '';
+      
+      // 清除保存的页面状态
+      try {
+        localStorage.removeItem('pageState_searchAggregation');
+        console.log('🔄 [状态清理] 已清除聚合搜索页面保存的状态');
+      } catch (error) {
+        console.error('清除页面状态失败:', error);
+      }
+      
+      this.$router.push({ name: 'SearchAggregation' });
     },
     minimize() {
       Message.info("最小化窗口");
@@ -146,6 +348,17 @@ export default defineComponent({
     },
     hideCloseConfirm() {
       this.showConfirmModal = false;
+    },
+    clearSessionStorage() {
+      try {
+        // 清除当前页面的sessionStorage
+        sessionStorage.clear();
+        this.showConfirmModal = false;
+        Message.success("缓存已清除");
+      } catch (error) {
+        console.error('清除缓存失败:', error);
+        Message.error("清除缓存失败");
+      }
     },
     confirmClose() {
       this.showConfirmModal = false;
@@ -226,6 +439,17 @@ export default defineComponent({
   gap: 8px;
 }
 
+.search-page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-1);
+  margin-left: 12px;
+  white-space: nowrap;
+  user-select: none;
+  display: flex;
+  align-items: center;
+}
+
 .header-center {
   flex: 1;
   display: flex;
@@ -285,45 +509,139 @@ export default defineComponent({
   box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
 }
 
-/* 搜索框样式 */
-.header-center :deep(.arco-input-search) {
+/* 搜索容器样式 */
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 0;
   width: 100%;
-  max-width: 400px;
+  max-width: 450px;
+  border: 1px solid var(--color-border-2);
   border-radius: 8px;
   background: var(--color-bg-1);
-  border: 1px solid var(--color-border-2);
+  padding: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
 }
 
-.header-center :deep(.arco-input-search:hover) {
+.search-container:hover {
   border-color: var(--color-border-3);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.header-center :deep(.arco-input-search:focus-within) {
+/* 搜索框样式 */
+.search-container :deep(.arco-input-search) {
+  flex: 1;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.search-container :deep(.arco-input-search:hover) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* 聚合搜索页面时的搜索框样式 */
+.header-center.search-page-mode .search-container :deep(.arco-input-search) {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.header-center.search-page-mode .search-container :deep(.arco-input-search .arco-input-wrapper) {
+  border: 2px solid var(--color-border-2);
+  transition: all 0.2s ease;
+}
+
+.header-center.search-page-mode .search-container :deep(.arco-input-search .arco-input-wrapper:focus-within) {
+  border-color: var(--color-primary-6);
+  box-shadow: 0 0 0 3px rgba(var(--primary-6), 0.1);
+}
+
+/* 搜索设置按钮样式 */
+.search-settings-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--color-text-2) !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.search-settings-btn:hover {
+  background: var(--color-fill-2) !important;
+  border: none !important;
+  color: var(--color-text-1) !important;
+  transform: none;
+  box-shadow: none !important;
+}
+
+.search-settings-btn:active {
+  transform: none !important;
+  background: var(--color-fill-3) !important;
+}
+
+/* 关闭搜索按钮样式 */
+.close-search-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--color-text-2) !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.close-search-btn:hover {
+  background: var(--color-danger-light-1) !important;
+  border: none !important;
+  color: var(--color-danger-6) !important;
+  transform: none;
+  box-shadow: none !important;
+}
+
+.close-search-btn:active {
+  transform: none !important;
+  background: var(--color-danger-light-2) !important;
+}
+
+.search-container:focus-within {
   border-color: var(--color-primary-6);
   box-shadow: 0 0 0 2px var(--color-primary-1);
 }
 
-.header-center :deep(.arco-input-wrapper) {
+.search-container :deep(.arco-input-search:focus-within) {
+  border: none;
+  box-shadow: none;
+}
+
+.search-container :deep(.arco-input-wrapper) {
   border-radius: 8px;
   background: transparent;
   border: none;
 }
 
-.header-center :deep(.arco-input) {
+.search-container :deep(.arco-input) {
   background: transparent;
   border: none;
   color: var(--color-text-1);
   font-size: 14px;
 }
 
-.header-center :deep(.arco-input::placeholder) {
+.search-container :deep(.arco-input::placeholder) {
   color: var(--color-text-3);
 }
 
-.header-center :deep(.arco-input-search-btn) {
+.search-container :deep(.arco-input-search-btn) {
   border-radius: 0 8px 8px 0;
   background: var(--color-primary-6);
   border: none;
@@ -331,7 +649,7 @@ export default defineComponent({
   transition: background-color 0.2s ease;
 }
 
-.header-center :deep(.arco-input-search-btn:hover) {
+.search-container :deep(.arco-input-search-btn:hover) {
   background: var(--color-primary-7);
 }
 
@@ -415,6 +733,13 @@ export default defineComponent({
   font-weight: 500;
 }
 
+.clear-cache-btn {
+  min-width: 90px;
+  height: 36px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
 .confirm-btn {
   min-width: 100px;
   height: 36px;
@@ -454,8 +779,8 @@ export default defineComponent({
     margin: 0 10px;
   }
   
-  .header-center :deep(.arco-input-search) {
-    max-width: 250px;
+  .search-container {
+    max-width: 280px;
   }
   
   .confirm-modal {
@@ -484,8 +809,8 @@ export default defineComponent({
     margin: 0 5px;
   }
   
-  .header-center :deep(.arco-input-search) {
-    max-width: 200px;
+  .search-container {
+    max-width: 220px;
   }
   
   .header-left :deep(.arco-btn),
