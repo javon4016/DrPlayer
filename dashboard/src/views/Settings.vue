@@ -1383,7 +1383,7 @@ const downloadProxyPlayer = () => {
 
 // 下载代理嗅探器
 const downloadProxySniffer = () => {
-  const url = 'https://wwvy.lanzouo.com/iXrG437tedfc'
+  const url = 'https://github.com/hjdhnx/pup-sniffer/releases'
   window.open(url, '_blank')
   Message.success('正在打开代理嗅探器下载页面')
 }
