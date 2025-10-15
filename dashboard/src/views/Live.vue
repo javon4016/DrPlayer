@@ -157,18 +157,28 @@
             </div>
             
             <div v-else class="player-wrapper">
-              <!-- 播放器头部组件 -->
-              <PlayerHeader
-                :episode-name="selectedChannel.name"
-                :is-live-mode="true"
-                :show-debug-button="true"
-                :qualities="routeQualities"
-                :current-quality="currentQualityName"
-                @quality-change="handleQualityChange"
-                @proxy-change="handleProxyChange"
-                @toggle-debug="handleToggleDebug"
-                @close="handleClosePlayer"
-              />
+              <!-- 播放器控制区域 -->
+              <div class="player-controls-area">
+                <!-- 播放器头部组件（不包含代理功能） -->
+                <PlayerHeader
+                  :episode-name="selectedChannel.name"
+                  :is-live-mode="true"
+                  :show-debug-button="true"
+                  :qualities="routeQualities"
+                  :current-quality="currentQualityName"
+                  @quality-change="handleQualityChange"
+                  @toggle-debug="handleToggleDebug"
+                  @close="handleClosePlayer"
+                />
+                
+                <!-- 独立的直播代理选择器 -->
+                <div class="live-proxy-control">
+                  <LiveProxySelector
+                    ref="liveProxySelector"
+                    @change="handleLiveProxyChange"
+                  />
+                </div>
+              </div>
               
               <!-- 默认播放器 -->
               <div class="video-container">
@@ -209,7 +219,7 @@
       :headers="{}"
       :player-type="'default'"
       :detected-format="'m3u8'"
-      :proxy-url="getProxyChannelUrl()"
+      :proxy-url="liveProxyEnabled && liveProxyUrl ? getProxyChannelUrl() : ''"
       @close="handleToggleDebug"
     />
   </div>
@@ -231,7 +241,8 @@ import {
 import liveService from '@/api/services/live.js'
 import PlayerHeader from '@/components/players/PlayerHeader.vue'
 import DebugInfoDialog from '@/components/players/DebugInfoDialog.vue'
-import { processVideoUrl } from '@/utils/proxyPlayer'
+import LiveProxySelector from '@/components/players/LiveProxySelector.vue'
+import { processVideoUrl, buildProxyPlayUrl } from '@/utils/proxyPlayer'
 
 const router = useRouter()
 
@@ -252,18 +263,10 @@ const videoPlayer = ref(null)
 // PlayerHeader相关状态
 const debugMode = ref(false)
 
-// 从addressSettings中读取代理状态
-const getProxyEnabledFromSettings = () => {
-  try {
-    const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
-    return savedAddresses.proxyPlayEnabled === true
-  } catch (error) {
-    console.error('读取代理设置失败:', error)
-    return false
-  }
-}
-
-const proxyEnabled = ref(getProxyEnabledFromSettings())
+// 直播界面独立的代理状态
+const liveProxyEnabled = ref(false)
+const liveProxyUrl = ref('')
+const liveProxySelector = ref(null)
 
 // 计算属性
 const filteredGroups = computed(() => {
@@ -426,9 +429,6 @@ onUnmounted(() => {
     mpegtsPlayer.destroy()
     mpegtsPlayer = null
   }
-  
-  // 清理事件监听器
-  window.removeEventListener('addressSettingsChanged', handleAddressSettingsChange)
 })
 const getCurrentChannelUrl = () => {
   if (!selectedChannel.value) return ''
@@ -446,18 +446,29 @@ const getProxyChannelUrl = () => {
   const originalUrl = getCurrentChannelUrl()
   if (!originalUrl) return ''
   
-  // 对于直播流，通常不需要特殊的请求头，但可以通过代理播放来处理跨域问题
-  return processVideoUrl(originalUrl, {})
+  // 如果启用了直播代理且有代理URL，使用直播独立代理URL构建代理地址
+  if (liveProxyEnabled.value && liveProxyUrl.value) {
+    console.log('🔄 [直播代理] 构建代理URL:', {
+      originalUrl: originalUrl,
+      proxyAddress: liveProxyUrl.value,
+      enabled: liveProxyEnabled.value
+    })
+    return buildProxyPlayUrl(originalUrl, liveProxyUrl.value, {})
+  }
+  
+  // 否则返回原始URL
+  return originalUrl
 }
 
-// 获取视频URL（根据代理设置）
+// 获取视频URL（根据直播代理设置）
 const getVideoUrl = () => {
   const originalUrl = getCurrentChannelUrl()
   const proxyUrl = getProxyChannelUrl()
-  const finalUrl = proxyEnabled.value ? proxyUrl : originalUrl
+  const finalUrl = liveProxyEnabled.value ? proxyUrl : originalUrl
   
   console.log('=== getVideoUrl 调试信息 ===')
-  console.log('代理状态:', proxyEnabled.value)
+  console.log('直播代理状态:', liveProxyEnabled.value)
+  console.log('直播代理URL:', liveProxyUrl.value)
   console.log('原始URL:', originalUrl)
   console.log('代理URL:', proxyUrl)
   console.log('最终URL:', finalUrl)
@@ -564,37 +575,17 @@ const handleQualityChange = (qualityName) => {
   }
 }
 
-const handleProxyChange = (proxyUrl) => {
-  console.log('=== 代理播放地址变更 ===')
-  console.log('新代理URL:', proxyUrl)
-  console.log('变更前代理状态:', proxyEnabled.value)
+// 处理直播代理变更（独立于全局代理设置）
+const handleLiveProxyChange = (proxyData) => {
+  console.log('=== 直播代理播放地址变更 ===')
+  console.log('代理数据:', proxyData)
+  console.log('变更前状态:', { enabled: liveProxyEnabled.value, url: liveProxyUrl.value })
   
-  try {
-    // 获取现有的地址设置
-    const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
-    
-    // 保存代理设置到addressSettings（与PlayerHeader保持一致）
-    if (proxyUrl === 'disabled') {
-      savedAddresses.proxyPlayEnabled = false
-      // 不清除proxyPlay地址，保留用户配置
-      proxyEnabled.value = false
-    } else {
-      savedAddresses.proxyPlayEnabled = true
-      savedAddresses.proxyPlay = proxyUrl
-      proxyEnabled.value = true
-    }
-    
-    // 保存到localStorage
-    localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-    
-    // 触发自定义事件，通知其他组件设置已变化
-    window.dispatchEvent(new CustomEvent('addressSettingsChanged'))
-    
-    console.log('变更后代理状态:', proxyEnabled.value)
-    console.log('保存的addressSettings:', savedAddresses)
-  } catch (error) {
-    console.error('保存代理播放设置失败:', error)
-  }
+  // 更新直播代理状态
+  liveProxyEnabled.value = proxyData.enabled
+  liveProxyUrl.value = proxyData.url
+  
+  console.log('变更后状态:', { enabled: liveProxyEnabled.value, url: liveProxyUrl.value })
   
   // 如果当前有选中的频道，重新加载视频以应用代理设置
   if (selectedChannel.value) {
@@ -611,6 +602,7 @@ const handleProxyChange = (proxyUrl) => {
       
       // 使用getVideoUrl函数获取正确的URL
       const newUrl = getVideoUrl()
+      console.log('直播代理变更后重新设置视频源:', newUrl)
       videoPlayer.value.src = newUrl
       videoPlayer.value.load()
       
@@ -621,13 +613,38 @@ const handleProxyChange = (proxyUrl) => {
     }
   }
   
-  Message.success(`代理播放设置: ${proxyUrl === 'disabled' ? '已关闭' : '已启用'}`)
+  Message.success(`直播代理播放: ${proxyData.enabled ? '已启用' : '已关闭'}`)
 }
 
 const handleToggleDebug = () => {
   debugMode.value = !debugMode.value
   console.log('调试模式:', debugMode.value ? '开启' : '关闭')
-  Message.info(`调试模式${debugMode.value ? '已开启' : '已关闭'}`)
+  
+  if (debugMode.value) {
+    console.log('=== 调试信息详情 ===')
+    
+    // 检查localStorage内容
+    const LIVE_PROXY_STORAGE_KEY = 'live-proxy-selection'
+    const savedSelection = localStorage.getItem(LIVE_PROXY_STORAGE_KEY)
+    console.log('localStorage中的直播代理选择:', savedSelection)
+    
+    console.log('直播代理启用状态:', liveProxyEnabled.value)
+    console.log('直播代理URL:', liveProxyUrl.value)
+    console.log('原始频道URL:', getCurrentChannelUrl())
+    console.log('代理后URL:', getProxyChannelUrl())
+    console.log('传递给DebugInfoDialog的proxy-url:', liveProxyEnabled.value && liveProxyUrl.value ? getProxyChannelUrl() : '')
+    
+    // 检查LiveProxySelector组件状态
+    if (liveProxySelector.value) {
+      console.log('LiveProxySelector组件状态:')
+      console.log('- getCurrentSelection():', liveProxySelector.value.getCurrentSelection?.())
+      console.log('- isEnabled():', liveProxySelector.value.isEnabled?.())
+      console.log('- getProxyUrl():', liveProxySelector.value.getProxyUrl?.())
+    }
+    
+    console.log('==================')
+  }
+  // Message.info(`调试模式${debugMode.value ? '已开启' : '已关闭'}`)
 }
 
 
@@ -674,17 +691,35 @@ const testLocalM3U = async () => {
       }
     }
 
-// 监听地址设置变化
-const handleAddressSettingsChange = () => {
-  const newProxyEnabled = getProxyEnabledFromSettings()
-  if (proxyEnabled.value !== newProxyEnabled) {
-    proxyEnabled.value = newProxyEnabled
-    console.log('代理状态已同步更新:', newProxyEnabled)
+// 组件挂载时加载数据
+// 初始化直播代理状态
+const initLiveProxyState = () => {
+  try {
+    const LIVE_PROXY_STORAGE_KEY = 'live-proxy-selection'  // 修复：使用与LiveProxySelector组件一致的键名
+    const savedSelection = localStorage.getItem(LIVE_PROXY_STORAGE_KEY)
+    
+    console.log('从localStorage读取的直播代理选择:', savedSelection)
+    
+    if (savedSelection && savedSelection !== 'null' && savedSelection !== 'disabled') {
+      liveProxyEnabled.value = true
+      liveProxyUrl.value = savedSelection
+      console.log('初始化直播代理状态:', { enabled: true, url: savedSelection })
+    } else {
+      liveProxyEnabled.value = false
+      liveProxyUrl.value = ''
+      console.log('初始化直播代理状态:', { enabled: false, url: '', reason: savedSelection || 'null/disabled' })
+    }
+  } catch (error) {
+    console.error('初始化直播代理状态失败:', error)
+    liveProxyEnabled.value = false
+    liveProxyUrl.value = ''
   }
 }
 
-// 组件挂载时加载数据
 onMounted(async () => {
+  // 初始化直播代理状态
+  initLiveProxyState()
+  
   try {
     await loadLiveData()
   } catch (error) {
@@ -692,9 +727,6 @@ onMounted(async () => {
     // 如果加载失败，尝试测试本地M3U
     testLocalM3U()
   }
-  
-  // 监听地址设置变化事件
-  window.addEventListener('addressSettingsChanged', handleAddressSettingsChange)
 })
 </script>
 

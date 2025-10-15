@@ -196,6 +196,9 @@ const currentQuality = ref('默认')
 const availableQualities = ref([])
 const currentPlayingUrl = ref('')
 
+// 代理设置变化追踪器 - 用于强制 proxyVideoUrl 计算属性重新计算
+const proxySettingsVersion = ref(0)
+
 // 计算属性：是否显示调试按钮
 const showDebugButton = computed(() => {
   return !!props.videoUrl
@@ -203,6 +206,9 @@ const showDebugButton = computed(() => {
 
 // 计算属性：代理后的视频链接
 const proxyVideoUrl = computed(() => {
+  // 依赖 proxySettingsVersion 以响应代理设置变化
+  proxySettingsVersion.value
+  
   // 使用当前实际播放的URL，如果没有则使用props.videoUrl
   const actualUrl = currentPlayingUrl.value || props.videoUrl
   if (!actualUrl) return ''
@@ -1555,6 +1561,10 @@ const handleResize = () => {
 // 处理代理设置变化
 const handleAddressSettingsChange = () => {
   console.log('检测到代理设置变化，重新初始化播放器')
+  
+  // 更新代理设置版本号，强制 proxyVideoUrl 计算属性重新计算
+  proxySettingsVersion.value++
+  
   if (props.videoUrl && props.visible) {
     nextTick(() => {
       initArtPlayer(props.videoUrl)

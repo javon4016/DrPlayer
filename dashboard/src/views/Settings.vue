@@ -10,57 +10,57 @@
       <!-- 地址设置卡片 -->
       <a-card class="settings-card config-card" title="地址设置" :bordered="false">
         <template #extra>
-          <icon-link class="card-icon" />
+          <icon-link class="card-icon"/>
         </template>
-        
+
         <div class="address-settings-section">
           <!-- 点播配置 -->
           <div class="address-config-item">
             <div class="address-config-row">
               <div class="address-config-info">
-                <icon-play-circle class="address-config-icon" />
+                <icon-play-circle class="address-config-icon"/>
                 <div class="address-config-text">
                   <div class="address-config-title">点播配置</div>
                   <div class="address-config-desc">配置点播视频数据源地址</div>
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-input 
-                  v-model="addressSettings.vodConfig" 
-                  placeholder="请输入点播配置地址"
-                  size="medium"
-                  class="address-config-input"
+                <a-input
+                    v-model="addressSettings.vodConfig"
+                    placeholder="请输入点播配置地址"
+                    size="medium"
+                    class="address-config-input"
                 >
                   <template #prefix>
-                    <icon-link />
+                    <icon-link/>
                   </template>
                 </a-input>
                 <div class="address-config-actions">
-                  <AddressHistory 
-                    ref="vodConfigHistory"
-                    config-key="vod-config"
-                    :current-value="addressSettings.vodConfig"
-                    @select="(value) => addressSettings.vodConfig = value"
+                  <AddressHistory
+                      ref="vodConfigHistory"
+                      config-key="vod-config"
+                      :current-value="addressSettings.vodConfig"
+                      @select="(value) => addressSettings.vodConfig = value"
                   />
-                  <a-button 
-                    type="outline" 
-                    @click="testAddress('vodConfig')"
-                    :loading="addressTesting.vodConfig"
-                    size="medium"
+                  <a-button
+                      type="outline"
+                      @click="testAddress('vodConfig')"
+                      :loading="addressTesting.vodConfig"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-check-circle />
+                      <icon-check-circle/>
                     </template>
                     测试
                   </a-button>
-                  <a-button 
-                    type="primary" 
-                    @click="saveAddress('vodConfig')"
-                    :loading="addressSaving.vodConfig"
-                    size="medium"
+                  <a-button
+                      type="primary"
+                      @click="saveAddress('vodConfig')"
+                      :loading="addressSaving.vodConfig"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-save />
+                      <icon-save/>
                     </template>
                     保存
                   </a-button>
@@ -68,17 +68,17 @@
               </div>
             </div>
             <div v-if="addressStatus.vodConfig && addressStatus.vodConfig.message" class="address-config-status">
-              <div 
-                class="config-message"
-                :class="{
+              <div
+                  class="config-message"
+                  :class="{
                   'config-message-success': addressStatus.vodConfig.type === 'success',
                   'config-message-error': addressStatus.vodConfig.type === 'error',
                   'config-message-warning': addressStatus.vodConfig.type === 'warning'
                 }"
               >
-                <icon-check-circle v-if="addressStatus.vodConfig.type === 'success'" class="config-icon" />
-                <icon-exclamation-circle v-else-if="addressStatus.vodConfig.type === 'error'" class="config-icon" />
-                <icon-info-circle v-else class="config-icon" />
+                <icon-check-circle v-if="addressStatus.vodConfig.type === 'success'" class="config-icon"/>
+                <icon-exclamation-circle v-else-if="addressStatus.vodConfig.type === 'error'" class="config-icon"/>
+                <icon-info-circle v-else class="config-icon"/>
                 <span class="config-text">{{ addressStatus.vodConfig.message }}</span>
               </div>
             </div>
@@ -88,49 +88,49 @@
           <div class="address-config-item">
             <div class="address-config-row">
               <div class="address-config-info">
-                <icon-live-broadcast class="address-config-icon" />
+                <icon-live-broadcast class="address-config-icon"/>
                 <div class="address-config-text">
                   <div class="address-config-title">直播配置</div>
                   <div class="address-config-desc">配置直播频道数据源地址</div>
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-input 
-                  v-model="addressSettings.liveConfig" 
-                  placeholder="请输入直播配置地址"
-                  size="medium"
-                  class="address-config-input"
+                <a-input
+                    v-model="addressSettings.liveConfig"
+                    placeholder="请输入直播配置地址"
+                    size="medium"
+                    class="address-config-input"
                 >
                   <template #prefix>
-                    <icon-link />
+                    <icon-link/>
                   </template>
                 </a-input>
                 <div class="address-config-actions">
-                  <AddressHistory 
-                    ref="liveConfigHistory"
-                    config-key="live-config"
-                    :current-value="addressSettings.liveConfig"
-                    @select="(value) => addressSettings.liveConfig = value"
+                  <AddressHistory
+                      ref="liveConfigHistory"
+                      config-key="live-config"
+                      :current-value="addressSettings.liveConfig"
+                      @select="(value) => addressSettings.liveConfig = value"
                   />
-                  <a-button 
-                    type="outline" 
-                    @click="resetLiveConfig"
-                    :loading="addressSaving.liveConfigReset"
-                    size="medium"
+                  <a-button
+                      type="outline"
+                      @click="resetLiveConfig"
+                      :loading="addressSaving.liveConfigReset"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-refresh />
+                      <icon-refresh/>
                     </template>
                     重置
                   </a-button>
-                  <a-button 
-                    type="primary" 
-                    @click="saveAddress('liveConfig')"
-                    :loading="addressSaving.liveConfig"
-                    size="medium"
+                  <a-button
+                      type="primary"
+                      @click="saveAddress('liveConfig')"
+                      :loading="addressSaving.liveConfig"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-save />
+                      <icon-save/>
                     </template>
                     保存
                   </a-button>
@@ -138,17 +138,17 @@
               </div>
             </div>
             <div v-if="addressStatus.liveConfig && addressStatus.liveConfig.message" class="address-config-status">
-              <div 
-                class="config-message"
-                :class="{
+              <div
+                  class="config-message"
+                  :class="{
                   'config-message-success': addressStatus.liveConfig.type === 'success',
                   'config-message-error': addressStatus.liveConfig.type === 'error',
                   'config-message-warning': addressStatus.liveConfig.type === 'warning'
                 }"
               >
-                <icon-check-circle v-if="addressStatus.liveConfig.type === 'success'" class="config-icon" />
-                <icon-exclamation-circle v-else-if="addressStatus.liveConfig.type === 'error'" class="config-icon" />
-                <icon-info-circle v-else class="config-icon" />
+                <icon-check-circle v-if="addressStatus.liveConfig.type === 'success'" class="config-icon"/>
+                <icon-exclamation-circle v-else-if="addressStatus.liveConfig.type === 'error'" class="config-icon"/>
+                <icon-info-circle v-else class="config-icon"/>
                 <span class="config-text">{{ addressStatus.liveConfig.message }}</span>
               </div>
             </div>
@@ -158,41 +158,41 @@
           <div class="address-config-item">
             <div class="address-config-row">
               <div class="address-config-info">
-                <icon-swap class="address-config-icon" />
+                <icon-swap class="address-config-icon"/>
                 <div class="address-config-text">
                   <div class="address-config-title">代理访问接口</div>
                   <div class="address-config-desc">配置代理访问服务接口地址</div>
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-switch v-model="addressSettings.proxyAccessEnabled" class="address-config-switch" />
-                <a-input 
-                  v-model="addressSettings.proxyAccess" 
-                  placeholder="请输入代理访问接口地址"
-                  size="medium"
-                  class="address-config-input"
-                  :disabled="!addressSettings.proxyAccessEnabled"
+                <a-switch v-model="addressSettings.proxyAccessEnabled" class="address-config-switch"/>
+                <a-input
+                    v-model="addressSettings.proxyAccess"
+                    placeholder="请输入代理访问接口地址"
+                    size="medium"
+                    class="address-config-input"
+                    :disabled="!addressSettings.proxyAccessEnabled"
                 >
                   <template #prefix>
-                    <icon-link />
+                    <icon-link/>
                   </template>
                 </a-input>
                 <div class="address-config-actions">
-                  <AddressHistory 
-                    ref="proxyAccessHistory"
-                    config-key="proxy-access"
-                    :current-value="addressSettings.proxyAccess"
-                    @select="(value) => addressSettings.proxyAccess = value"
+                  <AddressHistory
+                      ref="proxyAccessHistory"
+                      config-key="proxy-access"
+                      :current-value="addressSettings.proxyAccess"
+                      @select="(value) => addressSettings.proxyAccess = value"
                   />
-                  <a-button 
-                    type="primary" 
-                    @click="saveAddress('proxyAccess')"
-                    :loading="addressSaving.proxyAccess"
-                    :disabled="!addressSettings.proxyAccessEnabled"
-                    size="medium"
+                  <a-button
+                      type="primary"
+                      @click="saveAddress('proxyAccess')"
+                      :loading="addressSaving.proxyAccess"
+                      :disabled="!addressSettings.proxyAccessEnabled"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-save />
+                      <icon-save/>
                     </template>
                     保存
                   </a-button>
@@ -200,17 +200,17 @@
               </div>
             </div>
             <div v-if="addressStatus.proxyAccess && addressStatus.proxyAccess.message" class="address-config-status">
-              <div 
-                class="config-message"
-                :class="{
+              <div
+                  class="config-message"
+                  :class="{
                   'config-message-success': addressStatus.proxyAccess.type === 'success',
                   'config-message-error': addressStatus.proxyAccess.type === 'error',
                   'config-message-warning': addressStatus.proxyAccess.type === 'warning'
                 }"
               >
-                <icon-check-circle v-if="addressStatus.proxyAccess.type === 'success'" class="config-icon" />
-                <icon-exclamation-circle v-else-if="addressStatus.proxyAccess.type === 'error'" class="config-icon" />
-                <icon-info-circle v-else class="config-icon" />
+                <icon-check-circle v-if="addressStatus.proxyAccess.type === 'success'" class="config-icon"/>
+                <icon-exclamation-circle v-else-if="addressStatus.proxyAccess.type === 'error'" class="config-icon"/>
+                <icon-info-circle v-else class="config-icon"/>
                 <span class="config-text">{{ addressStatus.proxyAccess.message }}</span>
               </div>
             </div>
@@ -220,63 +220,64 @@
           <div class="address-config-item">
             <div class="address-config-row">
               <div class="address-config-info">
-                <icon-play-arrow class="address-config-icon" />
+                <icon-play-arrow class="address-config-icon"/>
                 <div class="address-config-text">
                   <div class="address-config-title">代理播放接口</div>
                   <div class="address-config-desc">配置代理播放服务接口地址</div>
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-switch v-model="addressSettings.proxyPlayEnabled" class="address-config-switch" @change="handleProxyPlayEnabledChange" />
-                <a-input 
-                  v-model="addressSettings.proxyPlay" 
-                  placeholder="请输入代理播放接口地址"
-                  size="medium"
-                  class="address-config-input"
-                  :disabled="!addressSettings.proxyPlayEnabled"
+                <a-switch v-model="addressSettings.proxyPlayEnabled" class="address-config-switch"
+                          @change="handleProxyPlayEnabledChange"/>
+                <a-input
+                    v-model="addressSettings.proxyPlay"
+                    placeholder="请输入代理播放接口地址"
+                    size="medium"
+                    class="address-config-input"
+                    :disabled="!addressSettings.proxyPlayEnabled"
                 >
                   <template #prefix>
-                    <icon-link />
+                    <icon-link/>
                   </template>
                 </a-input>
                 <div class="address-config-actions">
-                  <a-button 
-                    type="text" 
-                    @click="downloadProxyPlayer"
-                    size="medium"
-                    class="download-btn"
-                    title="下载代理播放器"
+                  <a-button
+                      type="text"
+                      @click="downloadProxyPlayer"
+                      size="medium"
+                      class="download-btn"
+                      title="下载代理播放器"
                   >
                     <template #icon>
-                      <icon-download />
+                      <icon-download/>
                     </template>
                   </a-button>
-                  <AddressHistory 
-                    ref="proxyPlayHistory"
-                    config-key="proxy-play"
-                    :current-value="addressSettings.proxyPlay"
-                    @select="(value) => addressSettings.proxyPlay = value"
+                  <AddressHistory
+                      ref="proxyPlayHistory"
+                      config-key="proxy-play"
+                      :current-value="addressSettings.proxyPlay"
+                      @select="(value) => addressSettings.proxyPlay = value"
                   />
-                  <a-button 
-                    type="outline" 
-                    @click="resetProxyPlay"
-                    :loading="addressSaving.proxyPlayReset"
-                    size="medium"
+                  <a-button
+                      type="outline"
+                      @click="resetProxyPlay"
+                      :loading="addressSaving.proxyPlayReset"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-refresh />
+                      <icon-refresh/>
                     </template>
                     重置
                   </a-button>
-                  <a-button 
-                    type="primary" 
-                    @click="saveAddress('proxyPlay')"
-                    :loading="addressSaving.proxyPlay"
-                    :disabled="!addressSettings.proxyPlayEnabled"
-                    size="medium"
+                  <a-button
+                      type="primary"
+                      @click="saveAddress('proxyPlay')"
+                      :loading="addressSaving.proxyPlay"
+                      :disabled="!addressSettings.proxyPlayEnabled"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-save />
+                      <icon-save/>
                     </template>
                     保存
                   </a-button>
@@ -284,17 +285,17 @@
               </div>
             </div>
             <div v-if="addressStatus.proxyPlay && addressStatus.proxyPlay.message" class="address-config-status">
-              <div 
-                class="config-message"
-                :class="{
+              <div
+                  class="config-message"
+                  :class="{
                   'config-message-success': addressStatus.proxyPlay.type === 'success',
                   'config-message-error': addressStatus.proxyPlay.type === 'error',
                   'config-message-warning': addressStatus.proxyPlay.type === 'warning'
                 }"
               >
-                <icon-check-circle v-if="addressStatus.proxyPlay.type === 'success'" class="config-icon" />
-                <icon-exclamation-circle v-else-if="addressStatus.proxyPlay.type === 'error'" class="config-icon" />
-                <icon-info-circle v-else class="config-icon" />
+                <icon-check-circle v-if="addressStatus.proxyPlay.type === 'success'" class="config-icon"/>
+                <icon-exclamation-circle v-else-if="addressStatus.proxyPlay.type === 'error'" class="config-icon"/>
+                <icon-info-circle v-else class="config-icon"/>
                 <span class="config-text">{{ addressStatus.proxyPlay.message }}</span>
               </div>
             </div>
@@ -304,63 +305,63 @@
           <div class="address-config-item">
             <div class="address-config-row">
               <div class="address-config-info">
-                <icon-search class="address-config-icon" />
+                <icon-search class="address-config-icon"/>
                 <div class="address-config-text">
                   <div class="address-config-title">代理嗅探接口</div>
                   <div class="address-config-desc">配置代理嗅探服务接口地址</div>
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-switch v-model="addressSettings.proxySniffEnabled" class="address-config-switch" />
-                <a-input 
-                  v-model="addressSettings.proxySniff" 
-                  placeholder="请输入代理嗅探接口地址"
-                  size="medium"
-                  class="address-config-input"
-                  :disabled="!addressSettings.proxySniffEnabled"
+                <a-switch v-model="addressSettings.proxySniffEnabled" class="address-config-switch"/>
+                <a-input
+                    v-model="addressSettings.proxySniff"
+                    placeholder="请输入代理嗅探接口地址"
+                    size="medium"
+                    class="address-config-input"
+                    :disabled="!addressSettings.proxySniffEnabled"
                 >
                   <template #prefix>
-                    <icon-link />
+                    <icon-link/>
                   </template>
                 </a-input>
                 <div class="address-config-actions">
-                  <a-button 
-                    type="text" 
-                    @click="downloadProxySniffer"
-                    size="medium"
-                    class="download-btn"
-                    title="下载代理嗅探器"
+                  <a-button
+                      type="text"
+                      @click="downloadProxySniffer"
+                      size="medium"
+                      class="download-btn"
+                      title="下载代理嗅探器"
                   >
                     <template #icon>
-                      <icon-download />
+                      <icon-download/>
                     </template>
                   </a-button>
-                  <AddressHistory 
-                    ref="proxySniffHistory"
-                    config-key="proxy-sniff"
-                    :current-value="addressSettings.proxySniff"
-                    @select="(value) => addressSettings.proxySniff = value"
+                  <AddressHistory
+                      ref="proxySniffHistory"
+                      config-key="proxy-sniff"
+                      :current-value="addressSettings.proxySniff"
+                      @select="(value) => addressSettings.proxySniff = value"
                   />
-                  <a-button 
-                    type="outline" 
-                    @click="resetProxySniff"
-                    :loading="addressSaving.proxySniffReset"
-                    size="medium"
+                  <a-button
+                      type="outline"
+                      @click="resetProxySniff"
+                      :loading="addressSaving.proxySniffReset"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-refresh />
+                      <icon-refresh/>
                     </template>
                     重置
                   </a-button>
-                  <a-button 
-                    type="primary" 
-                    @click="saveAddress('proxySniff')"
-                    :loading="addressSaving.proxySniff"
-                    :disabled="!addressSettings.proxySniffEnabled"
-                    size="medium"
+                  <a-button
+                      type="primary"
+                      @click="saveAddress('proxySniff')"
+                      :loading="addressSaving.proxySniff"
+                      :disabled="!addressSettings.proxySniffEnabled"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-save />
+                      <icon-save/>
                     </template>
                     保存
                   </a-button>
@@ -368,17 +369,17 @@
               </div>
             </div>
             <div v-if="addressStatus.proxySniff && addressStatus.proxySniff.message" class="address-config-status">
-              <div 
-                class="config-message"
-                :class="{
+              <div
+                  class="config-message"
+                  :class="{
                   'config-message-success': addressStatus.proxySniff.type === 'success',
                   'config-message-error': addressStatus.proxySniff.type === 'error',
                   'config-message-warning': addressStatus.proxySniff.type === 'warning'
                 }"
               >
-                <icon-check-circle v-if="addressStatus.proxySniff.type === 'success'" class="config-icon" />
-                <icon-exclamation-circle v-else-if="addressStatus.proxySniff.type === 'error'" class="config-icon" />
-                <icon-info-circle v-else class="config-icon" />
+                <icon-check-circle v-if="addressStatus.proxySniff.type === 'success'" class="config-icon"/>
+                <icon-exclamation-circle v-else-if="addressStatus.proxySniff.type === 'error'" class="config-icon"/>
+                <icon-info-circle v-else class="config-icon"/>
                 <span class="config-text">{{ addressStatus.proxySniff.message }}</span>
               </div>
             </div>
@@ -388,55 +389,56 @@
           <div class="address-config-item">
             <div class="address-config-row">
               <div class="address-config-info">
-                <icon-clock-circle class="address-config-icon" />
+                <icon-clock-circle class="address-config-icon"/>
                 <div class="address-config-text">
                   <div class="address-config-title">嗅探超时时间</div>
                   <div class="address-config-desc">设置代理嗅探接口的超时时间（秒）</div>
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-input-number 
-                  v-model="addressSettings.snifferTimeout" 
-                  placeholder="15"
-                  size="medium"
-                  class="address-config-input"
-                  :min="5"
-                  :max="60"
-                  :step="1"
-                  :disabled="!addressSettings.proxySniffEnabled"
+                <a-input-number
+                    v-model="addressSettings.snifferTimeout"
+                    placeholder="15"
+                    size="medium"
+                    class="address-config-input"
+                    :min="5"
+                    :max="60"
+                    :step="1"
+                    :disabled="!addressSettings.proxySniffEnabled"
                 >
                   <template #suffix>
                     <span class="input-suffix">秒</span>
                   </template>
                 </a-input-number>
                 <div class="address-config-actions">
-                  <a-button 
-                    type="primary" 
-                    @click="saveAddress('snifferTimeout')"
-                    :loading="addressSaving.snifferTimeout"
-                    :disabled="!addressSettings.proxySniffEnabled"
-                    size="medium"
+                  <a-button
+                      type="primary"
+                      @click="saveAddress('snifferTimeout')"
+                      :loading="addressSaving.snifferTimeout"
+                      :disabled="!addressSettings.proxySniffEnabled"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-save />
+                      <icon-save/>
                     </template>
                     保存
                   </a-button>
                 </div>
               </div>
             </div>
-            <div v-if="addressStatus.snifferTimeout && addressStatus.snifferTimeout.message" class="address-config-status">
-              <div 
-                class="config-message"
-                :class="{
+            <div v-if="addressStatus.snifferTimeout && addressStatus.snifferTimeout.message"
+                 class="address-config-status">
+              <div
+                  class="config-message"
+                  :class="{
                   'config-message-success': addressStatus.snifferTimeout.type === 'success',
                   'config-message-error': addressStatus.snifferTimeout.type === 'error',
                   'config-message-warning': addressStatus.snifferTimeout.type === 'warning'
                 }"
               >
-                <icon-check-circle v-if="addressStatus.snifferTimeout.type === 'success'" class="config-icon" />
-                <icon-exclamation-circle v-else-if="addressStatus.snifferTimeout.type === 'error'" class="config-icon" />
-                <icon-info-circle v-else class="config-icon" />
+                <icon-check-circle v-if="addressStatus.snifferTimeout.type === 'success'" class="config-icon"/>
+                <icon-exclamation-circle v-else-if="addressStatus.snifferTimeout.type === 'error'" class="config-icon"/>
+                <icon-info-circle v-else class="config-icon"/>
                 <span class="config-text">{{ addressStatus.snifferTimeout.message }}</span>
               </div>
             </div>
@@ -446,35 +448,35 @@
           <div class="address-config-item">
             <div class="address-config-row">
               <div class="address-config-info">
-                <icon-clock-circle class="address-config-icon" />
+                <icon-clock-circle class="address-config-icon"/>
                 <div class="address-config-text">
                   <div class="address-config-title">访问超时时间</div>
                   <div class="address-config-desc">设置T4接口访问的超时时间（秒）</div>
                 </div>
               </div>
               <div class="address-config-input-group">
-                <a-input-number 
-                  v-model="addressSettings.apiTimeout" 
-                  placeholder="30"
-                  size="medium"
-                  class="address-config-input"
-                  :min="5"
-                  :max="120"
-                  :step="1"
+                <a-input-number
+                    v-model="addressSettings.apiTimeout"
+                    placeholder="30"
+                    size="medium"
+                    class="address-config-input"
+                    :min="5"
+                    :max="120"
+                    :step="1"
                 >
                   <template #suffix>
                     <span class="input-suffix">秒</span>
                   </template>
                 </a-input-number>
                 <div class="address-config-actions">
-                  <a-button 
-                    type="primary" 
-                    @click="saveAddress('apiTimeout')"
-                    :loading="addressSaving.apiTimeout"
-                    size="medium"
+                  <a-button
+                      type="primary"
+                      @click="saveAddress('apiTimeout')"
+                      :loading="addressSaving.apiTimeout"
+                      size="medium"
                   >
                     <template #icon>
-                      <icon-save />
+                      <icon-save/>
                     </template>
                     保存
                   </a-button>
@@ -482,17 +484,17 @@
               </div>
             </div>
             <div v-if="addressStatus.apiTimeout && addressStatus.apiTimeout.message" class="address-config-status">
-              <div 
-                class="config-message"
-                :class="{
+              <div
+                  class="config-message"
+                  :class="{
                   'config-message-success': addressStatus.apiTimeout.type === 'success',
                   'config-message-error': addressStatus.apiTimeout.type === 'error',
                   'config-message-warning': addressStatus.apiTimeout.type === 'warning'
                 }"
               >
-                <icon-check-circle v-if="addressStatus.apiTimeout.type === 'success'" class="config-icon" />
-                <icon-exclamation-circle v-else-if="addressStatus.apiTimeout.type === 'error'" class="config-icon" />
-                <icon-info-circle v-else class="config-icon" />
+                <icon-check-circle v-if="addressStatus.apiTimeout.type === 'success'" class="config-icon"/>
+                <icon-exclamation-circle v-else-if="addressStatus.apiTimeout.type === 'error'" class="config-icon"/>
+                <icon-info-circle v-else class="config-icon"/>
                 <span class="config-text">{{ addressStatus.apiTimeout.message }}</span>
               </div>
             </div>
@@ -503,13 +505,13 @@
       <!-- 首页设置卡片 -->
       <a-card class="settings-card" title="首页设置" :bordered="false">
         <template #extra>
-          <icon-home class="card-icon" />
+          <icon-home class="card-icon"/>
         </template>
-        
+
         <div class="settings-grid">
           <div class="setting-item" @click="handleSettingClick('datasource')">
             <div class="setting-info">
-              <icon-storage class="setting-icon" />
+              <icon-storage class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">数据源</div>
                 <div class="setting-desc">管理视频数据来源</div>
@@ -517,26 +519,26 @@
             </div>
             <div class="setting-value">
               <span class="value-text">配置中</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('datasource-display')">
             <div class="setting-info">
-              <icon-eye class="setting-icon" />
+              <icon-eye class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">数据源显示</div>
                 <div class="setting-desc">控制数据源的显示状态</div>
               </div>
             </div>
             <div class="setting-value">
-              <a-switch v-model="settings.datasourceDisplay" />
+              <a-switch v-model="settings.datasourceDisplay"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('recommendation')">
             <div class="setting-info">
-              <icon-star class="setting-icon" />
+              <icon-star class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">推荐</div>
                 <div class="setting-desc">推荐内容设置</div>
@@ -544,13 +546,13 @@
             </div>
             <div class="setting-value">
               <span class="value-text">站点推荐</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('history-count')">
             <div class="setting-info">
-              <icon-history class="setting-icon" />
+              <icon-history class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">历史条数</div>
                 <div class="setting-desc">设置历史记录保存数量</div>
@@ -558,7 +560,7 @@
             </div>
             <div class="setting-value">
               <span class="value-text">100条</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
         </div>
@@ -567,26 +569,26 @@
       <!-- 播放器设置卡片 -->
       <a-card class="settings-card" title="播放器设置" :bordered="false">
         <template #extra>
-          <icon-play-circle class="card-icon" />
+          <icon-play-circle class="card-icon"/>
         </template>
-        
+
         <div class="settings-grid">
           <div class="setting-item" @click="handleSettingClick('window-preview')">
             <div class="setting-info">
-              <icon-computer class="setting-icon" />
+              <icon-computer class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">窗口预览</div>
                 <div class="setting-desc">启用播放器窗口预览</div>
               </div>
             </div>
             <div class="setting-value">
-              <a-switch v-model="settings.windowPreview" />
+              <a-switch v-model="settings.windowPreview"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('player-type')">
             <div class="setting-info">
-              <icon-play-arrow class="setting-icon" />
+              <icon-play-arrow class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">播放器</div>
                 <div class="setting-desc">选择播放器类型</div>
@@ -594,13 +596,13 @@
             </div>
             <div class="setting-value">
               <span class="value-text">{{ getCurrentPlayerName() }}</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('ijk-decode')">
             <div class="setting-info">
-              <icon-code class="setting-icon" />
+              <icon-code class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">IJK解码</div>
                 <div class="setting-desc">设置解码方式</div>
@@ -608,65 +610,65 @@
             </div>
             <div class="setting-value">
               <span class="value-text">硬解码</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('ad-filter')">
             <div class="setting-info">
-              <icon-safe class="setting-icon" />
+              <icon-safe class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">广告过滤</div>
                 <div class="setting-desc">自动过滤广告内容</div>
               </div>
             </div>
             <div class="setting-value">
-              <a-switch v-model="settings.adFilter" />
+              <a-switch v-model="settings.adFilter"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('ijk-cache')">
             <div class="setting-info">
-              <icon-storage class="setting-icon" />
+              <icon-storage class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">IJK缓存</div>
                 <div class="setting-desc">启用播放器缓存</div>
               </div>
             </div>
             <div class="setting-value">
-              <a-switch v-model="settings.ijkCache" />
+              <a-switch v-model="settings.ijkCache"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('auto-live')">
             <div class="setting-info">
-              <icon-live-broadcast class="setting-icon" />
+              <icon-live-broadcast class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">启动时进直播</div>
                 <div class="setting-desc">应用启动时自动进入直播</div>
               </div>
             </div>
             <div class="setting-value">
-              <a-switch v-model="settings.autoLive" />
+              <a-switch v-model="settings.autoLive"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('csp-bypass')">
             <div class="setting-info">
-              <icon-safe class="setting-icon" />
+              <icon-safe class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">CSP绕过</div>
                 <div class="setting-desc">自动绕过防盗链检测</div>
               </div>
             </div>
             <div class="setting-value">
-              <a-switch v-model="settings.cspBypass" />
+              <a-switch v-model="settings.cspBypass"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('referrer-policy')">
             <div class="setting-info">
-              <icon-link class="setting-icon" />
+              <icon-link class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">Referrer策略</div>
                 <div class="setting-desc">设置HTTP Referrer策略</div>
@@ -674,7 +676,7 @@
             </div>
             <div class="setting-value">
               <span class="value-text">{{ getCurrentReferrerPolicyName() }}</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
         </div>
@@ -683,13 +685,13 @@
       <!-- 系统设置卡片 -->
       <a-card class="settings-card" title="系统设置" :bordered="false">
         <template #extra>
-          <icon-desktop class="card-icon" />
+          <icon-desktop class="card-icon"/>
         </template>
-        
+
         <div class="settings-grid">
           <div class="setting-item" @click="handleSettingClick('language')">
             <div class="setting-info">
-              <icon-language class="setting-icon" />
+              <icon-language class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">语言</div>
                 <div class="setting-desc">选择界面语言</div>
@@ -697,13 +699,13 @@
             </div>
             <div class="setting-value">
               <span class="value-text">中文</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('theme')">
             <div class="setting-info">
-              <icon-palette class="setting-icon" />
+              <icon-palette class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">主题</div>
                 <div class="setting-desc">选择应用主题</div>
@@ -711,39 +713,39 @@
             </div>
             <div class="setting-value">
               <span class="value-text">奈飞</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('wallpaper')">
             <div class="setting-info">
-              <icon-image class="setting-icon" />
+              <icon-image class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">换张壁纸</div>
                 <div class="setting-desc">更换应用背景壁纸</div>
               </div>
             </div>
             <div class="setting-value">
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('reset-wallpaper')">
             <div class="setting-info">
-              <icon-refresh class="setting-icon" />
+              <icon-refresh class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">重置壁纸</div>
                 <div class="setting-desc">恢复默认背景壁纸</div>
               </div>
             </div>
             <div class="setting-value">
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('render-mode')">
             <div class="setting-info">
-              <icon-desktop class="setting-icon" />
+              <icon-desktop class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">渲染方式</div>
                 <div class="setting-desc">选择渲染模式</div>
@@ -751,13 +753,13 @@
             </div>
             <div class="setting-value">
               <span class="value-text">TextureView</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('search-display')">
             <div class="setting-info">
-              <icon-search class="setting-icon" />
+              <icon-search class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">搜索展示</div>
                 <div class="setting-desc">搜索结果展示方式</div>
@@ -765,13 +767,13 @@
             </div>
             <div class="setting-value">
               <span class="value-text">缩略图</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('webview')">
             <div class="setting-info">
-              <icon-code class="setting-icon" />
+              <icon-code class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">嗅探Webview</div>
                 <div class="setting-desc">选择Webview类型</div>
@@ -779,20 +781,20 @@
             </div>
             <div class="setting-value">
               <span class="value-text">系统自带</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('secure-dns')">
             <div class="setting-info">
-              <icon-safe class="setting-icon" />
+              <icon-safe class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">安全DNS</div>
                 <div class="setting-desc">启用安全DNS解析</div>
               </div>
             </div>
             <div class="setting-value">
-              <a-switch v-model="settings.secureDns" />
+              <a-switch v-model="settings.secureDns"/>
             </div>
           </div>
         </div>
@@ -801,39 +803,39 @@
       <!-- 数据管理卡片 -->
       <a-card class="settings-card" title="数据管理" :bordered="false">
         <template #extra>
-          <icon-folder class="card-icon" />
+          <icon-folder class="card-icon"/>
         </template>
-        
+
         <div class="settings-grid">
           <div class="setting-item" @click="handleSettingClick('backup')">
             <div class="setting-info">
-              <icon-download class="setting-icon" />
+              <icon-download class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">数据备份还原</div>
                 <div class="setting-desc">备份或还原应用数据</div>
               </div>
             </div>
             <div class="setting-value">
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('reset')">
             <div class="setting-info">
-              <icon-delete class="setting-icon" />
+              <icon-delete class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">重置</div>
                 <div class="setting-desc">重置所有设置到默认状态</div>
               </div>
             </div>
             <div class="setting-value">
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('search-aggregation')">
             <div class="setting-info">
-              <icon-find-replace class="setting-icon" />
+              <icon-find-replace class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">聚搜</div>
                 <div class="setting-desc">聚合搜索功能</div>
@@ -841,57 +843,57 @@
             </div>
             <div class="setting-value">
               <span class="value-text">{{ settings.searchAggregation ? '已开启' : '已关闭' }}</span>
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
 
           <div class="setting-item" @click="handleSettingClick('about')">
             <div class="setting-info">
-              <icon-info-circle class="setting-icon" />
+              <icon-info-circle class="setting-icon"/>
               <div class="setting-text">
                 <div class="setting-title">关于</div>
                 <div class="setting-desc">查看应用信息和版本</div>
               </div>
             </div>
             <div class="setting-value">
-              <icon-right class="arrow-icon" />
+              <icon-right class="arrow-icon"/>
             </div>
           </div>
         </div>
       </a-card>
     </div>
-    
+
     <!-- 播放器选择对话框 -->
     <PlayerSelector
-      v-model:visible="playerSelectVisible"
-      :player-types="playerTypes"
-      :current-player="settings.playerType"
-      @confirm="handlePlayerSelect"
+        v-model:visible="playerSelectVisible"
+        :player-types="playerTypes"
+        :current-player="settings.playerType"
+        @confirm="handlePlayerSelect"
     />
-    
+
     <!-- 备份还原对话框 -->
     <BackupRestoreDialog
-      v-model:visible="backupRestoreVisible"
+        v-model:visible="backupRestoreVisible"
     />
-    
+
     <!-- 关于弹窗 -->
-    <About v-model:visible="aboutModalVisible" />
+    <About v-model:visible="aboutModalVisible"/>
 
     <!-- 直达底部按钮 -->
-    <ScrollToBottom :target="settingsContainer" />
+    <ScrollToBottom :target="settingsContainer"/>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
-import { Message } from '@arco-design/web-vue'
-import { 
-  IconLink, 
-  IconCheckCircle, 
-  IconSave, 
-  IconHome, 
-  IconStorage, 
-  IconEye, 
+import {ref, reactive, watch, onMounted} from 'vue'
+import {Message} from '@arco-design/web-vue'
+import {
+  IconLink,
+  IconCheckCircle,
+  IconSave,
+  IconHome,
+  IconStorage,
+  IconEye,
   IconRight,
   IconStar,
   IconHistory,
@@ -925,13 +927,13 @@ import About from '@/components/About.vue'
 import ScrollToBottom from '@/components/ScrollToBottom.vue'
 import configService from '@/api/services/config'
 import siteService from '@/api/services/site'
-import { factoryResetWithConfirmation } from '@/services/resetService'
-import { 
-  getCSPConfig, 
-  saveCSPConfig, 
-  REFERRER_POLICIES_LIST, 
+import {factoryResetWithConfirmation} from '@/services/resetService'
+import {
+  getCSPConfig,
+  saveCSPConfig,
+  REFERRER_POLICIES_LIST,
   getCurrentReferrerPolicy,
-  setGlobalReferrerPolicy 
+  setGlobalReferrerPolicy
 } from '@/utils/csp'
 
 // AddressHistory 组件的 ref 引用
@@ -948,6 +950,7 @@ const addressSettings = reactive({
   proxyAccess: '',
   proxyAccessEnabled: false,
   // proxyPlay: 'http://localhost:57572/proxy?form=base64&url=${url}&headers=${headers}&type=${type}#嗷呜',
+  // proxyPlay: 'http://localhost:57574/?form=base64&url=${url}&headers=${headers}&type=${type}#GO',
   // proxyPlay: 'http://localhost:5757/file-proxy/proxy?form=base64&auth=drpys&url=${url}&headers=${headers}&type=${type}#DS',
   // proxyPlay: 'http://localhost:5757/m3u8-proxy/proxy?form=base64&auth=drpys&url=${url}&headers=${headers}&type=${type}#MDS',
   proxyPlay: 'http://localhost:5757/unified-proxy/proxy?form=base64&auth=drpys&url=${url}&headers=${headers}&type=${type}#DS',
@@ -987,11 +990,11 @@ const addressStatus = reactive({
 
 // 播放器类型选项
 const playerTypes = [
-  { value: 'art', label: 'Art Player', description: '现代化的HTML5播放器' },
-  { value: 'ijk', label: 'IJK Player', description: '基于FFmpeg的播放器' },
-  { value: 'exo', label: 'Exo Player', description: 'Google开发的Android播放器' },
-  { value: 'mpv', label: 'MPV Player', description: '轻量级的媒体播放器' },
-  { value: 'vlc', label: 'VLC Player', description: '功能强大的多媒体播放器' }
+  {value: 'art', label: 'Art Player', description: '现代化的HTML5播放器'},
+  {value: 'ijk', label: 'IJK Player', description: '基于FFmpeg的播放器'},
+  {value: 'exo', label: 'Exo Player', description: 'Google开发的Android播放器'},
+  {value: 'mpv', label: 'MPV Player', description: '轻量级的媒体播放器'},
+  {value: 'vlc', label: 'VLC Player', description: '功能强大的多媒体播放器'}
 ]
 
 // 设置项状态
@@ -1022,7 +1025,7 @@ const settingsContainer = ref(null)
 // 保存地址配置
 const saveAddress = async (configType) => {
   const addressValue = addressSettings[configType]
-  
+
   // 对于字符串类型，检查是否为空或只包含空白字符
   // 对于数字类型，检查是否为有效数字
   if (typeof addressValue === 'string') {
@@ -1039,21 +1042,21 @@ const saveAddress = async (configType) => {
     Message.warning('请输入有效的配置值')
     return
   }
-  
+
   addressSaving[configType] = true
   try {
     // 保存到本地存储
     const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
     savedAddresses[configType] = addressValue
-    
+
     // 如果是代理相关配置，也保存开关状态
     if (configType.startsWith('proxy')) {
       const enabledKey = configType + 'Enabled'
       savedAddresses[enabledKey] = addressSettings[enabledKey]
     }
-    
+
     localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-    
+
     // 如果是代理播放地址相关配置，触发自定义事件通知播放器组件
     if (configType === 'proxyPlay' || configType === 'proxyPlayEnabled') {
       // 触发自定义事件，通知播放器组件地址设置已更改
@@ -1065,12 +1068,12 @@ const saveAddress = async (configType) => {
         }
       }))
     }
-    
+
     // 如果是点播配置，尝试使用配置服务设置地址并自动设置直播配置地址
     if (configType === 'vodConfig') {
       try {
         await configService.setConfigUrl(addressValue)
-        
+
         // 清除缓存并刷新点播数据，确保下次换源时列表是最新的
         try {
           await siteService.loadSitesFromConfig(true) // 强制刷新配置数据
@@ -1079,17 +1082,17 @@ const saveAddress = async (configType) => {
           console.error('刷新点播数据失败:', refreshError)
           // 即使刷新失败也不影响保存成功的提示
         }
-        
+
         // 检查是否自动设置了直播配置地址
         const liveConfigUrl = configService.getLiveConfigUrl()
         if (liveConfigUrl && liveConfigUrl !== addressSettings.liveConfig) {
           // 更新界面显示的直播配置地址
           addressSettings.liveConfig = liveConfigUrl
-          
+
           // 同步保存到本地存储
           savedAddresses.liveConfig = liveConfigUrl
           localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-          
+
           Message.success('点播配置保存成功，已自动设置直播配置地址并刷新数据')
         } else {
           Message.success('点播配置保存成功，已刷新点播数据')
@@ -1110,12 +1113,12 @@ const saveAddress = async (configType) => {
     } else {
       Message.success('地址保存成功')
     }
-    
+
     addressStatus[configType] = {
       type: 'success',
       message: '地址保存成功'
     }
-    
+
     // 添加到历史记录
     const historyRefMap = {
       'vodConfig': vodConfigHistory,
@@ -1124,12 +1127,12 @@ const saveAddress = async (configType) => {
       'proxyPlay': proxyPlayHistory,
       'proxySniff': proxySniffHistory
     }
-    
+
     const historyRef = historyRefMap[configType]
     if (historyRef && historyRef.value) {
       historyRef.value.addHistory(addressValue)
     }
-    
+
   } catch (error) {
     console.error('保存地址失败:', error)
     addressStatus[configType] = {
@@ -1151,19 +1154,19 @@ const testAddress = async (configType) => {
   if (configType !== 'vodConfig') {
     return
   }
-  
+
   const addressValue = addressSettings[configType]
-  
+
   if (!addressValue || !addressValue.trim()) {
     Message.warning('请输入配置地址')
     return
   }
-  
+
   addressTesting[configType] = true
   try {
     // 使用配置服务验证配置地址
     const isValid = await configService.validateConfigUrl(addressValue)
-    
+
     if (isValid) {
       addressStatus[configType] = {
         type: 'success',
@@ -1199,17 +1202,17 @@ const resetLiveConfig = async () => {
   try {
     // 使用配置服务重置直播配置地址
     const success = await configService.resetLiveConfigUrl()
-    
+
     if (success) {
       // 更新界面显示的地址
       const newLiveConfigUrl = configService.getLiveConfigUrl()
       addressSettings.liveConfig = newLiveConfigUrl || ''
-      
+
       // 同步保存到本地存储
       const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
       savedAddresses.liveConfig = newLiveConfigUrl || ''
       localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-      
+
       addressStatus.liveConfig = {
         type: 'success',
         message: '直播配置地址已重置为当前点播配置中的默认地址'
@@ -1244,17 +1247,18 @@ const resetProxyPlay = async () => {
   try {
     // 重置为默认值
     // addressSettings.proxyPlay = 'http://localhost:57572/proxy?form=base64&url=${url}&headers=${headers}&type=${type}#嗷呜'
+    // addressSettings.proxyPlay = 'http://localhost:57574/?form=base64&url=${url}&headers=${headers}&type=${type}#GO'
     // addressSettings.proxyPlay = 'http://localhost:5757/file-proxy/proxy?form=base64&auth=drpys&url=${url}&headers=${headers}&type=${type}#DS'
     // addressSettings.proxyPlay = 'http://localhost:5757/m3u8-proxy/proxy?form=base64&auth=drpys&url=${url}&headers=${headers}&type=${type}#MDS'
     addressSettings.proxyPlay = 'http://localhost:5757/unified-proxy/proxy?form=base64&auth=drpys&url=${url}&headers=${headers}&type=${type}#DS'
     addressSettings.proxyPlayEnabled = false
-    
+
     // 保存到本地存储
     const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
     savedAddresses.proxyPlay = addressSettings.proxyPlay
     savedAddresses.proxyPlayEnabled = addressSettings.proxyPlayEnabled
     localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-    
+
     // 触发自定义事件，通知播放器组件代理播放设置已重置
     window.dispatchEvent(new CustomEvent('addressSettingsChanged', {
       detail: {
@@ -1263,7 +1267,7 @@ const resetProxyPlay = async () => {
         enabled: addressSettings.proxyPlayEnabled
       }
     }))
-    
+
     addressStatus.proxyPlay = {
       type: 'success',
       message: '代理播放接口已重置为默认地址'
@@ -1292,13 +1296,13 @@ const resetProxySniff = async () => {
     // 重置为默认值
     addressSettings.proxySniff = 'http://localhost:57573/sniffer'
     addressSettings.proxySniffEnabled = false
-    
+
     // 保存到本地存储
     const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
     savedAddresses.proxySniff = addressSettings.proxySniff
     savedAddresses.proxySniffEnabled = addressSettings.proxySniffEnabled
     localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-    
+
     addressStatus.proxySniff = {
       type: 'success',
       message: '代理嗅探接口已重置为默认地址'
@@ -1326,14 +1330,14 @@ const saveSnifferTimeout = async () => {
     Message.warning('请输入有效的超时时间（5-60秒）')
     return
   }
-  
+
   addressSaving.snifferTimeout = true
   try {
     // 保存到本地存储
     const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
     savedAddresses.snifferTimeout = addressSettings.snifferTimeout
     localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-    
+
     Message.success('嗅探超时设置保存成功')
     addressStatus.snifferTimeout = {
       type: 'success',
@@ -1361,7 +1365,7 @@ const handleProxyPlayEnabledChange = (enabled) => {
   const savedAddresses = JSON.parse(localStorage.getItem('addressSettings') || '{}')
   savedAddresses.proxyPlayEnabled = enabled
   localStorage.setItem('addressSettings', JSON.stringify(savedAddresses))
-  
+
   // 触发自定义事件，通知播放器组件代理播放开关状态已更改
   window.dispatchEvent(new CustomEvent('addressSettingsChanged', {
     detail: {
@@ -1370,13 +1374,13 @@ const handleProxyPlayEnabledChange = (enabled) => {
       enabled: enabled
     }
   }))
-  
+
   console.log('代理播放开关状态已更改:', enabled)
 }
 
 // 下载代理播放器
 const downloadProxyPlayer = () => {
-  const url = 'https://wwvy.lanzouo.com/iPNGu37snuna'
+  const url = 'https://pan.quark.cn/s/7eb53b20db95'
   window.open(url, '_blank')
   Message.success('正在打开代理播放器下载页面')
 }
@@ -1416,7 +1420,7 @@ const handleCSPBypassToggle = () => {
   const config = getCSPConfig()
   config.autoBypass = settings.cspBypass
   saveCSPConfig(config)
-  
+
   if (settings.cspBypass) {
     setGlobalReferrerPolicy(settings.referrerPolicy)
     Message.success('已启用CSP绕过功能')
@@ -1428,7 +1432,7 @@ const handleCSPBypassToggle = () => {
 // 处理聚搜功能开关
 const handleSearchAggregationToggle = () => {
   settings.searchAggregation = !settings.searchAggregation
-  
+
   if (settings.searchAggregation) {
     Message.success('已开启聚搜功能')
   } else {
@@ -1443,14 +1447,14 @@ const handleReferrerPolicySelect = () => {
     label: policy.label,
     value: policy.value
   }))
-  
+
   // 显示选择对话框
   const currentIndex = policyOptions.findIndex(p => p.value === settings.referrerPolicy)
-  
+
   // 使用简单的循环切换策略
   const nextIndex = (currentIndex + 1) % policyOptions.length
   const nextPolicy = policyOptions[nextIndex]
-  
+
   settings.referrerPolicy = nextPolicy.value
   Message.success(`已切换Referrer策略为: ${nextPolicy.label}`)
 }
@@ -1469,7 +1473,7 @@ const resetAllSettings = async () => {
 // 处理设置项点击
 const handleSettingClick = (settingKey) => {
   console.log('Setting clicked:', settingKey)
-  
+
   switch (settingKey) {
     case 'player-type':
       playerSelectVisible.value = true
@@ -1538,7 +1542,7 @@ const loadConfig = async () => {
         console.error('Failed to load address settings:', error)
       }
     }
-    
+
     // 兼容旧的配置地址设置
     const savedUrl = configService.getConfigUrl()
     if (savedUrl && !addressSettings.vodConfig) {
@@ -1547,7 +1551,7 @@ const loadConfig = async () => {
   } catch (error) {
     console.error('Failed to load config url:', error)
   }
-  
+
   // 加载其他设置项的状态
   const savedSettings = localStorage.getItem('appSettings')
   if (savedSettings) {
@@ -1562,7 +1566,7 @@ const loadConfig = async () => {
       console.error('Failed to load settings:', error)
     }
   }
-  
+
   // 加载CSP设置
   try {
     const cspConfig = getCSPConfig()
@@ -1576,14 +1580,14 @@ const loadConfig = async () => {
 // 保存设置项状态
 const saveSettings = () => {
   localStorage.setItem('appSettings', JSON.stringify(settings))
-  
+
   // 保存CSP设置
   try {
     saveCSPConfig({
       autoBypass: settings.cspBypass,
       referrerPolicy: settings.referrerPolicy
     })
-    
+
     // 应用全局referrer策略
     setGlobalReferrerPolicy(settings.referrerPolicy)
   } catch (error) {
@@ -1592,8 +1596,7 @@ const saveSettings = () => {
 }
 
 // 监听设置项变化并自动保存
-watch(settings, saveSettings, { deep: true })
-
+watch(settings, saveSettings, {deep: true})
 
 
 // 初始化
@@ -2091,48 +2094,48 @@ onMounted(async () => {
     padding: 16px 16px 24px;
     gap: 16px;
   }
-  
+
   .config-input-group {
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
   }
-  
+
   .config-input {
     width: 100%;
     max-width: 100%;
   }
-  
+
   .config-actions {
     width: 100%;
     max-width: 100%;
     justify-content: stretch;
     flex-direction: row;
   }
-  
+
   .config-actions .arco-btn {
     flex: 1;
     min-width: 0;
   }
-  
+
   .setting-item {
     padding: 14px 16px;
   }
-  
+
   .setting-info {
     gap: 12px;
     max-width: calc(100% - 80px);
   }
-  
+
   .setting-icon {
     font-size: 18px;
     padding: 6px;
   }
-  
+
   .setting-title {
     font-size: 15px;
   }
-  
+
   .setting-desc {
     font-size: 12px;
   }
@@ -2143,25 +2146,24 @@ onMounted(async () => {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .config-actions .arco-btn {
     width: 100%;
     flex: none;
   }
-  
+
   .setting-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
   }
-  
+
   .setting-value {
     width: 100%;
     max-width: 100%;
     justify-content: space-between;
   }
 }
-
 
 
 </style>
