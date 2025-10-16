@@ -25,7 +25,7 @@
           <h1 class="about-title">DrPlayer</h1>
           <p class="about-subtitle">新一代智能视频播放器</p>
           <div class="about-version">
-            <span class="version-badge">v1.0.0</span>
+            <span class="version-badge">v{{ appVersion }}</span>
           </div>
         </div>
       </div>
@@ -153,6 +153,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { 
   IconPlayCircle,
   IconInfoCircle,
@@ -177,6 +178,12 @@ defineProps({
 
 // 定义emits
 defineEmits(['update:visible'])
+
+// 获取应用版本号
+const appVersion = computed(() => {
+  // 从 Vite 全局变量中获取版本号
+  return __APP_VERSION__ || '1.0.0'
+})
 </script>
 
 <style scoped>

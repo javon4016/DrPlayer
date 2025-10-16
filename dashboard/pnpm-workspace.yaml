@@ -1,4 +1,3 @@
-ignoredBuiltDependencies:
-  - '@tailwindcss/oxide'
-  - esbuild
-  - vue-demi
+# pnpm workspace configuration
+packages:
+  - '.'

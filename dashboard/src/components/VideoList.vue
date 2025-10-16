@@ -1217,7 +1217,7 @@ const handleFolderNavigate = async (breadcrumb, index) => {
   const now = Date.now();
   if (now - lastFolderNavigationTime < 300) {
     console.log('folder导航过于频繁，跳过');
-    return;
+    // return;
   }
   
   // 只在短时间内（1秒）阻止相同目标的重复导航，避免误点击

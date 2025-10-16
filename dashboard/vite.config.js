@@ -1,6 +1,11 @@
 import {defineConfig, loadEnv} from 'vite'
 import vue from '@vitejs/plugin-vue'
-import path from 'path';
+import path from 'path'
+import { readFileSync } from 'fs'
+
+// 读取 package.json 中的版本号
+const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
+const version = packageJson.version
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -11,6 +16,11 @@ export default defineConfig(({ command, mode }) => {
         // 基础路径配置，支持子目录部署
         // 开发环境使用 '/'，生产环境可以通过环境变量设置
         base: mode.includes('production') ? (env.VITE_BASE_PATH || './') : '/',
+        
+        // 定义全局变量
+        define: {
+            __APP_VERSION__: JSON.stringify(version)
+        },
     
     plugins: [
         vue(),

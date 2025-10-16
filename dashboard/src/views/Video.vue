@@ -722,7 +722,7 @@ const handleFolderNavigate = async (navigationData) => {
   const now = Date.now();
   if (now - lastNavigationTime < 200) {
     console.log('folder导航更新过于频繁，跳过');
-    return;
+    // return;
   }
   
   // 检查是否是相同的导航数据
