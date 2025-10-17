@@ -39,7 +39,15 @@ const BACKUP_KEYS = {
   PARSER_CONFIG: 'parserConfig',
   PARSERS: 'drplayer_parsers', // 解析器数据
   SIDEBAR_COLLAPSED: 'sidebarCollapsed',
-  PAGE_STATE: 'pageState'
+  PAGE_STATE: 'pageState',
+  
+  // 开发者调试设置
+  DEBUG_SETTINGS: 'debugSettings',
+  
+  // 悬浮组件相关
+  FLOATING_BUTTON_POSITION: 'floating-iframe-button-position',
+  FLOATING_WINDOW_POSITION: 'floating-iframe-window-position',
+  FLOATING_WINDOW_SIZE: 'floating-iframe-window-size'
 }
 
 // 存储为字符串的键（不需要JSON解析）
@@ -189,6 +197,19 @@ export const collectBackupData = () => {
       liveConfigUrl: getLocalStorageData(BACKUP_KEYS.LIVE_CONFIG_URL, ''),
       // 当前站点
       currentSite: getLocalStorageData(BACKUP_KEYS.CURRENT_SITE, null)
+    },
+    
+    // 开发者调试设置
+    debugSettings: getLocalStorageData(BACKUP_KEYS.DEBUG_SETTINGS, {}),
+    
+    // 悬浮组件数据
+    floatingData: {
+      // 悬浮按钮位置
+      buttonPosition: getLocalStorageData(BACKUP_KEYS.FLOATING_BUTTON_POSITION, null),
+      // 悬浮窗口位置
+      windowPosition: getLocalStorageData(BACKUP_KEYS.FLOATING_WINDOW_POSITION, null),
+      // 悬浮窗口尺寸
+      windowSize: getLocalStorageData(BACKUP_KEYS.FLOATING_WINDOW_SIZE, null)
     }
   }
   
@@ -402,6 +423,37 @@ export const restoreBackupData = (backupData) => {
           }
         } catch (error) {
           console.error('同步还原的当前站点到siteService失败:', error)
+        }
+      }
+    }
+    
+    // 还原开发者调试设置
+    if (backupData.debugSettings) {
+      if (setLocalStorageData(BACKUP_KEYS.DEBUG_SETTINGS, backupData.debugSettings)) {
+        restoredCount++
+      } else {
+        failedCount++
+        errors.push('开发者调试设置')
+      }
+    }
+    
+    // 还原悬浮组件数据
+    if (backupData.floatingData) {
+      const floatingDataMapping = {
+        buttonPosition: BACKUP_KEYS.FLOATING_BUTTON_POSITION,
+        windowPosition: BACKUP_KEYS.FLOATING_WINDOW_POSITION,
+        windowSize: BACKUP_KEYS.FLOATING_WINDOW_SIZE
+      }
+      
+      for (const [key, value] of Object.entries(backupData.floatingData)) {
+        const storageKey = floatingDataMapping[key]
+        if (storageKey && value !== null) {
+          if (setLocalStorageData(storageKey, value)) {
+            restoredCount++
+          } else {
+            failedCount++
+            errors.push(`悬浮组件数据 ${key}`)
+          }
         }
       }
     }

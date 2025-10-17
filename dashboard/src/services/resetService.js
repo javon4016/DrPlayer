@@ -55,9 +55,16 @@ const DEFAULT_CONFIGS = {
   searchAggregationSettings: {
     selectedSources: [] // 默认没有选中任何搜索源
   },
+
+  // 侧边栏折叠状态默认值
+  sidebarCollapsed: false,
   
-  // 侧边栏状态默认值
-  sidebarCollapsed: false
+  // 开发者调试设置默认值
+  debugSettings: {
+    enabled: false,
+    url: 'http://localhost:5757/apps/websocket',
+    resetting: false
+  }
 }
 
 // 需要完全清空的数据键
@@ -92,15 +99,23 @@ const CLEAR_DATA_KEYS = [
   'selectedParser',               // 选中的解析器
   'last-clicked-video',           // 最后点击的视频
   
-  // 界面状态
+  // 其他设置和状态
   'sidebar-collapsed',            // 侧边栏折叠状态
-  
-  // 地址配置历史
+
+  // 地址配置历史记录
   'drplayer_vod_config_history',
   'drplayer_live_config_history',
   'drplayer_proxy_access_history',
   'drplayer_proxy_play_history',
-  'drplayer_proxy_sniff_history'
+  'drplayer_proxy_sniff_history',
+  
+  // 开发者调试设置相关
+  'debugSettings',
+  
+  // 悬浮组件相关
+  'floating-iframe-button-position',
+  'floating-iframe-window-position',
+  'floating-iframe-window-size'
 ]
 
 /**
@@ -206,5 +221,6 @@ export const factoryResetWithConfirmation = async () => {
 export default {
   showResetConfirmation,
   performFactoryReset,
-  factoryResetWithConfirmation
+  factoryResetWithConfirmation,
+  DEFAULT_CONFIGS
 }

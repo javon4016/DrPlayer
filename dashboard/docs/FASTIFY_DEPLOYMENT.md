@@ -129,7 +129,7 @@ fastify.get('/apps/drplayer/', async (request, reply) => {
 ## 测试验证
 
 1. 启动Fastify服务器
-2. 访问 `http://localhost:3000/apps/drplayer/`
+2. 访问 `http://localhost:5757/apps/drplayer/`
 3. 导航到不同页面（如设置页面）
 4. 刷新页面，确认不出现404错误
 5. 检查浏览器开发者工具，确认静态资源正常加载

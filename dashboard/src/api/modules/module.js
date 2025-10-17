@@ -252,6 +252,7 @@ export const parsePlayUrl = async (module, params) => {
       playType: 'direct', // 默认直链
       url: '',
       headers: {}, // 添加headers字段
+      danmaku: '', // 添加弹幕字段
       needParse: false,
       needSniff: false,
       message: ''
@@ -265,6 +266,7 @@ export const parsePlayUrl = async (module, params) => {
         result.playType = 'parse'
         result.url = playData.url || playData.play_url || ''
         result.headers = parseHeaders(playData.headers || playData.header)
+        result.danmaku = playData.danmaku || '' // 处理弹幕字段
         result.needParse = true
         result.qualities = []
         result.hasMultipleQualities = false
@@ -319,6 +321,7 @@ export const parsePlayUrl = async (module, params) => {
         }
         
         result.headers = parseHeaders(playData.headers || playData.header)
+        result.danmaku = playData.danmaku || '' // 处理弹幕字段
         result.needParse = false
         result.needSniff = false
       } else if (playData.parse === 1) {
@@ -326,6 +329,7 @@ export const parsePlayUrl = async (module, params) => {
         result.playType = 'sniff'
         result.url = playData.url || playData.play_url || ''
         result.headers = parseHeaders(playData.headers || playData.header)
+        result.danmaku = playData.danmaku || '' // 处理弹幕字段
         result.needSniff = true
         result.qualities = []
         result.hasMultipleQualities = false
@@ -334,6 +338,7 @@ export const parsePlayUrl = async (module, params) => {
         // 默认处理为直链
         result.url = playData.url || playData.play_url || playData
         result.headers = parseHeaders(playData.headers || playData.header)
+        result.danmaku = playData.danmaku || '' // 处理弹幕字段
         result.qualities = []
         result.hasMultipleQualities = false
         result.message = '直链播放'
@@ -342,6 +347,7 @@ export const parsePlayUrl = async (module, params) => {
       // 如果返回的是字符串，直接作为播放地址
       result.url = playData
       result.headers = {}
+      result.danmaku = '' // 字符串类型无弹幕数据
       result.qualities = []
       result.hasMultipleQualities = false
       result.message = '直链播放'

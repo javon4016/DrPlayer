@@ -98,6 +98,7 @@
         :current-episode-index="currentEpisodeIndex"
         :auto-next="true"
         :headers="parsedHeaders"
+        :danmaku-url="parsedDanmakuUrl"
         :qualities="parsedQualities"
         :has-multiple-qualities="hasMultipleQualities"
         :initial-quality="initialQuality"
@@ -425,6 +426,8 @@ const showVideoPlayer = ref(false)
 const parsedVideoUrl = ref('')
 // 解析后的请求头（用于T4接口解析结果）
 const parsedHeaders = ref({})
+// 解析后的弹幕链接（用于T4接口解析结果）
+const parsedDanmakuUrl = ref('')
 // 多画质相关数据
 const parsedQualities = ref([])
 const hasMultipleQualities = ref(false)
@@ -1584,11 +1587,14 @@ const selectEpisode = async (index) => {
          // 普通视频内容
          console.log('启动内置播放器播放直链视频:', parseResult.url)
          console.log('T4解析结果headers:', parseResult.headers)
+         console.log('T4解析结果danmaku:', parseResult.danmaku)
          console.log('T4解析结果画质信息:', parseResult.qualities, parseResult.hasMultipleQualities)
          
          parsedVideoUrl.value = parseResult.url
          // 提取并存储headers，如果没有headers则使用空对象
          parsedHeaders.value = parseResult.headers || {}
+         // 提取并存储弹幕链接，如果没有danmaku则使用空字符串
+         parsedDanmakuUrl.value = parseResult.danmaku || ''
          // 提取并存储画质信息
          parsedQualities.value = parseResult.qualities || []
          hasMultipleQualities.value = parseResult.hasMultipleQualities || false

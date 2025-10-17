@@ -800,6 +800,83 @@
         </div>
       </a-card>
 
+      <!-- 开发者调试卡片 -->
+      <a-card class="settings-card config-card" title="开发者调试" :bordered="false">
+        <template #extra>
+          <icon-bug class="card-icon"/>
+        </template>
+
+        <div class="address-settings-section">
+          <!-- 允许调试开关 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <icon-bug class="setting-icon"/>
+              <div class="setting-text">
+                <div class="setting-title">允许调试</div>
+                <div class="setting-desc">开启开发者调试功能</div>
+              </div>
+            </div>
+            <div class="setting-value">
+              <a-switch 
+                v-model="debugSettings.enabled" 
+                @change="saveDebugSettings"
+                size="medium"
+              />
+            </div>
+          </div>
+
+          <!-- 调试地址配置 -->
+          <div class="address-config-item" v-if="debugSettings.enabled">
+            <div class="address-config-row">
+              <div class="address-config-info">
+                <icon-link class="address-config-icon"/>
+                <div class="address-config-text">
+                  <div class="address-config-title">调试地址</div>
+                  <div class="address-config-desc">配置悬浮iframe的调试地址</div>
+                </div>
+              </div>
+              <div class="address-config-input-group">
+                <a-input
+                    v-model="debugSettings.url"
+                    placeholder="请输入调试地址"
+                    size="medium"
+                    class="address-config-input"
+                    @blur="saveDebugSettings"
+                >
+                  <template #prefix>
+                    <icon-link/>
+                  </template>
+                </a-input>
+                <div class="address-config-actions">
+                  <a-button
+                      type="outline"
+                      @click="resetFloatingState"
+                      :loading="debugSettings.resetting"
+                      size="medium"
+                  >
+                    <template #icon>
+                      <icon-refresh/>
+                    </template>
+                    重置状态
+                  </a-button>
+                  <a-button
+                      type="primary"
+                      @click="saveDebugSettings"
+                      size="medium"
+                  >
+                    <template #icon>
+                      <icon-save/>
+                    </template>
+                    保存
+                  </a-button>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-card>
+
       <!-- 数据管理卡片 -->
       <a-card class="settings-card" title="数据管理" :bordered="false">
         <template #extra>
@@ -918,7 +995,8 @@ import {
   IconClockCircle,
   IconComputer,
   IconDownload,
-  IconCode
+  IconCode,
+  IconFolder
 } from '@arco-design/web-vue/es/icon'
 import AddressHistory from '@/components/AddressHistory.vue'
 import PlayerSelector from '@/components/PlayerSelector.vue'
@@ -1009,6 +1087,13 @@ const settings = reactive({
   cspBypass: true, // CSP绕过开关
   referrerPolicy: 'no-referrer', // 默认referrer策略
   searchAggregation: false // 聚搜功能开关，默认关闭
+})
+
+// 开发者调试设置
+const debugSettings = reactive({
+  enabled: false, // 是否启用调试功能
+  url: 'http://localhost:5757/apps/websocket', // 默认调试地址
+  resetting: false // 重置状态loading
 })
 
 // 播放器选择对话框状态
@@ -1598,10 +1683,66 @@ const saveSettings = () => {
 // 监听设置项变化并自动保存
 watch(settings, saveSettings, {deep: true})
 
+// 保存开发者调试设置
+const saveDebugSettings = () => {
+  try {
+    localStorage.setItem('debugSettings', JSON.stringify(debugSettings))
+    
+    // 触发自定义事件，通知其他组件调试设置已更新
+    window.dispatchEvent(new CustomEvent('debugSettingsChanged', {
+      detail: { ...debugSettings }
+    }))
+    
+    Message.success('调试设置已保存')
+  } catch (error) {
+    console.error('Failed to save debug settings:', error)
+    Message.error('保存调试设置失败')
+  }
+}
+
+// 加载开发者调试设置
+const loadDebugSettings = () => {
+  try {
+    const saved = localStorage.getItem('debugSettings')
+    if (saved) {
+      const parsedSettings = JSON.parse(saved)
+      Object.assign(debugSettings, parsedSettings)
+    }
+  } catch (error) {
+    console.error('Failed to load debug settings:', error)
+  }
+}
+
+// 重置悬浮组件状态
+const resetFloatingState = async () => {
+  debugSettings.resetting = true
+  try {
+    // 清除悬浮组件相关的localStorage数据
+    localStorage.removeItem('floating-iframe-button-position')
+    localStorage.removeItem('floating-iframe-window-position')
+    localStorage.removeItem('floating-iframe-window-size')
+    
+    // 模拟异步操作
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    Message.success('悬浮组件状态已重置，刷新页面后生效')
+  } catch (error) {
+    console.error('Failed to reset floating state:', error)
+    Message.error('重置悬浮组件状态失败')
+  } finally {
+    debugSettings.resetting = false
+  }
+}
+
+
+
+// 监听开发者调试设置变化并自动保存
+watch(debugSettings, saveDebugSettings, {deep: true})
 
 // 初始化
 onMounted(async () => {
   await loadConfig()
+  loadDebugSettings()
 })
 </script>
 
