@@ -587,7 +587,7 @@ export default {
         const result = await Actions.webView({
           actionId: 'test-webview',
           title: '网页视图测试',
-          url: 'https://www.baidu.com',
+          url: 'http://localhost:5757/apps/websocket',
           width: '85%',
           height: '80%',
           showToolbar: true,

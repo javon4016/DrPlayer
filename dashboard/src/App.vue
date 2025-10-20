@@ -7,7 +7,7 @@
   <GlobalToast />
   <!-- 全局悬浮iframe组件 -->
   <FloatingIframe 
-    :default-url="'https://www.baidu.com'"
+    :default-url="'http://localhost:5757/apps/websocket'"
     :default-position="{ x: 33, y: 604 }"
     :default-size="{ width: 419, height: 883 }"
     button-title="打开浮窗浏览器"

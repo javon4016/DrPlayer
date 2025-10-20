@@ -85,7 +85,7 @@ import {
 const props = defineProps({
   defaultUrl: {
     type: String,
-    default: 'https://www.baidu.com'
+    default: 'http://localhost:5757/apps/websocket'
   },
   defaultPosition: {
     type: Object,
